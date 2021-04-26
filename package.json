@@ -1,6 +1,6 @@
 {
   "name": "synckit",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Perform async work synchronously in Node.js using a separate process with first-class TypeScript support",
   "repository": "git+https://github.com/rx-ts/synckit.git",
   "author": "JounQin <admin@1stg.me>",
@@ -34,7 +34,7 @@
     "lint:es": "eslint . --cache -f friendly --max-warnings 10",
     "lint:tsc": "tsc --noEmit",
     "prepare": "simple-git-hooks && yarn-deduplicate --strategy fewer || exit 0",
-    "prerelease": "yarn build",
+    "prerelease": "npm run build",
     "release": "clean-publish && changeset publish",
     "test": "jest",
     "typecov": "type-coverage"
@@ -58,9 +58,6 @@
     "type-coverage": "^2.17.3",
     "typescript": "^4.2.4",
     "yarn-deduplicate": "^3.1.0"
-  },
-  "clean-publish": {
-    "packageManager": "npm"
   },
   "commitlint": {
     "extends": "@1stg"
