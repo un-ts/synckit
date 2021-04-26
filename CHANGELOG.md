@@ -1,5 +1,11 @@
 # synckit
 
+## 0.1.4
+
+### Patch Changes
+
+- [#9](https://github.com/rx-ts/synckit/pull/9) [`cad2e05`](https://github.com/rx-ts/synckit/commit/cad2e059bba51779115f63121077532b97d8aa6e) Thanks [@JounQin](https://github.com/JounQin)! - fix: try to fix clean-publish + changeset publish again
+
 ## 0.1.2
 
 ### Patch Changes
