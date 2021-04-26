@@ -39,13 +39,15 @@ const syncFn = createSyncFn(require.resolve('./worker'))
 
 // do whatever you want, you will get the result synchronously!
 const result = syncFn(...args)
+```
 
+```js
 // worker.js
 import { runAsWorker } from 'synckit'
 
 runAsWorker(async (...args) => {
   // do expensive work
-  // but you mush mark sure the `result` is serializable by `JSON.stringify`
+  // but you must make sure the `result` is serializable by `JSON.stringify`
   return result
 })
 ```
