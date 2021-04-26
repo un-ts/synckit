@@ -20,7 +20,7 @@ test('createSyncFn', () => {
   const distance = Date.now() - now
   expect(distance > 500).toBe(true)
 
-  const DIFF_RANGE = 150
+  const DIFF_RANGE = 200
 
   now = Date.now()
   expect(syncFn(2)).toBe(2)
