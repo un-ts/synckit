@@ -1,5 +1,11 @@
 # synckit
 
+## 0.1.2
+
+### Patch Changes
+
+- [#7](https://github.com/rx-ts/synckit/pull/7) [`0336c22`](https://github.com/rx-ts/synckit/commit/0336c22a5f159fa6d35b9a6b8f93f0a56a35b3dd) Thanks [@JounQin](https://github.com/JounQin)! - fix: try to fix clean-publish + changeset publish
+
 ## 0.1.1
 
 ### Patch Changes
