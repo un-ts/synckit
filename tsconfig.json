@@ -1,0 +1,9 @@
+{
+  "extends": "./node_modules/@1stg/tsconfig/node",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "synckit": ["src"]
+    }
+  }
+}
