@@ -5,6 +5,10 @@ import fs from 'fs'
 
 import { v4 as uuid } from 'uuid'
 
+import { AnyAsyncFn, AnyFn, Syncify } from './types'
+
+export * from './types'
+
 /**
  * @link https://github.com/sindresorhus/temp-dir/blob/main/index.js#L9
  */
@@ -30,12 +34,12 @@ const isTsconfigPathsAvailable = () => {
   return tsconfigPathsAvailable
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const syncFnCache = new Map<string, (...args: any) => any>()
+const syncFnCache = new Map<string, AnyFn>()
 
-export const createSyncFn = <T extends (...args: unknown[]) => unknown>(
+export function createSyncFn<T extends AnyAsyncFn>(
   workerPath: string,
-) => {
+): Syncify<T>
+export function createSyncFn<R>(workerPath: string) {
   if (!path.isAbsolute(workerPath)) {
     throw new Error('`workerPath` must be absolute')
   }
@@ -59,7 +63,7 @@ export const createSyncFn = <T extends (...args: unknown[]) => unknown>(
         : /* istanbul ignore next */ '')
     : 'node'
 
-  const syncFn = (...args: Parameters<T>): ReturnType<T> => {
+  const syncFn = (...args: unknown[]): R => {
     const filename = path.resolve(tmpdir, `synckit-${uuid()}.json`)
 
     fs.writeFileSync(filename, JSON.stringify(args))
@@ -83,13 +87,9 @@ export const createSyncFn = <T extends (...args: unknown[]) => unknown>(
   return syncFn
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const runAsWorker = async <R, T extends (...args: any[]) => Promise<R>>(
-  fn: T,
-) => {
+export const runAsWorker = async <T extends AnyAsyncFn>(fn: T) => {
   const filename = process.argv[2]
   const content = fs.readFileSync(filename, 'utf-8')
   const options = JSON.parse(content) as Parameters<T>
-  const result = await fn(...options)
-  fs.writeFileSync(filename, JSON.stringify(result))
+  fs.writeFileSync(filename, JSON.stringify(await fn(...options)))
 }
