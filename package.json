@@ -35,8 +35,7 @@
     "lint:tsc": "tsc --noEmit",
     "postinstall": "simple-git-hooks && yarn-deduplicate --strategy fewer || exit 0",
     "prerelease": "yarn build",
-    "publish": "clean-publish",
-    "release": "changeset publish",
+    "release": "clean-publish && changeset publish",
     "test": "jest",
     "typecov": "type-coverage"
   },
