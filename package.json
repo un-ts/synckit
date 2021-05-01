@@ -44,7 +44,7 @@
     "uuid": "^8.3.2"
   },
   "devDependencies": {
-    "@1stg/lib-config": "^1.2.10",
+    "@1stg/lib-config": "^1.2.11",
     "@changesets/changelog-github": "^0.4.0",
     "@changesets/cli": "^2.16.0",
     "@types/jest": "^26.0.22",
