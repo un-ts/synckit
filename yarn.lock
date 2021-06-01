@@ -3188,10 +3188,10 @@ class-utils@^0.3.5:
     isobject "^3.0.0"
     static-extend "^0.1.1"
 
-clean-publish@^2.1.1:
-  version "2.1.1"
-  resolved "https://registry.yarnpkg.com/clean-publish/-/clean-publish-2.1.1.tgz#2286cbcf587d2eb8bac56a771854539c30f6f035"
-  integrity sha512-IO0aLHoeSK23rIJ7Epvb/3wAstsehvJaPi5cv6zQrvmpBHjJ0AaLzbiDlPfxSWBRCQQ8S6UcHk65IMiIyAWI6Q==
+clean-publish@^2.2.0:
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/clean-publish/-/clean-publish-2.2.0.tgz#3d249934128757e457dc060511a056d32487f38d"
+  integrity sha512-U+/Y5YXbxnqWlh8y/toKSEGbMvIvsgfkfJ7yK0v0uQ1mz07lNNSxceY7XaFweEw8LFQo8Al3H7SuQHXbf5Xw8g==
   dependencies:
     cross-spawn "^7.0.3"
     fs-extra "^9.1.0"
