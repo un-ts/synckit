@@ -6,7 +6,7 @@
   "author": "JounQin <admin@1stg.me>",
   "license": "MIT",
   "engines": {
-    "node": ">=4.0"
+    "node": ">=v4.9.1"
   },
   "main": "lib",
   "module": "lib/esm",
