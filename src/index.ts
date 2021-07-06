@@ -16,12 +16,13 @@ export const tmpdir = fs.realpathSync(_tmpdir())
 
 let tsconfigPathsAvailable: boolean
 
+const TSCONFIG_PATH = process.env.TSCONFIG_PATH || 'tsconfig.json'
+
 const isTsconfigPathsAvailable = () => {
   if (typeof tsconfigPathsAvailable === 'boolean') {
     return tsconfigPathsAvailable
   }
   try {
-    // eslint-disable-next-line node/no-extraneous-require
     tsconfigPathsAvailable = !!require.resolve('tsconfig-paths')
   } catch {
     /**
@@ -57,7 +58,8 @@ export function createSyncFn<R>(workerPath: string) {
   }
 
   const executor = resolvedWorkerPath.endsWith('.ts')
-    ? 'ts-node' +
+    ? 'ts-node -P ' +
+      TSCONFIG_PATH +
       (isTsconfigPathsAvailable()
         ? ' -r tsconfig-paths/register'
         : /* istanbul ignore next */ '')
@@ -75,8 +77,7 @@ export function createSyncFn<R>(workerPath: string) {
         stdio: 'inherit',
       })
       const result = fs.readFileSync(filename, 'utf8')
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return JSON.parse(result)
+      return JSON.parse(result) as R
     } finally {
       fs.unlinkSync(filename)
     }

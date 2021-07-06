@@ -9,9 +9,7 @@
     "node": ">=4.0"
   },
   "main": "lib",
-  "module": "lib/esm",
-  "es2015": "lib/es2015",
-  "fesm5": "lib/esm",
+  "module": "lib/es2015",
   "types": "lib",
   "files": [
     "lib",
@@ -28,7 +26,7 @@
   ],
   "scripts": {
     "build": "run-p build:*",
-    "build:r": "r -f esm,es2015",
+    "build:r": "r -f es2015",
     "build:ts": "tsc -P src",
     "lint": "run-p lint:*",
     "lint:es": "eslint . --cache -f friendly --max-warnings 10",
@@ -40,24 +38,25 @@
     "typecov": "type-coverage"
   },
   "dependencies": {
-    "tslib": "^2.2.0",
+    "tslib": "^2.3.0",
     "uuid": "^8.3.2"
   },
   "devDependencies": {
-    "@1stg/lib-config": "^1.2.10",
+    "@1stg/lib-config": "^3.0.0",
     "@changesets/changelog-github": "^0.4.0",
     "@changesets/cli": "^2.16.0",
     "@types/jest": "^26.0.22",
-    "@types/node": "^14.14.41",
-    "@types/uuid": "^8.3.0",
+    "@types/node": "^16.0.0",
+    "@types/uuid": "^8.3.1",
     "clean-publish": "^2.1.1",
-    "npm-run-all": "^4.1.5",
     "ts-expect": "^1.3.0",
-    "ts-jest": "^26.5.5",
-    "ts-node": "^9.1.1",
+    "ts-jest": "^27.0.3",
+    "ts-node": "^10.0.0",
     "type-coverage": "^2.17.3",
-    "typescript": "^4.2.4",
-    "yarn-deduplicate": "^3.1.0"
+    "typescript": "^4.2.4"
+  },
+  "resolutions": {
+    "prettier": "^2.3.2"
   },
   "commitlint": {
     "extends": "@1stg"
@@ -90,8 +89,10 @@
     ]
   },
   "typeCoverage": {
-    "atLeast": 98.24,
+    "atLeast": 100,
+    "cache": true,
     "detail": true,
+    "ignoreNested": true,
     "strict": true,
     "update": true
   }
