@@ -51,11 +51,10 @@ jobs:
           PARSER_NO_WATCH: true
 
       - name: Codecov
-        if: matrix.node == 14 # only report coverage once per commit
         run: |
           yarn global add codecov codacy-coverage
           codecov
-          cat ./coverage/lcov.info | codacy-coverage -u rx-ts -n eslint
+          cat ./coverage/lcov.info | codacy-coverage -u rx-ts -n synckit
         env:
           CI: 'true'
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

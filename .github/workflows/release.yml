@@ -34,7 +34,10 @@ jobs:
             ${{ runner.os }}-yarn-
 
       - name: Install Dependencies
-        run: yarn --frozen-lockfile --ignore-scripts
+        # https://github.com/atlassian/changesets/issues/246
+        run: |
+          yarn --frozen-lockfile
+          rm -rf .git/hooks/commit-msg
 
       - name: Create Release Pull Request or Publish to npm
         id: changesets
