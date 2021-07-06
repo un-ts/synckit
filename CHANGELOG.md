@@ -1,5 +1,11 @@
 # synckit
 
+## 0.1.6
+
+### Patch Changes
+
+- [`b3e9760`](https://github.com/rx-ts/synckit/commit/b3e976062f1c568d495ad0a578c55b83506208c9) Thanks [@JounQin](https://github.com/JounQin)! - feat: support custom TSCONFIG_PATH env
+
 ## 0.1.4
 
 ### Patch Changes
