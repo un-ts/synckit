@@ -6,7 +6,7 @@
   "author": "JounQin <admin@1stg.me>",
   "license": "MIT",
   "engines": {
-    "node": ">=4.0"
+    "node": ">=8.10"
   },
   "main": "lib",
   "module": "lib/es2015",
@@ -33,8 +33,10 @@
     "lint:tsc": "tsc --noEmit",
     "prepare": "simple-git-hooks && yarn-deduplicate --strategy fewer || exit 0",
     "prerelease": "npm run build",
+    "pretest": "yarn build",
     "release": "clean-publish && changeset publish",
     "test": "jest",
+    "test-worker": "ts-node test/test-worker-ts && node test/test-worker",
     "typecov": "type-coverage"
   },
   "dependencies": {
@@ -62,7 +64,10 @@
     "extends": "@1stg"
   },
   "eslintConfig": {
-    "extends": "@1stg"
+    "extends": "@1stg",
+    "rules": {
+      "unicorn/require-post-message-target-origin": 0
+    }
   },
   "eslintIgnore": [
     "coverage",
