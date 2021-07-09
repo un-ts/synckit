@@ -18,7 +18,18 @@
 
 Perform async work synchronously in Node.js using a separate process with first-class TypeScript support
 
+## TOC <!-- omit in toc -->
+
+- [Usage](#usage)
+  - [Install](#install)
+  - [API](#api)
+  - [TypeScript](#typescript)
+- [Changelog](#changelog)
+- [License](#license)
+
 ## Usage
+
+### Install
 
 ```sh
 # yarn
@@ -29,6 +40,8 @@ npm i synckit
 ```
 
 ### API
+
+`worker_threads` is used by default for performance, if you have any problem with it, you can set env `SYNCKIT_WORKER_THREADS=0` to disable it and fallback to previously `child_process` solution, and please raise an issue here so that we can improve it.
 
 ```js
 // runner.js
@@ -47,10 +60,22 @@ import { runAsWorker } from 'synckit'
 
 runAsWorker(async (...args) => {
   // do expensive work
-  // but you must make sure the `result` is serializable by `JSON.stringify`
   return result
 })
 ```
+
+You must make sure:
+
+1. if `worker_threads` is enabled (by default), the `result` is serialized by [`Structured Clone Algorithm`](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm)
+2. if `child_process` is used, the `result` is serialized by `JSON.stringify`
+
+### TypeScript
+
+If you want to use `ts-node` for worker file (a `.ts` file), it is supported out of box!
+
+If you want to use a custom tsconfig as project instead of default `tsconfig.json`, use `TS_NODE_PROJECT` env. Please view [ts-node](https://github.com/TypeStrong/ts-node#tsconfig) for more details.
+
+If you want to integrate with [tsconfig-paths](https://www.npmjs.com/package/tsconfig-paths), please view [ts-node](https://github.com/TypeStrong/ts-node#paths-and-baseurl) for more details.
 
 ## Changelog
 
