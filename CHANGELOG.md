@@ -1,5 +1,11 @@
 # synckit
 
+## 0.2.0
+
+### Minor Changes
+
+- [#23](https://github.com/rx-ts/synckit/pull/23) [`6577e86`](https://github.com/rx-ts/synckit/commit/6577e86bff97a6a4d803394571e9406a86dd82dc) Thanks [@JounQin](https://github.com/JounQin)! - feat: use worker_threads by default for performance
+
 ## 0.1.6
 
 ### Patch Changes
