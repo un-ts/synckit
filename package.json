@@ -66,17 +66,6 @@
   "commitlint": {
     "extends": "@1stg"
   },
-  "eslintConfig": {
-    "extends": "@1stg",
-    "rules": {
-      "unicorn/require-post-message-target-origin": 0
-    }
-  },
-  "eslintIgnore": [
-    "coverage",
-    "lib",
-    "CHANGELOG.md"
-  ],
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
@@ -86,11 +75,6 @@
     }
   },
   "prettier": "@1stg/prettier-config",
-  "remarkConfig": {
-    "plugins": [
-      "@1stg/remark-config"
-    ]
-  },
   "renovate": {
     "extends": [
       "@1stg"
