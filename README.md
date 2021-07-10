@@ -16,7 +16,7 @@
 [![JavaScript Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://standardjs.com)
 [![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://github.com/prettier/prettier)
 
-Perform async work synchronously in Node.js using a separate process with first-class TypeScript support
+Perform async work synchronously in Node.js using `worker_threads`, or `child_process` as fallback, with first-class TypeScript support.
 
 ## TOC <!-- omit in toc -->
 
@@ -24,6 +24,7 @@ Perform async work synchronously in Node.js using a separate process with first-
   - [Install](#install)
   - [API](#api)
   - [TypeScript](#typescript)
+- [Benchmark](#benchmark)
 - [Changelog](#changelog)
 - [License](#license)
 
@@ -76,6 +77,12 @@ If you want to use `ts-node` for worker file (a `.ts` file), it is supported out
 If you want to use a custom tsconfig as project instead of default `tsconfig.json`, use `TS_NODE_PROJECT` env. Please view [ts-node](https://github.com/TypeStrong/ts-node#tsconfig) for more details.
 
 If you want to integrate with [tsconfig-paths](https://www.npmjs.com/package/tsconfig-paths), please view [ts-node](https://github.com/TypeStrong/ts-node#paths-and-baseurl) for more details.
+
+## Benchmark
+
+It is about 20x faster than [`sync-threads`](https://github.com/lambci/sync-threads) but 3x slower than native for reading the file content itself 1000 times during runtime. See [Benchmark](./benchmarks/benchmark.txt) for more details.
+
+You can try it with running `yarn benchmark` by yourself. [Here](./benchmarks/benchmark.js) is the benchmark source code.
 
 ## Changelog
 

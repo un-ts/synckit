@@ -51,6 +51,9 @@ jobs:
           EFF_NO_LINK_RULES: true
           PARSER_NO_WATCH: true
 
+      - name: Benchmark
+        run: yarn benchmark
+
       - name: Codecov
         run: |
           yarn global add codecov codacy-coverage
