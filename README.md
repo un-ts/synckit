@@ -87,7 +87,7 @@ If you want to integrate with [tsconfig-paths](https://www.npmjs.com/package/tsc
 
 ## Benchmark
 
-It is about 20x faster than [`sync-threads`](https://github.com/lambci/sync-threads) but 3x slower than native for reading the file content itself 1000 times during runtime. See [Benchmark](./benchmarks/benchmark.txt) for more details.
+It is about 20x faster than [`sync-threads`](https://github.com/lambci/sync-threads) but 3x slower than native for reading the file content itself 1000 times during runtime, and 18x faster than `sync-threads` but 4x slower than native for total time. See [Benchmark](./benchmarks/benchmark.txt) for more details.
 
 You can try it with running `yarn benchmark` by yourself. [Here](./benchmarks/benchmark.js) is the benchmark source code.
 
