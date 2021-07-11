@@ -1,30 +1,40 @@
+/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
+
 import fs from 'fs'
 import path from 'path'
 
 import { createSyncFn, tmpdir } from 'synckit'
 
-test('createSyncFn with worker threads', () => {
-  process.env.SYNCKIT_WORKER_THREADS = '1'
+type AsyncWorkerFn<T = number> = (result: T, timeout?: number) => Promise<void>
 
+beforeEach(() => {
+  jest.resetModules()
+  delete process.env.SYNCKIT_BUFFER_SIZE
+  delete process.env.SYNCKIT_TIMEOUT
+  delete process.env.SYNCKIT_WORKER_THREADS
+})
+
+const workerTsPath = require.resolve('./worker-ts')
+const workerPath = require.resolve('./worker')
+const workerErrorPath = require.resolve('./worker-error')
+
+test('createSyncFn with worker threads', () => {
   expect(() => createSyncFn('./fake')).toThrow('`workerPath` must be absolute')
   expect(() => createSyncFn(require.resolve('eslint'))).not.toThrow()
 
-  // eslint-disable-next-line sonarjs/no-duplicate-string
-  const syncFn1 = createSyncFn(require.resolve('./worker-ts'))
-  const syncFn2 = createSyncFn(require.resolve('./worker-ts'))
+  const syncFn1 = createSyncFn<AsyncWorkerFn>(workerTsPath)
+  const syncFn2 = createSyncFn<AsyncWorkerFn>(workerTsPath)
   const syncFn3 = createSyncFn(require.resolve('../src'))
-  // eslint-disable-next-line sonarjs/no-duplicate-string
-  const errSyncFn = createSyncFn(require.resolve('./worker-error'))
+  const errSyncFn = createSyncFn<() => Promise<void>>(workerErrorPath)
 
   expect(syncFn1).toBe(syncFn2)
   expect(syncFn1).not.toBe(syncFn3)
   expect(syncFn1(1)).toBe(1)
   expect(syncFn1(2)).toBe(2)
   expect(syncFn1(5, 0)).toBe(5)
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
   expect(() => errSyncFn()).toThrow('Worker Error')
 
-  const syncFn4 = createSyncFn(require.resolve('./worker'))
+  const syncFn4 = createSyncFn<AsyncWorkerFn>(workerPath)
 
   expect(syncFn4(1)).toBe(1)
   expect(syncFn4(2)).toBe(2)
@@ -32,34 +42,53 @@ test('createSyncFn with worker threads', () => {
 })
 
 test('createSyncFn with child process', () => {
-  jest.resetModules()
-
   process.env.SYNCKIT_WORKER_THREADS = '0'
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const { createSyncFn } = require('synckit') as typeof import('synckit')
 
   expect(() => createSyncFn('./fake')).toThrow('`workerPath` must be absolute')
   expect(() => createSyncFn(require.resolve('eslint'))).not.toThrow()
 
-  const syncFn1 = createSyncFn(require.resolve('./worker-ts'))
-  const syncFn2 = createSyncFn(require.resolve('./worker-ts'))
+  const syncFn1 = createSyncFn<AsyncWorkerFn>(workerTsPath)
+  const syncFn2 = createSyncFn<AsyncWorkerFn>(workerTsPath)
   const syncFn3 = createSyncFn(require.resolve('../src'))
-  const errSyncFn = createSyncFn(require.resolve('./worker-error'))
+  const errSyncFn = createSyncFn<() => Promise<void>>(workerErrorPath)
 
   expect(syncFn1).toBe(syncFn2)
   expect(syncFn1).not.toBe(syncFn3)
   expect(syncFn1(1)).toBe(1)
   expect(syncFn1(2)).toBe(2)
   expect(syncFn1(5, 0)).toBe(5)
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-return
   expect(() => errSyncFn()).toThrow('Worker Error')
 
-  const syncFn4 = createSyncFn(require.resolve('./worker'))
+  const syncFn4 = createSyncFn<AsyncWorkerFn>(workerPath)
 
   expect(syncFn4(1)).toBe(1)
   expect(syncFn4(2)).toBe(2)
   expect(syncFn4(5, 0)).toBe(5)
+})
+
+test('env with worker threads', () => {
+  process.env.SYNCKIT_BUFFER_SIZE = '0'
+  process.env.SYNCKIT_TIMEOUT = '1'
+
+  const { createSyncFn } = require('synckit') as typeof import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerTsPath)
+
+  expect(() => syncFn(1, 100)).toThrow(
+    'Internal error: Atomics.wait() failed: timed-out',
+  )
+})
+
+test('env with child process', () => {
+  process.env.SYNCKIT_BUFFER_SIZE = '0'
+  process.env.SYNCKIT_TIMEOUT = '1'
+  process.env.SYNCKIT_WORKER_THREADS = '0'
+
+  const { createSyncFn } = require('synckit') as typeof import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerTsPath)
+
+  expect(() => syncFn(1, 100)).toThrow('spawnSync /bin/sh ETIMEDOUT')
 })
 
 /**
@@ -69,11 +98,8 @@ test('createSyncFn with child process', () => {
  * @link https://github.com/facebook/jest/issues/5274
  */
 test('runAsWorker with child process', async () => {
-  jest.resetModules()
-
   process.env.SYNCKIT_WORKER_THREADS = '0'
 
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const { runAsWorker } = require('synckit') as typeof import('synckit')
 
   const originalArgv = process.argv
@@ -81,13 +107,13 @@ test('runAsWorker with child process', async () => {
   const filename = path.resolve(tmpdir, 'synckit-test.json')
   fs.writeFileSync(filename, JSON.stringify([]))
 
-  process.argv = ['ts-node', require.resolve('./worker'), filename]
+  process.argv = ['ts-node', workerPath, filename]
   let result = await runAsWorker(() => Promise.resolve(1))
   expect(result).toBe(undefined)
   expect(fs.readFileSync(filename, 'utf8')).toBe(JSON.stringify({ result: 1 }))
 
   fs.writeFileSync(filename, JSON.stringify([]))
-  process.argv = ['ts-node', require.resolve('./worker-error'), filename]
+  process.argv = ['ts-node', workerErrorPath, filename]
   result = await runAsWorker(() => Promise.reject(new Error('Error!')))
   expect(result).toBe(undefined)
   expect(JSON.parse(fs.readFileSync(filename, 'utf8'))).toMatchObject({

@@ -1,3 +1,6 @@
 const { runAsWorker } = require('../lib')
 
-runAsWorker(result => Promise.resolve(result))
+runAsWorker(
+  (result, timeout) =>
+    new Promise(resolve => setTimeout(() => resolve(result), timeout)),
+)

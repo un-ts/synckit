@@ -29,13 +29,13 @@
     "benchmark:export": "yarn benchmark > benchmarks/benchmark.txt",
     "build": "run-p build:*",
     "build:r": "r -f es2015",
-    "build:ts": "tsc -P src",
+    "build:ts": "tsc -p src",
     "lint": "run-p lint:*",
     "lint:es": "eslint . --cache -f friendly --max-warnings 10",
     "lint:tsc": "tsc --noEmit",
     "prepare": "simple-git-hooks && yarn-deduplicate --strategy fewer || exit 0",
     "prerelease": "npm run build",
-    "pretest": "yarn build",
+    "pretest": "yarn build:ts",
     "release": "clean-publish && changeset publish",
     "test": "jest",
     "test-worker": "ts-node test/test-worker-ts && node test/test-worker",
@@ -81,10 +81,12 @@
     ]
   },
   "typeCoverage": {
-    "atLeast": 100,
+    "atLeast": 98.63,
     "cache": true,
     "detail": true,
-    "ignoreNested": true,
+    "ignoreAsAssertion": true,
+    "ignoreNonNullAssertion": true,
+    "showRelativePath": true,
     "strict": true,
     "update": true
   }

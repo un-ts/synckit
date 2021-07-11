@@ -22,6 +22,38 @@ const syncFn3 = require('./native')
 
 const nativeLoadTime = performance.now() - nativeLoadStartTime
 
+const RUN_TIMES = +process.env.RUN_TIMES || 1000
+
+const synckitRunStartTime = performance.now()
+
+let i = RUN_TIMES
+
+while (i-- > 0) {
+  syncFn1()
+}
+
+const synckitRuntime = performance.now() - synckitRunStartTime
+
+const syncThreadsRunStartTime = performance.now()
+
+i = RUN_TIMES
+
+while (i-- > 0) {
+  syncFn2()
+}
+
+const syncThreadsRuntime = performance.now() - syncThreadsRunStartTime
+
+const nativeRunStartTime = performance.now()
+
+i = RUN_TIMES
+
+while (i-- > 0) {
+  syncFn3()
+}
+
+const nativeRuntime = performance.now() - nativeRunStartTime
+
 class Benchmark {
   /**
    * @param {number} synckit
@@ -65,38 +97,6 @@ class Benchmark {
   }
 }
 
-const RUN_TIMES = +process.env.RUN_TIMES || 1000
-
-const synckitRunStartTime = performance.now()
-
-let i = RUN_TIMES
-
-while (i-- > 0) {
-  syncFn1()
-}
-
-const synckitRuntime = performance.now() - synckitRunStartTime
-
-const syncThreadsRunStartTime = performance.now()
-
-i = RUN_TIMES
-
-while (i-- > 0) {
-  syncFn2()
-}
-
-const syncThreadsRuntime = performance.now() - syncThreadsRunStartTime
-
-const nativeRunStartTime = performance.now()
-
-i = RUN_TIMES
-
-while (i-- > 0) {
-  syncFn3()
-}
-
-const nativeRuntime = performance.now() - nativeRunStartTime
-
 console.table({
   'load time': new Benchmark(
     synckitLoadTime,
@@ -104,4 +104,9 @@ console.table({
     nativeLoadTime,
   ),
   'run time': new Benchmark(synckitRuntime, syncThreadsRuntime, nativeRuntime),
+  'total time': new Benchmark(
+    synckitLoadTime + synckitRuntime,
+    syncThreadsLoadTime + syncThreadsRuntime,
+    nativeLoadTime + nativeRuntime,
+  ),
 })
