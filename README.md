@@ -23,6 +23,7 @@ Perform async work synchronously in Node.js using `worker_threads`, or `child_pr
 - [Usage](#usage)
   - [Install](#install)
   - [API](#api)
+  - [Env variables](#env-variables)
   - [TypeScript](#typescript)
 - [Benchmark](#benchmark)
 - [Changelog](#changelog)
@@ -69,6 +70,12 @@ You must make sure:
 
 1. if `worker_threads` is enabled (by default), the `result` is serialized by [`Structured Clone Algorithm`](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm)
 2. if `child_process` is used, the `result` is serialized by `JSON.stringify`
+
+### Env variables
+
+1. `SYNCKIT_WORKER_THREADS`: whether or not enable `worker_threads`, it's enabled by default, set as `0` to disable
+2. `SYNCKIT_BUFFER_SIZE`: `bufferSize` to create `SharedArrayBuffer` for `worker_threads` (default as `1024`), or `maxBuffer` for `child_process` (no default)
+3. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
 
 ### TypeScript
 

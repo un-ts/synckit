@@ -29,17 +29,32 @@ export * from './types'
  */
 export const tmpdir = fs.realpathSync(_tmpdir())
 
-export const useWorkerThreads = !['0', 'false'].includes(
-  process.env.SYNCKIT_WORKER_THREADS!,
-)
+const { SYNCKIT_WORKER_THREADS, SYNCKIT_BUFFER_SIZE, SYNCKIT_TIMEOUT } =
+  process.env
+
+export const useWorkerThreads =
+  !SYNCKIT_WORKER_THREADS || !['0', 'false'].includes(SYNCKIT_WORKER_THREADS)
+
+export const DEFAULT_BUFFER_SIZE = SYNCKIT_BUFFER_SIZE
+  ? +SYNCKIT_BUFFER_SIZE
+  : undefined
+
+export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
+
+export const DEFAULT_WORKER_BUFFER_SIZE = DEFAULT_BUFFER_SIZE || 1024
 
 const syncFnCache = new Map<string, AnyFn>()
 
 export function createSyncFn<T extends AnyAsyncFn>(
   workerPath: string,
   bufferSize?: number,
+  timeout?: number,
 ): Syncify<T>
-export function createSyncFn<T>(workerPath: string, bufferSize?: number) {
+export function createSyncFn<T>(
+  workerPath: string,
+  bufferSize?: number,
+  timeout = DEFAULT_TIMEOUT,
+) {
   if (!path.isAbsolute(workerPath)) {
     throw new Error('`workerPath` must be absolute')
   }
@@ -59,6 +74,7 @@ export function createSyncFn<T>(workerPath: string, bufferSize?: number) {
   const syncFn = (useWorkerThreads ? startWorkerThread : startChildProcess)<T>(
     resolvedWorkerPath,
     bufferSize,
+    timeout,
   )
 
   syncFnCache.set(workerPath, syncFn)
@@ -66,7 +82,11 @@ export function createSyncFn<T>(workerPath: string, bufferSize?: number) {
   return syncFn
 }
 
-function startChildProcess<T>(workerPath: string) {
+function startChildProcess<T>(
+  workerPath: string,
+  bufferSize = DEFAULT_BUFFER_SIZE,
+  timeout?: number,
+) {
   const executor = workerPath.endsWith('.ts') ? 'ts-node' : 'node'
 
   return (...args: unknown[]): T => {
@@ -79,13 +99,15 @@ function startChildProcess<T>(workerPath: string) {
     try {
       execSync(command, {
         stdio: 'inherit',
+        maxBuffer: bufferSize,
+        timeout,
       })
       const { result, error } = JSON.parse(
         fs.readFileSync(filename, 'utf8'),
       ) as DataMessage<T>
 
       if (error) {
-        throw typeof error === 'object' && error && 'message' in error
+        throw typeof error === 'object' && 'message' in error!
           ? // eslint-disable-next-line unicorn/error-message
             Object.assign(new Error(), error)
           : error
@@ -98,7 +120,11 @@ function startChildProcess<T>(workerPath: string) {
   }
 }
 
-function startWorkerThread<T>(workerPath: string, bufferSize = 1024) {
+function startWorkerThread<T>(
+  workerPath: string,
+  bufferSize = DEFAULT_WORKER_BUFFER_SIZE,
+  timeout?: number,
+) {
   const { port1: mainPort, port2: workerPort } = new MessageChannel()
 
   const isTs = workerPath.endsWith('.ts')
@@ -126,10 +152,10 @@ function startWorkerThread<T>(workerPath: string, bufferSize = 1024) {
     const msg: MainToWorkerMessage = { sharedBuffer, id, args }
     worker.postMessage(msg)
 
-    const status = Atomics.wait(sharedBufferView, 0, 0)
+    const status = Atomics.wait(sharedBufferView, 0, 0, timeout)
 
     /* istanbul ignore if */
-    if (status !== 'ok' && status !== 'not-equal') {
+    if (!['ok', 'not-equal'].includes(status)) {
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
     }
 
@@ -149,7 +175,7 @@ function startWorkerThread<T>(workerPath: string, bufferSize = 1024) {
       // MessagePort doesn't copy the properties of Error objects. We still want
       // error objects to have extra properties such as "warnings" so implement the
       // property copying manually.
-      throw Object.assign(error, properties)
+      throw typeof error === 'object' ? Object.assign(error, properties) : error
     }
 
     return result!
@@ -168,7 +194,7 @@ export const runAsWorker = async <T extends AnyAsyncFn>(fn: T) => {
     let msg: DataMessage<T>
     try {
       msg = { result: (await fn(...args)) as T }
-    } catch (err) {
+    } catch (err: unknown) {
       msg = {
         error:
           err instanceof Error
@@ -192,7 +218,7 @@ export const runAsWorker = async <T extends AnyAsyncFn>(fn: T) => {
         let msg: WorkerToMainMessage<T>
         try {
           msg = { id, result: (await fn(...args)) as T }
-        } catch (err) {
+        } catch (err: unknown) {
           const error = err as Error
           msg = { id, error, properties: { ...error } }
         }
