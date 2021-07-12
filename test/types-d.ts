@@ -18,16 +18,22 @@ expectType<TypeEqual<Syncify<() => AnyPromise>, () => PromiseType<AnyPromise>>>(
 )
 expectType<TypeEqual<Syncify<() => Promise<never>>, () => never>>(true)
 
-// @ts-expect-error
-createSyncFn<() => 0>('')
+expectType<(input: 0) => void>(createSyncFn<(input: 0) => Promise<void>>(''))
 
-// @ts-expect-error
-expectType<() => true>(createSyncFn<() => Promise<1>>(''))
+expectType<() => 1>(createSyncFn<() => Promise<1>>(''))
 
 expectType<() => true>(createSyncFn<() => Promise<true>>(''))
 expectType<() => true>(createSyncFn<() => Promise<never>>(''))
 
 // @ts-expect-error
+createSyncFn<() => 0>('')
+
+expectType<Promise<void>>(runAsWorker(() => Promise.resolve(1)))
+
+// @ts-expect-error
 runAsWorker(() => 1)
 
-runAsWorker<() => Promise<number>>(() => Promise.resolve(1))
+runAsWorker<() => Promise<string>>(() =>
+  // @ts-expect-error
+  Promise.resolve(1),
+)

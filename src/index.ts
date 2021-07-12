@@ -50,7 +50,7 @@ export function createSyncFn<T extends AnyAsyncFn>(
   bufferSize?: number,
   timeout?: number,
 ): Syncify<T>
-export function createSyncFn<T>(
+export function createSyncFn<R, T extends AnyAsyncFn<R>>(
   workerPath: string,
   bufferSize?: number,
   timeout = DEFAULT_TIMEOUT,
@@ -65,25 +65,24 @@ export function createSyncFn<T>(
     return cachedSyncFn
   }
 
-  const syncFn = (useWorkerThreads ? startWorkerThread : startChildProcess)<T>(
-    workerPath,
-    bufferSize,
-    timeout,
-  )
+  const syncFn = (useWorkerThreads ? startWorkerThread : startChildProcess)<
+    R,
+    T
+  >(workerPath, bufferSize, timeout)
 
   syncFnCache.set(workerPath, syncFn)
 
   return syncFn
 }
 
-function startChildProcess<T>(
+function startChildProcess<R, T extends AnyAsyncFn<R>>(
   workerPath: string,
   bufferSize = DEFAULT_BUFFER_SIZE,
   timeout?: number,
 ) {
   const executor = workerPath.endsWith('.ts') ? 'ts-node' : 'node'
 
-  return (...args: unknown[]): T => {
+  return (...args: Parameters<T>): R => {
     const filename = path.resolve(tmpdir, `synckit-${uuid()}.json`)
 
     fs.writeFileSync(filename, JSON.stringify(args))
@@ -98,7 +97,7 @@ function startChildProcess<T>(
       })
       const { result, error } = JSON.parse(
         fs.readFileSync(filename, 'utf8'),
-      ) as DataMessage<T>
+      ) as DataMessage<R>
 
       if (error) {
         throw typeof error === 'object' && 'message' in error!
@@ -114,7 +113,7 @@ function startChildProcess<T>(
   }
 }
 
-function startWorkerThread<T>(
+function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   workerPath: string,
   bufferSize = DEFAULT_WORKER_BUFFER_SIZE,
   timeout?: number,
@@ -137,13 +136,13 @@ function startWorkerThread<T>(
 
   let nextID = 0
 
-  const syncFn = (...args: unknown[]): T => {
+  const syncFn = (...args: Parameters<T>): R => {
     const id = nextID++
 
     const sharedBuffer = new SharedArrayBuffer(bufferSize)
     const sharedBufferView = new Int32Array(sharedBuffer)
 
-    const msg: MainToWorkerMessage = { sharedBuffer, id, args }
+    const msg: MainToWorkerMessage<Parameters<T>> = { sharedBuffer, id, args }
     worker.postMessage(msg)
 
     const status = Atomics.wait(sharedBufferView, 0, 0, timeout)
@@ -157,8 +156,7 @@ function startWorkerThread<T>(
       id: id2,
       result,
       error,
-      properties,
-    } = receiveMessageOnPort(mainPort)!.message as WorkerToMainMessage<T>
+    } = receiveMessageOnPort(mainPort)!.message as WorkerToMainMessage<R>
 
     /* istanbul ignore if */
     if (id !== id2) {
@@ -166,10 +164,7 @@ function startWorkerThread<T>(
     }
 
     if (error) {
-      // MessagePort doesn't copy the properties of Error objects. We still want
-      // error objects to have extra properties such as "warnings" so implement the
-      // property copying manually.
-      throw typeof error === 'object' ? Object.assign(error, properties) : error
+      throw error
     }
 
     return result!
@@ -180,19 +175,20 @@ function startWorkerThread<T>(
   return syncFn
 }
 
-export const runAsWorker = async <T extends AnyAsyncFn>(fn: T) => {
+export async function runAsWorker<T extends AnyAsyncFn>(fn: T): Promise<void>
+export async function runAsWorker<R, T extends AnyAsyncFn<R>>(fn: T) {
   if (!workerData) {
     const filename = process.argv[2]
     const content = fs.readFileSync(filename, 'utf8')
     const args = JSON.parse(content) as Parameters<T>
-    let msg: DataMessage<T>
+    let msg: DataMessage<R>
     try {
-      msg = { result: (await fn(...args)) as T }
+      msg = { result: await fn(...args) }
     } catch (err: unknown) {
       msg = {
         error:
           err instanceof Error
-            ? { name: err.name, message: err.message, stack: err.stack }
+            ? { ...err, name: err.name, message: err.message, stack: err.stack }
             : err,
       }
     }
@@ -205,20 +201,22 @@ export const runAsWorker = async <T extends AnyAsyncFn>(fn: T) => {
   /* istanbul ignore next */
   parentPort!.on(
     'message',
-    ({ sharedBuffer, id, args }: MainToWorkerMessage) => {
+    ({ sharedBuffer, id, args }: MainToWorkerMessage<Parameters<T>>) => {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       ;(async () => {
         const sharedBufferView = new Int32Array(sharedBuffer)
-        let msg: WorkerToMainMessage<T>
+        let msg: WorkerToMainMessage<R>
         try {
-          msg = { id, result: (await fn(...args)) as T }
-        } catch (err: unknown) {
-          const error = err as Error
-          msg = { id, error, properties: { ...error } }
+          msg = { id, result: await fn(...args) }
+        } catch (error: unknown) {
+          msg = {
+            id,
+            error,
+          }
         }
         workerPort.postMessage(msg)
         Atomics.add(sharedBufferView, 0, 1)
-        Atomics.notify(sharedBufferView, 0, Number.POSITIVE_INFINITY)
+        Atomics.notify(sharedBufferView, 0)
       })()
     },
   )
