@@ -65,14 +65,8 @@ export function createSyncFn<T>(
     return cachedSyncFn
   }
 
-  let resolvedWorkerPath = workerPath
-
-  if (!resolvedWorkerPath.endsWith('.ts')) {
-    resolvedWorkerPath = require.resolve(workerPath)
-  }
-
   const syncFn = (useWorkerThreads ? startWorkerThread : startChildProcess)<T>(
-    resolvedWorkerPath,
+    workerPath,
     bufferSize,
     timeout,
   )
