@@ -33,11 +33,6 @@ const perfCase = name => {
   }
 }
 
-const synckit = perfCase('synckit')
-const syncThreads = perfCase('sync-threads')
-const deasync = perfCase('deasync')
-const native = perfCase('native')
-
 /**
  * @param {string} text
  * @returns {string} Kebab cased text
@@ -64,7 +59,7 @@ class Benchmark {
       this[perfType] = keys.reduce(
         (acc, key) =>
           Object.assign(acc, {
-            [key]: perfResults[key][perfType].toFixed(2),
+            [key]: perfResults[key][perfType].toFixed(2) + 'ms',
             ...(key === baseKey
               ? null
               : {
@@ -95,9 +90,9 @@ class Benchmark {
 
 console.table(
   new Benchmark({
-    synckit,
-    syncThreads,
-    deasync,
-    native,
+    synckit: perfCase('synckit'),
+    syncThreads: perfCase('sync-threads'),
+    deasync: perfCase('deasync'),
+    native: perfCase('native'),
   }),
 )

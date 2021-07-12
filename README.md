@@ -89,7 +89,7 @@ If you want to integrate with [tsconfig-paths](https://www.npmjs.com/package/tsc
 
 It is about 20x faster than [`sync-threads`](https://github.com/lambci/sync-threads) but 3x slower than native for reading the file content itself 1000 times during runtime, and 18x faster than `sync-threads` but 4x slower than native for total time.
 
-And it's a little bit faster than [`deasync`](https://github.com/abbr/deasync) but requires no native bindings or `node-gyp`.
+And it's almost same as [`deasync`](https://github.com/abbr/deasync) but requires no native bindings or `node-gyp`.
 
 See [benchmark](./benchmarks/benchmark.txt) for more details.
 
