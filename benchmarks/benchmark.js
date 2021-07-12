@@ -1,86 +1,82 @@
 // @ts-check
 
-/* eslint-disable import/order */
-
 const { performance } = require('perf_hooks')
-
-const synckitLoadStartTime = performance.now()
-
-const syncFn1 = require('./synckit')
-
-const synckitLoadTime = performance.now() - synckitLoadStartTime
-
-const syncThreadsLoadStartTime = performance.now()
-
-const syncFn2 = require('./sync-threads')
-
-const syncThreadsLoadTime = performance.now() - syncThreadsLoadStartTime
-
-const nativeLoadStartTime = performance.now()
-
-const syncFn3 = require('./native')
-
-const nativeLoadTime = performance.now() - nativeLoadStartTime
 
 const RUN_TIMES = +process.env.RUN_TIMES || 1000
 
-const synckitRunStartTime = performance.now()
+/**
+ * @param {string} name
+ * @typedef {{ loadTime:number,runTime:number, totalTime:number }} PerfResult
+ * @returns {PerfResult} Perf result
+ */
+const perfCase = name => {
+  const loadStartTime = performance.now()
 
-let i = RUN_TIMES
+  const syncFn = require(`./${name}`)
 
-while (i-- > 0) {
-  syncFn1()
+  const loadTime = performance.now() - loadStartTime
+
+  let i = RUN_TIMES
+
+  const runStartTime = performance.now()
+
+  while (i-- > 0) {
+    syncFn()
+  }
+
+  const runTime = performance.now() - runStartTime
+
+  return {
+    loadTime,
+    runTime,
+    totalTime: runTime + loadTime,
+  }
 }
 
-const synckitRuntime = performance.now() - synckitRunStartTime
+const synckit = perfCase('synckit')
+const syncThreads = perfCase('sync-threads')
+const deasync = perfCase('deasync')
+const native = perfCase('native')
 
-const syncThreadsRunStartTime = performance.now()
-
-i = RUN_TIMES
-
-while (i-- > 0) {
-  syncFn2()
-}
-
-const syncThreadsRuntime = performance.now() - syncThreadsRunStartTime
-
-const nativeRunStartTime = performance.now()
-
-i = RUN_TIMES
-
-while (i-- > 0) {
-  syncFn3()
-}
-
-const nativeRuntime = performance.now() - nativeRunStartTime
+/**
+ * @param {string} text
+ * @returns {string} Kebab cased text
+ */
+const kebabCase = text =>
+  text.replace(/([A-Z]+)/, (_, $1) => '-' + $1.toLowerCase())
 
 class Benchmark {
   /**
-   * @param {number} synckit
-   * @param {number} syncThreads
-   * @param {number} native
+   * @param { Object.<string, PerfResult> } perfResults
    */
-  constructor(synckit, syncThreads, native) {
-    /**
-     * @type {string}
-     */
-    this.synckit = synckit.toFixed(2) + 'ms'
-    /**
-     * @type {string}
-     */
-    this['sync-threads'] = syncThreads.toFixed(2) + 'ms'
-    /**
-     * @type {string}
-     */
-    this.native = native.toFixed(2) + 'ms'
-    /**
-     * @type {string}
-     */
-    this['perf sync-threads'] = this.perf(synckit, syncThreads)
-    /**
-     * @type {string}
-     */
-    this['perf native'] = this.perf(synckit, native)
+  constructor(perfResults) {
+    const keys = Object.keys(perfResults)
+    const baseKey = kebabCase(keys[0])
+
+    const perfTypes = /** @type {Array<keyof PerfResult>} */ ([
+      'loadTime',
+      'runTime',
+      'totalTime',
+    ])
+
+    for (const perfType of perfTypes) {
+      const basePerf = perfResults[baseKey][perfType]
+      this[perfType] = keys.reduce(
+        (acc, key) =>
+          Object.assign(acc, {
+            [key]: perfResults[key][perfType].toFixed(2),
+            ...(key === baseKey
+              ? null
+              : {
+                  [`perf ${key}`]: this.perf(
+                    basePerf,
+                    perfResults[key][perfType],
+                  ),
+                }),
+          }),
+        {},
+      )
+    }
   }
 
   /**
@@ -97,16 +93,11 @@ class Benchmark {
   }
 }
 
-console.table({
-  'load time': new Benchmark(
-    synckitLoadTime,
-    syncThreadsLoadTime,
-    nativeLoadTime,
-  ),
-  'run time': new Benchmark(synckitRuntime, syncThreadsRuntime, nativeRuntime),
-  'total time': new Benchmark(
-    synckitLoadTime + synckitRuntime,
-    syncThreadsLoadTime + syncThreadsRuntime,
-    nativeLoadTime + nativeRuntime,
-  ),
-})
+console.table(
+  new Benchmark({
+    synckit,
+    syncThreads,
+    deasync,
+    native,
+  }),
+)
