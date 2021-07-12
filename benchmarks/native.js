@@ -1,3 +1,3 @@
 const fs = require('fs')
 
-module.exports = () => fs.readFileSync(__filename, 'utf8')
+module.exports = filename => fs.readFileSync(filename, 'utf8')

@@ -21,7 +21,7 @@ const perfCase = name => {
   const runStartTime = performance.now()
 
   while (i-- > 0) {
-    syncFn()
+    syncFn(__filename)
   }
 
   const runTime = performance.now() - runStartTime
