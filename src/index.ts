@@ -156,7 +156,6 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       id: id2,
       result,
       error,
-      properties,
     } = receiveMessageOnPort(mainPort)!.message as WorkerToMainMessage<R>
 
     /* istanbul ignore if */
@@ -165,10 +164,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     }
 
     if (error) {
-      // MessagePort doesn't copy the properties of Error objects. We still want
-      // error objects to have extra properties such as "warnings" so implement the
-      // property copying manually.
-      throw properties ? Object.assign(error, properties) : error
+      throw error
     }
 
     return result!
@@ -212,17 +208,15 @@ export async function runAsWorker<R, T extends AnyAsyncFn<R>>(fn: T) {
         let msg: WorkerToMainMessage<R>
         try {
           msg = { id, result: await fn(...args) }
-        } catch (err: unknown) {
-          const error = err as Error
+        } catch (error: unknown) {
           msg = {
             id,
             error,
-            properties: typeof error === 'object' ? { ...error } : undefined,
           }
         }
         workerPort.postMessage(msg)
         Atomics.add(sharedBufferView, 0, 1)
-        Atomics.notify(sharedBufferView, 0, Number.POSITIVE_INFINITY)
+        Atomics.notify(sharedBufferView, 0)
       })()
     },
   )

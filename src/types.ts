@@ -36,5 +36,4 @@ export interface DataMessage<T> {
 
 export interface WorkerToMainMessage<T = unknown> extends DataMessage<T> {
   id: number
-  properties?: object
 }
