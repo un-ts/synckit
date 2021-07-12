@@ -1,5 +1,11 @@
 # synckit
 
+## 0.3.0
+
+### Minor Changes
+
+- [#27](https://github.com/rx-ts/synckit/pull/27) [`2809da0`](https://github.com/rx-ts/synckit/commit/2809da0d25b9e4c617b3699c78cf80fbae895c6f) Thanks [@JounQin](https://github.com/JounQin)! - feat: add more env variables support
+
 ## 0.2.0
 
 ### Minor Changes
