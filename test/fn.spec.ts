@@ -5,7 +5,7 @@ import path from 'path'
 
 import { createSyncFn, tmpdir } from 'synckit'
 
-type AsyncWorkerFn<T = number> = (result: T, timeout?: number) => Promise<void>
+type AsyncWorkerFn<T = number> = (result: T, timeout?: number) => Promise<T>
 
 beforeEach(() => {
   jest.resetModules()
