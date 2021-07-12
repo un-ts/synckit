@@ -93,6 +93,7 @@ console.table(
     synckit: perfCase('synckit'),
     syncThreads: perfCase('sync-threads'),
     deasync: perfCase('deasync'),
+    makeSynchronous: perfCase('make-synchronous'),
     native: perfCase('native'),
   }),
 )
