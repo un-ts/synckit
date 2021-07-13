@@ -1,5 +1,11 @@
 # synckit
 
+## 0.3.3
+
+### Patch Changes
+
+- [#37](https://github.com/rx-ts/synckit/pull/37) [`4ae675a`](https://github.com/rx-ts/synckit/commit/4ae675ad4b0bc02ac459e9d49319154048ee40dd) Thanks [@JounQin](https://github.com/JounQin)! - fix: `worker_threads` API changes a lot
+
 ## 0.3.2
 
 ### Patch Changes
