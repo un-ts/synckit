@@ -46,7 +46,8 @@ class Benchmark {
    */
   constructor(perfResults) {
     const keys = Object.keys(perfResults)
-    const baseKey = kebabCase(keys[0])
+    const _baseKey = keys[0]
+    const baseKey = kebabCase(_baseKey)
 
     const perfTypes = /** @type {Array<keyof PerfResult>} */ ([
       'loadTime',
@@ -55,22 +56,19 @@ class Benchmark {
     ])
 
     for (const perfType of perfTypes) {
-      const basePerf = perfResults[baseKey][perfType]
-      this[perfType] = keys.reduce(
-        (acc, key) =>
-          Object.assign(acc, {
-            [key]: perfResults[key][perfType].toFixed(2) + 'ms',
-            ...(key === baseKey
-              ? null
-              : {
-                  [`perf ${key}`]: this.perf(
-                    basePerf,
-                    perfResults[key][perfType],
-                  ),
-                }),
-          }),
-        {},
-      )
+      const basePerf = perfResults[_baseKey][perfType]
+      this[perfType] = keys.reduce((acc, key) => {
+        const perfResult = perfResults[key]
+        key = kebabCase(key)
+        return Object.assign(acc, {
+          [key]: perfResult[perfType].toFixed(2) + 'ms',
+          ...(key === baseKey
+            ? null
+            : {
+                [`perf ${key}`]: this.perf(basePerf, perfResult[perfType]),
+              }),
+        })
+      }, {})
     }
   }
 
