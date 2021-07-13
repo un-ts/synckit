@@ -1,5 +1,11 @@
 # synckit
 
+## 0.3.2
+
+### Patch Changes
+
+- [#35](https://github.com/rx-ts/synckit/pull/35) [`578db5b`](https://github.com/rx-ts/synckit/commit/578db5bd33fdd137ca09b450a211e46d3f7299cf) Thanks [@JounQin](https://github.com/JounQin)! - fix: improve compatibility with node >=8.10 <12.11
+
 ## 0.3.1
 
 ### Patch Changes
