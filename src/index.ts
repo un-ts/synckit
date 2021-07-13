@@ -27,10 +27,17 @@ let workerThreads: typeof import('worker_threads') | undefined
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
   workerThreads = require('worker_threads')
-} catch {
-  /* istanbul ignore next */
+
+  /* istanbul ignore if */
+  if (typeof workerThreads!.receiveMessageOnPort !== 'function') {
+    workerThreads = undefined
+  }
+} catch {}
+
+/* istanbul ignore if */
+if (!workerThreads) {
   console.warn(
-    '`worker_threads` is not available in current environment, `Node >= 12` is required',
+    '[synckit]: `worker_threads` or `receiveMessageOnPort` is not available in current environment, `Node >= 12` is required',
   )
 }
 
