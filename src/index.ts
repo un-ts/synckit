@@ -30,7 +30,7 @@ try {
 } catch {
   /* istanbul ignore next */
   console.warn(
-    '`worker_threads` is not available in current environment,\nyou may want to enable it by using `node --experimental-worker` or setting env `NODE_OPTIONS="--experimental-worker"` for better performance',
+    '`worker_threads` is not available in current environment, `Node >= 12` is required',
   )
 }
 
