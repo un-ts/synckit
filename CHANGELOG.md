@@ -1,5 +1,11 @@
 # synckit
 
+## 0.3.4
+
+### Patch Changes
+
+- [#39](https://github.com/rx-ts/synckit/pull/39) [`0698572`](https://github.com/rx-ts/synckit/commit/0698572d048e38d9c1e5de233c07e89a7ca01eca) Thanks [@JounQin](https://github.com/JounQin)! - fix: test whether `receiveMessageOnPort` available for `--experimental-worker`
+
 ## 0.3.3
 
 ### Patch Changes
