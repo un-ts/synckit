@@ -23,7 +23,6 @@ Perform async work synchronously in Node.js using `worker_threads`, or `child_pr
 - [Usage](#usage)
   - [Install](#install)
   - [API](#api)
-  - [`Node` compatibility](#node-compatibility)
   - [Envs](#envs)
   - [TypeScript](#typescript)
 - [Benchmark](#benchmark)
@@ -71,10 +70,6 @@ You must make sure:
 
 1. if `worker_threads` is enabled (by default), the `result` is serialized by [`Structured Clone Algorithm`](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm)
 2. if `child_process` is used, the `result` is serialized by `JSON.stringify`
-
-### `Node` compatibility
-
-`worker_threads` is available from `Node 8.10` with flag `--experimental-worker` and only enabled by default from `Node 12.11`, so you may want to enable it by using `node --experimental-worker` or setting env `NODE_OPTIONS="--experimental-worker"` for better performance.
 
 ### Envs
 
