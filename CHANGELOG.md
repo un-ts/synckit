@@ -1,5 +1,13 @@
 # synckit
 
+## 0.3.1
+
+### Patch Changes
+
+- [#34](https://github.com/rx-ts/synckit/pull/34) [`255736c`](https://github.com/rx-ts/synckit/commit/255736ca98731cf52aa1391d855737f45edb457f) Thanks [@JounQin](https://github.com/JounQin)! - fix: `worker_threads` is only available on Node 12
+
+- [#32](https://github.com/rx-ts/synckit/pull/32) [`d84e48e`](https://github.com/rx-ts/synckit/commit/d84e48e643124c3d5801bec3147ec158ccf6db49) Thanks [@JounQin](https://github.com/JounQin)! - fix(types): stricter but internal types
+
 ## 0.3.0
 
 ### Minor Changes
