@@ -6,7 +6,7 @@
   "author": "JounQin <admin@1stg.me>",
   "license": "MIT",
   "engines": {
-    "node": ">=v8.17.0"
+    "node": ">=v14.17.4"
   },
   "main": "lib",
   "module": "lib/es2015",
