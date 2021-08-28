@@ -2,6 +2,7 @@ import { execSync } from 'child_process'
 import { tmpdir as _tmpdir } from 'os'
 import path from 'path'
 import fs from 'fs'
+import { createRequire } from 'module'
 
 import { v4 as uuid } from 'uuid'
 
@@ -13,9 +14,9 @@ import {
   Syncify,
   WorkerData,
   WorkerToMainMessage,
-} from './types'
+} from './types.js'
 
-export * from './types'
+export * from './types.js'
 
 /**
  * @link https://github.com/sindresorhus/temp-dir/blob/main/index.js#L9
@@ -24,12 +25,16 @@ export const tmpdir = fs.realpathSync(_tmpdir())
 
 let workerThreads: typeof import('worker_threads') | undefined
 
+const cjsRequire =
+  typeof require === 'undefined' ? createRequire(import.meta.url) : require
+
 try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
-  workerThreads = require('worker_threads')
+  workerThreads = cjsRequire(
+    'worker_threads',
+  ) as typeof import('worker_threads')
 
   /* istanbul ignore if */
-  if (typeof workerThreads!.receiveMessageOnPort !== 'function') {
+  if (typeof workerThreads.receiveMessageOnPort !== 'function') {
     workerThreads = undefined
   }
 } catch {}
@@ -41,8 +46,12 @@ if (!workerThreads) {
   )
 }
 
-const { SYNCKIT_WORKER_THREADS, SYNCKIT_BUFFER_SIZE, SYNCKIT_TIMEOUT } =
-  process.env
+const {
+  SYNCKIT_WORKER_THREADS,
+  SYNCKIT_BUFFER_SIZE,
+  SYNCKIT_TIMEOUT,
+  SYNCKIT_ESM,
+} = process.env
 
 export const useWorkerThreads =
   !!workerThreads &&
@@ -93,7 +102,11 @@ function startChildProcess<R, T extends AnyAsyncFn<R>>(
   bufferSize = DEFAULT_BUFFER_SIZE,
   timeout?: number,
 ) {
-  const executor = workerPath.endsWith('.ts') ? 'ts-node' : 'node'
+  const executor = workerPath.endsWith('.ts')
+    ? ['1', 'true'].includes(SYNCKIT_ESM!)
+      ? 'node --loader ts-node/esm'
+      : 'ts-node'
+    : 'node'
 
   return (...args: Parameters<T>): R => {
     const filename = path.resolve(tmpdir, `synckit-${uuid()}.json`)

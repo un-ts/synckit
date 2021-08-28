@@ -12,7 +12,7 @@ const RUN_TIMES = +process.env.RUN_TIMES || 1000
 const perfCase = name => {
   const loadStartTime = performance.now()
 
-  const syncFn = require(`./${name}`)
+  const syncFn = require(`./${name}.cjs`)
 
   const loadTime = performance.now() - loadStartTime
 

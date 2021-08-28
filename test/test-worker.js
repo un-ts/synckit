@@ -1,15 +1,14 @@
-const {
-  Worker,
-  MessageChannel,
-  receiveMessageOnPort,
-} = require('worker_threads')
+import { createRequire } from 'module'
+import { Worker, MessageChannel, receiveMessageOnPort } from 'worker_threads'
+
+const cjsRequire = createRequire(import.meta.url)
 
 const sharedBuffer = new SharedArrayBuffer(1024)
 const sharedBufferView = new Int32Array(sharedBuffer)
 
 const { port1: mainPort, port2: workerPort } = new MessageChannel()
 
-const worker = new Worker(require.resolve('./worker'), {
+const worker = new Worker(cjsRequire.resolve('./worker'), {
   transferList: [workerPort],
   workerData: {
     workerPort,

@@ -1,7 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires */
 
 import fs from 'fs'
+import { createRequire } from 'module'
 import path from 'path'
+
+import { jest } from '@jest/globals'
 
 import { createSyncFn, tmpdir } from 'synckit'
 
@@ -14,17 +17,19 @@ beforeEach(() => {
   delete process.env.SYNCKIT_WORKER_THREADS
 })
 
-const workerTsPath = require.resolve('./worker-ts')
-const workerPath = require.resolve('./worker')
-const workerErrorPath = require.resolve('./worker-error')
+const cjsRequire = createRequire(import.meta.url)
+
+const workerTsPath = cjsRequire.resolve('./worker-ts')
+const workerPath = cjsRequire.resolve('./worker')
+const workerErrorPath = cjsRequire.resolve('./worker-error')
 
 test('createSyncFn with worker threads', () => {
   expect(() => createSyncFn('./fake')).toThrow('`workerPath` must be absolute')
-  expect(() => createSyncFn(require.resolve('eslint'))).not.toThrow()
+  expect(() => createSyncFn(cjsRequire.resolve('eslint'))).not.toThrow()
 
   const syncFn1 = createSyncFn<AsyncWorkerFn>(workerTsPath)
   const syncFn2 = createSyncFn<AsyncWorkerFn>(workerTsPath)
-  const syncFn3 = createSyncFn(require.resolve('../src'))
+  const syncFn3 = createSyncFn(cjsRequire.resolve('../src'))
   const errSyncFn = createSyncFn<() => Promise<void>>(workerErrorPath)
 
   expect(syncFn1).toBe(syncFn2)
