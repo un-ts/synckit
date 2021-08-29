@@ -1,6 +1,6 @@
 {
   "name": "synckit",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "description": "Perform async work synchronously in Node.js using `worker_threads`, or `child_process` as fallback, with first-class TypeScript support.",
   "repository": "git+https://github.com/rx-ts/synckit.git",
