@@ -91,7 +91,7 @@ It is about 20x faster than [`sync-threads`](https://github.com/lambci/sync-thre
 
 And it's almost same as [`deasync`](https://github.com/abbr/deasync) but requires no native bindings or `node-gyp`.
 
-See [benchmark](./benchmarks/benchmark.txt) for more details.
+See [benchmark.cjs](./benchmarks/benchmark.cjs.txt) and [benchmark.esm](./benchmarks/benchmark.esm.txt) for more details.
 
 You can try it with running `yarn benchmark` by yourself. [Here](./benchmarks/benchmark.js) is the benchmark source code.
 

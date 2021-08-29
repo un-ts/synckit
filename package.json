@@ -28,8 +28,12 @@
     "synckit"
   ],
   "scripts": {
-    "benchmark": "node benchmarks/benchmark.cjs",
-    "benchmark:export": "yarn benchmark > benchmarks/benchmark.txt",
+    "benchmark": "run-s benchmark:*",
+    "benchmark-export": "run-s benchmark-export:*",
+    "benchmark-export:cjs": "yarn benchmark:cjs > benchmarks/benchmark.cjs.txt",
+    "benchmark-export:esm": "yarn benchmark:esm> benchmarks/benchmark.esm.txt",
+    "benchmark:cjs": "node benchmarks/benchmark.cjs",
+    "benchmark:esm": "node benchmarks/benchmark.js",
     "build": "run-p build:*",
     "build:r": "r -f cjs",
     "build:ts": "tsc -p src",

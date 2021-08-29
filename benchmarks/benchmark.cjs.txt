@@ -1,8 +1,8 @@
-$ node benchmarks/benchmark
+$ node benchmarks/benchmark.cjs
 ┌───────────┬────────────┬──────────────┬───────────────────┬────────────┬────────────────┬───────────┬─────────────────┐
 │  (index)  │  synckit   │ sync-threads │ perf sync-threads │  deasync   │  perf deasync  │  native   │   perf native   │
 ├───────────┼────────────┼──────────────┼───────────────────┼────────────┼────────────────┼───────────┼─────────────────┤
-│ loadTime  │ '23.78ms'  │   '1.34ms'   │  '17.73x slower'  │ '12.33ms'  │ '1.93x slower' │ '0.32ms'  │ '74.50x slower' │
-│  runTime  │ '202.66ms' │ '4184.60ms'  │  '20.65x faster'  │ '307.03ms' │ '1.51x faster' │ '30.71ms' │ '6.60x slower'  │
-│ totalTime │ '226.44ms' │ '4185.95ms'  │  '18.49x faster'  │ '319.36ms' │ '1.41x faster' │ '31.02ms' │ '7.30x slower'  │
+│ loadTime  │ '26.45ms'  │   '1.61ms'   │  '16.47x slower'  │ '15.39ms'  │ '1.72x slower' │ '0.35ms'  │ '76.64x slower' │
+│  runTime  │ '256.15ms' │ '4884.80ms'  │  '19.07x faster'  │ '428.31ms' │ '1.67x faster' │ '35.98ms' │ '7.12x slower'  │
+│ totalTime │ '282.60ms' │ '4886.41ms'  │  '17.29x faster'  │ '443.70ms' │ '1.57x faster' │ '36.32ms' │ '7.78x slower'  │
 └───────────┴────────────┴──────────────┴───────────────────┴────────────┴────────────────┴───────────┴─────────────────┘

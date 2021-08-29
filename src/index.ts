@@ -26,6 +26,7 @@ export const tmpdir = fs.realpathSync(_tmpdir())
 let workerThreads: typeof import('worker_threads') | undefined
 
 const cjsRequire =
+  /* istanbul ignore next */
   typeof require === 'undefined' ? createRequire(import.meta.url) : require
 
 try {
@@ -50,12 +51,14 @@ const {
   SYNCKIT_WORKER_THREADS,
   SYNCKIT_BUFFER_SIZE,
   SYNCKIT_TIMEOUT,
-  SYNCKIT_ESM,
+  SYNCKIT_TS_ESM,
 } = process.env
 
 export const useWorkerThreads =
   !!workerThreads &&
   (!SYNCKIT_WORKER_THREADS || !['0', 'false'].includes(SYNCKIT_WORKER_THREADS))
+
+const TS_USE_ESM = !!SYNCKIT_TS_ESM && ['1', 'true'].includes(SYNCKIT_TS_ESM)
 
 export const DEFAULT_BUFFER_SIZE = SYNCKIT_BUFFER_SIZE
   ? +SYNCKIT_BUFFER_SIZE
@@ -103,7 +106,7 @@ function startChildProcess<R, T extends AnyAsyncFn<R>>(
   timeout?: number,
 ) {
   const executor = workerPath.endsWith('.ts')
-    ? ['1', 'true'].includes(SYNCKIT_ESM!)
+    ? TS_USE_ESM
       ? 'node --loader ts-node/esm'
       : 'ts-node'
     : 'node'
@@ -139,23 +142,32 @@ function startChildProcess<R, T extends AnyAsyncFn<R>>(
   }
 }
 
+const throwError = (msg: string) => {
+  throw new Error(msg)
+}
+
 function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   workerPath: string,
   bufferSize = DEFAULT_WORKER_BUFFER_SIZE,
   timeout?: number,
 ) {
-  const { port1: mainPort, port2: workerPort } =
-    new workerThreads!.MessageChannel()
+  const { MessageChannel, Worker } = workerThreads!
+
+  const { port1: mainPort, port2: workerPort } = new MessageChannel()
 
   const isTs = workerPath.endsWith('.ts')
 
-  const worker = new workerThreads!.Worker(
+  const worker = new Worker(
     isTs
-      ? `require('ts-node/register');require(require('worker_threads').workerData.workerPath)`
+      ? TS_USE_ESM
+        ? throwError(
+            'Native esm in `.ts` file is not supported yet, please use `.cjs` instead',
+          )
+        : `require('ts-node/register');require('${workerPath}')`
       : workerPath,
     {
       eval: isTs,
-      workerData: { workerPath, workerPort },
+      workerData: { workerPort },
       transferList: [workerPort],
       execArgv: [],
     },
