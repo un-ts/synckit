@@ -1,5 +1,11 @@
 # synckit
 
+## 0.4.0
+
+### Minor Changes
+
+- [#45](https://github.com/rx-ts/synckit/pull/45) [`f38de5f`](https://github.com/rx-ts/synckit/commit/f38de5fe5dfc8e4a8871d3d55e7a4d9bdc3a5d05) Thanks [@JounQin](https://github.com/JounQin)! - feat: use native esm
+
 ## 0.3.4
 
 ### Patch Changes
