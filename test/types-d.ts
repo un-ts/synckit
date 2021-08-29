@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import { TypeEqual, expectType } from 'ts-expect'
 
 import {
@@ -28,7 +27,7 @@ expectType<() => true>(createSyncFn<() => Promise<never>>(''))
 // @ts-expect-error
 createSyncFn<() => 0>('')
 
-expectType<Promise<void>>(runAsWorker(() => Promise.resolve(1)))
+expectType<void>(runAsWorker(() => Promise.resolve(1)))
 
 // @ts-expect-error
 runAsWorker(() => 1)
