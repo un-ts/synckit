@@ -1,5 +1,11 @@
 # synckit
 
+## 0.5.0
+
+### Minor Changes
+
+- [#47](https://github.com/rx-ts/synckit/pull/47) [`a362982`](https://github.com/rx-ts/synckit/commit/a362982eac4083ff3d00b4f6a9d4f4183dd2418e) Thanks [@JounQin](https://github.com/JounQin)! - feat: drop child_process
+
 ## 0.4.0
 
 ### Minor Changes
