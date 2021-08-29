@@ -16,7 +16,7 @@
 [![JavaScript Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://standardjs.com)
 [![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://github.com/prettier/prettier)
 
-Perform async work synchronously in Node.js using `worker_threads`, or `child_process` as fallback, with first-class TypeScript support.
+Perform async work synchronously in Node.js using `worker_threads` with first-class TypeScript support.
 
 ## TOC <!-- omit in toc -->
 
@@ -43,8 +43,6 @@ npm i synckit
 
 ### API
 
-`worker_threads` is used by default for performance, if you have any problem with it, you can set env `SYNCKIT_WORKER_THREADS=0` to disable it and fallback to previously `child_process` solution, and please raise an issue here so that we can improve it.
-
 ```js
 // runner.js
 import { createSyncFn } from 'synckit'
@@ -66,16 +64,12 @@ runAsWorker(async (...args) => {
 })
 ```
 
-You must make sure:
-
-1. if `worker_threads` is enabled (by default), the `result` is serialized by [`Structured Clone Algorithm`](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm)
-2. if `child_process` is used, the `result` is serialized by `JSON.stringify`
+You must make sure, the `result` is serialized by [`Structured Clone Algorithm`](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm)
 
 ### Envs
 
-1. `SYNCKIT_WORKER_THREADS`: whether or not enable `worker_threads`, it's enabled by default, set as `0` to disable
-2. `SYNCKIT_BUFFER_SIZE`: `bufferSize` to create `SharedArrayBuffer` for `worker_threads` (default as `1024`), or `maxBuffer` for `child_process` (no default)
-3. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
+1. `SYNCKIT_BUFFER_SIZE`: `bufferSize` to create `SharedArrayBuffer` for `worker_threads` (default as `1024`)
+2. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
 
 ### TypeScript
 

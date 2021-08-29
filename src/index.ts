@@ -1,15 +1,15 @@
-import { execSync } from 'child_process'
-import { tmpdir as _tmpdir } from 'os'
 import path from 'path'
-import fs from 'fs'
-import { createRequire } from 'module'
-
-import { v4 as uuid } from 'uuid'
+import {
+  MessageChannel,
+  Worker,
+  receiveMessageOnPort,
+  workerData,
+  parentPort,
+} from 'worker_threads'
 
 import {
   AnyAsyncFn,
   AnyFn,
-  DataMessage,
   MainToWorkerMessage,
   Syncify,
   WorkerData,
@@ -18,45 +18,7 @@ import {
 
 export * from './types.js'
 
-/**
- * @link https://github.com/sindresorhus/temp-dir/blob/main/index.js#L9
- */
-export const tmpdir = fs.realpathSync(_tmpdir())
-
-let workerThreads: typeof import('worker_threads') | undefined
-
-const cjsRequire =
-  /* istanbul ignore next */
-  typeof require === 'undefined' ? createRequire(import.meta.url) : require
-
-try {
-  workerThreads = cjsRequire(
-    'worker_threads',
-  ) as typeof import('worker_threads')
-
-  /* istanbul ignore if */
-  if (typeof workerThreads.receiveMessageOnPort !== 'function') {
-    workerThreads = undefined
-  }
-} catch {}
-
-/* istanbul ignore if */
-if (!workerThreads) {
-  console.warn(
-    '[synckit]: `worker_threads` or `receiveMessageOnPort` is not available in current environment, `Node >= 12` is required',
-  )
-}
-
-const {
-  SYNCKIT_WORKER_THREADS,
-  SYNCKIT_BUFFER_SIZE,
-  SYNCKIT_TIMEOUT,
-  SYNCKIT_TS_ESM,
-} = process.env
-
-export const useWorkerThreads =
-  !!workerThreads &&
-  (!SYNCKIT_WORKER_THREADS || !['0', 'false'].includes(SYNCKIT_WORKER_THREADS))
+const { SYNCKIT_BUFFER_SIZE, SYNCKIT_TIMEOUT, SYNCKIT_TS_ESM } = process.env
 
 const TS_USE_ESM = !!SYNCKIT_TS_ESM && ['1', 'true'].includes(SYNCKIT_TS_ESM)
 
@@ -90,56 +52,11 @@ export function createSyncFn<R, T extends AnyAsyncFn<R>>(
     return cachedSyncFn
   }
 
-  const syncFn = (useWorkerThreads ? startWorkerThread : startChildProcess)<
-    R,
-    T
-  >(workerPath, bufferSize, timeout)
+  const syncFn = startWorkerThread<R, T>(workerPath, bufferSize, timeout)
 
   syncFnCache.set(workerPath, syncFn)
 
   return syncFn
-}
-
-function startChildProcess<R, T extends AnyAsyncFn<R>>(
-  workerPath: string,
-  bufferSize = DEFAULT_BUFFER_SIZE,
-  timeout?: number,
-) {
-  const executor = workerPath.endsWith('.ts')
-    ? TS_USE_ESM
-      ? 'node --loader ts-node/esm'
-      : 'ts-node'
-    : 'node'
-
-  return (...args: Parameters<T>): R => {
-    const filename = path.resolve(tmpdir, `synckit-${uuid()}.json`)
-
-    fs.writeFileSync(filename, JSON.stringify(args))
-
-    const command = `${executor} ${workerPath} ${filename}`
-
-    try {
-      execSync(command, {
-        stdio: 'inherit',
-        maxBuffer: bufferSize,
-        timeout,
-      })
-      const { result, error } = JSON.parse(
-        fs.readFileSync(filename, 'utf8'),
-      ) as DataMessage<R>
-
-      if (error) {
-        throw typeof error === 'object' && 'message' in error!
-          ? // eslint-disable-next-line unicorn/error-message
-            Object.assign(new Error(), error)
-          : error
-      }
-
-      return result!
-    } finally {
-      fs.unlinkSync(filename)
-    }
-  }
 }
 
 const throwError = (msg: string) => {
@@ -151,8 +68,6 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   bufferSize = DEFAULT_WORKER_BUFFER_SIZE,
   timeout?: number,
 ) {
-  const { MessageChannel, Worker } = workerThreads!
-
   const { port1: mainPort, port2: workerPort } = new MessageChannel()
 
   const isTs = workerPath.endsWith('.ts')
@@ -195,8 +110,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       id: id2,
       result,
       error,
-    } = workerThreads!.receiveMessageOnPort(mainPort)!
-      .message as WorkerToMainMessage<R>
+    } = receiveMessageOnPort(mainPort)!.message as WorkerToMainMessage<R>
 
     /* istanbul ignore if */
     if (id !== id2) {
@@ -215,31 +129,17 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   return syncFn
 }
 
-export async function runAsWorker<T extends AnyAsyncFn>(fn: T): Promise<void>
-export async function runAsWorker<R, T extends AnyAsyncFn<R>>(fn: T) {
-  if (!workerThreads?.workerData) {
-    const filename = process.argv[2]
-    const content = fs.readFileSync(filename, 'utf8')
-    const args = JSON.parse(content) as Parameters<T>
-    let msg: DataMessage<R>
-    try {
-      msg = { result: await fn(...args) }
-    } catch (err: unknown) {
-      msg = {
-        error:
-          err instanceof Error
-            ? { ...err, name: err.name, message: err.message, stack: err.stack }
-            : err,
-      }
-    }
-    fs.writeFileSync(filename, JSON.stringify(msg))
+/* istanbul ignore next */
+export function runAsWorker<
+  R = unknown,
+  T extends AnyAsyncFn<R> = AnyAsyncFn<R>,
+>(fn: T) {
+  if (!workerData) {
     return
   }
 
-  /* istanbul ignore next */
-  const { workerPort } = workerThreads.workerData as WorkerData
-  /* istanbul ignore next */
-  workerThreads.parentPort!.on(
+  const { workerPort } = workerData as WorkerData
+  parentPort!.on(
     'message',
     ({ sharedBuffer, id, args }: MainToWorkerMessage<Parameters<T>>) => {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises

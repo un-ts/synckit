@@ -7,7 +7,7 @@
   "author": "JounQin <admin@1stg.me>",
   "license": "MIT",
   "engines": {
-    "node": ">=12"
+    "node": ">=12.3"
   },
   "exports": {
     "import": "./lib/index.js",
@@ -49,8 +49,7 @@
     "typecov": "type-coverage"
   },
   "dependencies": {
-    "tslib": "^2.3.1",
-    "uuid": "^8.3.2"
+    "tslib": "^2.3.1"
   },
   "devDependencies": {
     "@1stg/lib-config": "^4.0.0",
