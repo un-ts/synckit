@@ -1,5 +1,5 @@
-const fs = require('fs')
+import fs from 'fs'
 
-const { runAsWorker } = require('../lib')
+import { runAsWorker } from '../lib/index.js'
 
 runAsWorker(filename => fs.promises.readFile(filename, 'utf8'))

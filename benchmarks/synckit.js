@@ -1,8 +1,12 @@
-const { createSyncFn } = require('../lib')
+import { createRequire } from 'module'
+
+import { createSyncFn } from '../lib/index.js'
+
+const cjsRequire = createRequire(import.meta.url)
 
 /**
  * @type {() => string}
  */
-const syncFn = createSyncFn(require.resolve('./synckit.worker'))
+const syncFn = createSyncFn(cjsRequire.resolve('./synckit.worker'))
 
-module.exports = syncFn
+export default syncFn

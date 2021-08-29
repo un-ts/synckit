@@ -1,4 +1,4 @@
-const { runAsWorker } = require('../lib')
+import { runAsWorker } from '../lib/index.js'
 
 runAsWorker(
   (result, timeout) =>

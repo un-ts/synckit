@@ -1,24 +1,18 @@
 // @ts-check
 
-import { performance } from 'perf_hooks'
-import { fileURLToPath } from 'url'
+const { performance } = require('perf_hooks')
 
 const RUN_TIMES = +process.env.RUN_TIMES || 1000
-
-// @ts-expect-error -- no idea
-const __filename = fileURLToPath(import.meta.url)
 
 /**
  * @param {string} name
  * @typedef {{ loadTime:number,runTime:number, totalTime:number }} PerfResult
- * @returns {Promise<PerfResult>} Perf result
+ * @returns {PerfResult} Perf result
  */
-const perfCase = async name => {
+const perfCase = name => {
   const loadStartTime = performance.now()
 
-  const syncFn = (
-    await import(`./${name}.${name === 'synckit' ? 'js' : 'cjs'}`)
-  ).default
+  const syncFn = require(`./${name}.cjs`)
 
   const loadTime = performance.now() - loadStartTime
 
@@ -92,15 +86,11 @@ class Benchmark {
   }
 }
 
-const main = async () => {
-  console.table(
-    new Benchmark({
-      synckit: await perfCase('synckit'),
-      syncThreads: await perfCase('sync-threads'),
-      deasync: await perfCase('deasync'),
-      native: await perfCase('native'),
-    }),
-  )
-}
-
-main()
+console.table(
+  new Benchmark({
+    synckit: perfCase('synckit'),
+    syncThreads: perfCase('sync-threads'),
+    deasync: perfCase('deasync'),
+    native: perfCase('native'),
+  }),
+)
