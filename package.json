@@ -46,7 +46,6 @@
     "pretest": "yarn build:ts",
     "release": "clean-publish && changeset publish",
     "test": "yarn jest",
-    "test-worker": "ts-node test/test-worker-ts && node test/test-worker",
     "typecov": "type-coverage"
   },
   "dependencies": {
