@@ -43,7 +43,7 @@
     "lint:tsc": "tsc --noEmit",
     "prepare": "simple-git-hooks && yarn-deduplicate --strategy fewer || exit 0",
     "prerelease": "npm run build",
-    "pretest": "yarn build:ts",
+    "pretest": "yarn build",
     "release": "clean-publish && changeset publish",
     "test": "yarn jest",
     "typecov": "type-coverage"
@@ -103,7 +103,7 @@
     ]
   },
   "typeCoverage": {
-    "atLeast": 99.2,
+    "atLeast": 99.42,
     "cache": true,
     "detail": true,
     "ignoreAsAssertion": true,

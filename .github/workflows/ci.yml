@@ -32,9 +32,8 @@ jobs:
 
       - name: Build, Lint and test
         run: |
-          yarn build
-          yarn lint
           yarn test
+          yarn lint
         env:
           EFF_NO_LINK_RULES: true
           PARSER_NO_WATCH: true
