@@ -37,7 +37,7 @@
     "build": "run-p build:*",
     "build:r": "r -f cjs",
     "build:ts": "tsc -p src",
-    "jest": "node --experimental-vm-modules node_modules/.bin/jest --setupFiles dotenv/config",
+    "jest": "node --experimental-vm-modules node_modules/.bin/jest",
     "lint": "run-p lint:*",
     "lint:es": "eslint . --cache -f friendly --max-warnings 10",
     "lint:tsc": "tsc --noEmit",
@@ -77,24 +77,44 @@
     "extends": "@1stg"
   },
   "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
     "collectCoverage": true,
-    "extensionsToTreatAsEsm": [
-      ".ts"
-    ],
-    "moduleNameMapper": {
-      "^(\\.{1,2}/.*)\\.js$": "$1",
-      "^synckit$": "<rootDir>/src"
-    },
-    "globals": {
-      "ts-jest": {
-        "useESM": true,
-        "tsconfig": {
-          "importHelpers": false
+    "projects": [
+      {
+        "displayName": "cjs",
+        "testMatch": [
+          "<rootDir>/**/cjs.spec.ts"
+        ],
+        "preset": "ts-jest",
+        "testEnvironment": "node",
+        "moduleNameMapper": {
+          "^(\\.{1,2}/.*)\\.js$": "$1",
+          "^synckit$": "<rootDir>/src"
+        }
+      },
+      {
+        "displayName": "esm",
+        "testMatch": [
+          "<rootDir>/**/esm.spec.ts"
+        ],
+        "preset": "ts-jest",
+        "testEnvironment": "node",
+        "extensionsToTreatAsEsm": [
+          ".ts"
+        ],
+        "moduleNameMapper": {
+          "^(\\.{1,2}/.*)\\.js$": "$1",
+          "^synckit$": "<rootDir>/src"
+        },
+        "globals": {
+          "ts-jest": {
+            "useESM": true,
+            "tsconfig": {
+              "importHelpers": false
+            }
+          }
         }
       }
-    }
+    ]
   },
   "prettier": "@1stg/prettier-config",
   "renovate": {
