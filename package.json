@@ -7,7 +7,7 @@
   "author": "JounQin <admin@1stg.me>",
   "license": "MIT",
   "engines": {
-    "node": ">=12.3"
+    "node": ">=v12.22.6"
   },
   "exports": {
     "import": "./lib/index.js",
