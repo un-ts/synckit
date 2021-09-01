@@ -54,7 +54,7 @@
   },
   "devDependencies": {
     "@1stg/lib-config": "^4.0.0",
-    "@changesets/changelog-github": "^0.4.0",
+    "@changesets/changelog-github": "^0.4.1",
     "@changesets/cli": "^2.16.0",
     "@types/jest": "^27.0.1",
     "@types/node": "^16.7.5",
