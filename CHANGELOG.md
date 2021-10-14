@@ -1,5 +1,11 @@
 # synckit
 
+## 0.4.1
+
+### Patch Changes
+
+- [`c357bb3`](https://github.com/rx-ts/synckit/commit/c357bb3bb61d3854da0b41f3587cc77063514179) Thanks [@JounQin](https://github.com/JounQin)! - fix: add legacy fields as fallback
+
 ## 0.4.0
 
 ### Minor Changes
