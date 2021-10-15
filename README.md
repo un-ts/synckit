@@ -70,6 +70,7 @@ You must make sure, the `result` is serialized by [`Structured Clone Algorithm`]
 
 1. `SYNCKIT_BUFFER_SIZE`: `bufferSize` to create `SharedArrayBuffer` for `worker_threads` (default as `1024`)
 2. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
+3. `SYNCKIT_EXEC_ARGV`: List of node CLI options passed to the worker, split with comma `,`. (default as `[]`), see also [`node` docs](https://nodejs.org/api/worker_threads.html)
 
 ### TypeScript
 
