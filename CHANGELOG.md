@@ -1,5 +1,13 @@
 # synckit
 
+## 0.6.0
+
+### Minor Changes
+
+- [`18106a5`](https://github.com/rx-ts/synckit/commit/18106a511c9dfc21a9ae19c70ab19fb3b71fcbf5) Thanks [@JounQin](https://github.com/JounQin)! - feat: add custom `execArgv` support
+
+  close #55
+
 ## 0.5.0
 
 ### Minor Changes
