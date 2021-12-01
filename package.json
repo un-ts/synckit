@@ -58,7 +58,7 @@
     "@1stg/lib-config": "^4.1.2",
     "@changesets/changelog-github": "^0.4.2",
     "@changesets/cli": "^2.17.0",
-    "@types/jest": "^27.0.2",
+    "@types/jest": "^27.0.3",
     "@types/node": "^16.11.0",
     "@types/uuid": "^8.3.1",
     "clean-publish": "^3.4.2",
