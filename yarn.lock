@@ -3469,16 +3469,16 @@ cjs-module-lexer@^1.0.0:
   resolved "https://registry.yarnpkg.com/cjs-module-lexer/-/cjs-module-lexer-1.2.2.tgz#9f84ba3244a512f3a54e5277e8eef4c489864e40"
   integrity sha512-cOU9usZw8/dXIXKtwa8pM0OTJQuJkxMN6w30csNRUerHfeQ5R6U3kkU/FtJeIf3M202OHfY2U8ccInBG7/xogA==
 
-clean-publish@^3.4.3:
-  version "3.4.3"
-  resolved "https://registry.yarnpkg.com/clean-publish/-/clean-publish-3.4.3.tgz#1b12ac1d26549098bf49d0c17fdc9e86824d66be"
-  integrity sha512-PXq2JrWYqsovKjaO7NqOi47vMHV/6VbkP8fxPK4e3RBsoghAJXemwCiBCqhymgIIxD67G0VfRnkCJCa78+zqDw==
+clean-publish@^3.4.4:
+  version "3.4.4"
+  resolved "https://registry.yarnpkg.com/clean-publish/-/clean-publish-3.4.4.tgz#d5ffa3a4bffb76594b14706675efea7d78f42e46"
+  integrity sha512-eCWBBLbaOBqLtxQrjBDSI1tSmx6tKckV2H0C9/je0eQg2QOGGnjE1XKc01V8M3vKe7bJuCut5hF/yUwLGLZoVA==
   dependencies:
     cross-spawn "^7.0.3"
     fast-glob "^3.2.7"
     fs-extra "^10.0.0"
     hosted-git-info "^4.0.2"
-    lilconfig "^2.0.3"
+    lilconfig "^2.0.4"
 
 clean-regexp@^1.0.0:
   version "1.0.0"
@@ -6474,6 +6474,11 @@ lilconfig@^2.0.3:
   version "2.0.3"
   resolved "https://registry.yarnpkg.com/lilconfig/-/lilconfig-2.0.3.tgz#68f3005e921dafbd2a2afb48379986aa6d2579fd"
   integrity sha512-EHKqr/+ZvdKCifpNrJCKxBTgk5XupZA3y/aCPY9mxfgBzmgh93Mt/WqjjQ38oMxXuvDokaKiM3lAgvSH2sjtHg==
+
+lilconfig@^2.0.4:
+  version "2.0.4"
+  resolved "https://registry.yarnpkg.com/lilconfig/-/lilconfig-2.0.4.tgz#f4507d043d7058b380b6a8f5cb7bcd4b34cee082"
+  integrity sha512-bfTIN7lEsiooCocSISTWXkiWJkRqtL9wYtYy+8EK3Y41qh3mpwPU0ycTOgjdY9ErwXCc8QyrQp82bdL0Xkm9yA==
 
 lines-and-columns@^1.1.6:
   version "1.1.6"
