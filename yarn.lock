@@ -3469,10 +3469,10 @@ cjs-module-lexer@^1.0.0:
   resolved "https://registry.yarnpkg.com/cjs-module-lexer/-/cjs-module-lexer-1.2.2.tgz#9f84ba3244a512f3a54e5277e8eef4c489864e40"
   integrity sha512-cOU9usZw8/dXIXKtwa8pM0OTJQuJkxMN6w30csNRUerHfeQ5R6U3kkU/FtJeIf3M202OHfY2U8ccInBG7/xogA==
 
-clean-publish@^3.4.4:
-  version "3.4.4"
-  resolved "https://registry.yarnpkg.com/clean-publish/-/clean-publish-3.4.4.tgz#d5ffa3a4bffb76594b14706675efea7d78f42e46"
-  integrity sha512-eCWBBLbaOBqLtxQrjBDSI1tSmx6tKckV2H0C9/je0eQg2QOGGnjE1XKc01V8M3vKe7bJuCut5hF/yUwLGLZoVA==
+clean-publish@^3.4.5:
+  version "3.4.5"
+  resolved "https://registry.yarnpkg.com/clean-publish/-/clean-publish-3.4.5.tgz#c46c943f81f7316fb3c12ec35449308fcce63176"
+  integrity sha512-wxtaEqCy/B7lch+bpTPmx9wI8owTODa619UOVA1XfyNaM2bjwv1SkR1IJNDA6rtf89bjiz6UkpfU5HcEL8YJIw==
   dependencies:
     cross-spawn "^7.0.3"
     fast-glob "^3.2.7"
