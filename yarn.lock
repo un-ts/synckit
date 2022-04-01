@@ -3909,10 +3909,10 @@ dataloader@^1.4.0:
   resolved "https://registry.yarnpkg.com/dataloader/-/dataloader-1.4.0.tgz#bca11d867f5d3f1b9ed9f737bd15970c65dff5c8"
   integrity sha512-68s5jYdlvasItOJnCuI2Q9s4q98g0pCyL3HrcKJu8KNugUl8ahgmZYg38ysLTgQjjXX3H8CJLkAvWrclWfcalw==
 
-deasync@^0.1.24:
-  version "0.1.24"
-  resolved "https://registry.yarnpkg.com/deasync/-/deasync-0.1.24.tgz#6ecc9c6ff9eba64a4f4572ae3c4db77fed09268a"
-  integrity sha512-i98vg42xNfRZCymummMAN0rIcQ1gZFinSe3btvPIvy6JFTaeHcumeKybRo2HTv86nasfmT0nEgAn2ggLZhOCVA==
+deasync@^0.1.25:
+  version "0.1.25"
+  resolved "https://registry.yarnpkg.com/deasync/-/deasync-0.1.25.tgz#43f4674e01a2e687dcff72a77c7f003682875b48"
+  integrity sha512-tia42VeVpjTtsWSMPlzVv0GmNXhziqJWlUSIyzyZ2KU0+fNfeWvhNc1nd0enyl4nadAA6qb91a+gG1asu8lYAw==
   dependencies:
     bindings "^1.5.0"
     node-addon-api "^1.7.1"
