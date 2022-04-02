@@ -2,12 +2,13 @@ import { createRequire } from 'module'
 
 import { jest } from '@jest/globals'
 
-import { createSyncFn } from 'synckit'
+import { createSyncFn, extractProperties } from 'synckit'
 
 type AsyncWorkerFn<T = number> = (result: T, timeout?: number) => Promise<T>
 
 beforeEach(() => {
   jest.resetModules()
+
   delete process.env.SYNCKIT_BUFFER_SIZE
   delete process.env.SYNCKIT_TIMEOUT
 
@@ -45,7 +46,7 @@ test('createSyncFn', () => {
   expect(syncFn3(2)).toBe(2)
   expect(syncFn3(5, 0)).toBe(5)
 
-  expect(() => errSyncFn()).toThrow('Worker Error')
+  expect(() => errSyncFn()).toThrowErrorMatchingInlineSnapshot(`"Worker Error"`)
 
   const syncFn4 = createSyncFn<AsyncWorkerFn>(workerCjsPath)
 
@@ -65,4 +66,19 @@ test('timeout', async () => {
   expect(() => syncFn(1, 100)).toThrow(
     'Internal error: Atomics.wait() failed: timed-out',
   )
+})
+
+test('extractProperties', () => {
+  expect(extractProperties()).toBeUndefined()
+  expect(extractProperties({})).toEqual({})
+  expect(extractProperties(new Error('message'))).toEqual({})
+  expect(
+    extractProperties(
+      Object.assign(new Error('message'), {
+        code: 'CODE',
+      }),
+    ),
+  ).toEqual({
+    code: 'CODE',
+  })
 })
