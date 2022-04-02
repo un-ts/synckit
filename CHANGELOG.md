@@ -1,5 +1,11 @@
 # synckit
 
+## 0.6.2
+
+### Patch Changes
+
+- [#76](https://github.com/rx-ts/synckit/pull/76) [`e7393f1`](https://github.com/rx-ts/synckit/commit/e7393f19b84e2b3ffdac7b48c7a1442e7cbabaf4) Thanks [@JounQin](https://github.com/JounQin)! - chore: export extractProperties
+
 ## 0.6.1
 
 ### Patch Changes
