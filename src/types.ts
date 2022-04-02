@@ -32,6 +32,7 @@ export interface WorkerData {
 export interface DataMessage<T> {
   result?: T
   error?: unknown
+  properties?: Record<string, unknown>
 }
 
 export interface WorkerToMainMessage<T = unknown> extends DataMessage<T> {

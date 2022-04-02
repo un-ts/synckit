@@ -42,7 +42,7 @@ const kebabCase = text =>
 
 class Benchmark {
   /**
-   * @param { Object.<string, PerfResult> } perfResults
+   * @param { Record<string, PerfResult> } perfResults
    */
   constructor(perfResults) {
     const keys = Object.keys(perfResults)

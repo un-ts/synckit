@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url'
 
 const RUN_TIMES = +process.env.RUN_TIMES || 1000
 
-// @ts-expect-error -- no idea
 const __filename = fileURLToPath(import.meta.url)
 
 /**
@@ -16,9 +15,9 @@ const __filename = fileURLToPath(import.meta.url)
 const perfCase = async name => {
   const loadStartTime = performance.now()
 
-  const syncFn = (
-    await import(`./${name}.${name === 'synckit' ? 'js' : 'cjs'}`)
-  ).default
+  const syncFn =
+    // eslint-disable-next-line unicorn/no-await-expression-member
+    (await import(`./${name}.${name === 'synckit' ? 'js' : 'cjs'}`)).default
 
   const loadTime = performance.now() - loadStartTime
 
@@ -48,7 +47,7 @@ const kebabCase = text =>
 
 class Benchmark {
   /**
-   * @param { Object.<string, PerfResult> } perfResults
+   * @param { Record.<string, PerfResult> } perfResults
    */
   constructor(perfResults) {
     const keys = Object.keys(perfResults)
