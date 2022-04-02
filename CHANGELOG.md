@@ -1,5 +1,11 @@
 # synckit
 
+## 0.6.1
+
+### Patch Changes
+
+- [`da19076`](https://github.com/rx-ts/synckit/commit/da1907659806b31b49a6e9c73ae07b160bb02ff9) Thanks [@JounQin](https://github.com/JounQin)! - fix: extract and apply error properties
+
 ## 0.6.0
 
 ### Minor Changes
