@@ -48,31 +48,14 @@ export interface SynckitOptions {
 // MessagePort doesn't copy the properties of Error objects. We still want
 // error objects to have extra properties such as "warnings" so implement the
 // property copying manually.
-const extractProperties = (object: unknown): Record<string, unknown> => {
-  const properties: Record<string, unknown> = {}
+export const extractProperties = <T>(object?: T): T | undefined => {
   if (object && typeof object === 'object') {
+    const properties = {} as T
     for (const key in object) {
-      properties[key] = (object as Record<string, unknown>)[key]
+      properties[key as keyof T] = object[key]
     }
+    return properties
   }
-  return properties
-}
-
-// MessagePort doesn't copy the properties of Error objects. We still want
-// error objects to have extra properties such as "warnings" so implement the
-// property copying manually.
-const applyProperties = <T>(
-  object: T,
-  properties?: Record<string, unknown>,
-): T => {
-  if (!properties) {
-    return object
-  }
-  // eslint-disable-next-line sonar/for-in
-  for (const key in properties) {
-    ;(object as Record<string, unknown>)[key] = properties[key]
-  }
-  return object
 }
 
 export function createSyncFn<T extends AnyAsyncFn>(
@@ -166,7 +149,8 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       result,
       error,
       properties,
-    } = receiveMessageOnPort(mainPort)!.message as WorkerToMainMessage<R>
+    } = (receiveMessageOnPort(mainPort) as { message: WorkerToMainMessage<R> })
+      .message
 
     /* istanbul ignore if */
     if (id !== id2) {
@@ -174,7 +158,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     }
 
     if (error) {
-      throw applyProperties(error, properties)
+      throw Object.assign(error, properties)
     }
 
     return result!
