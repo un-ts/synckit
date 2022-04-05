@@ -12,7 +12,7 @@ beforeEach(() => {
   jest.resetModules()
 
   delete process.env.SYNCKIT_BUFFER_SIZE
-  // delete process.env.SYNCKIT_TIMEOUT
+  delete process.env.SYNCKIT_TIMEOUT
 })
 
 const cjsRequire = createRequire(import.meta.url)
@@ -90,7 +90,6 @@ test('createSyncFn', () => {
 test('timeout', async () => {
   process.env.SYNCKIT_BUFFER_SIZE = '0'
   process.env.SYNCKIT_TIMEOUT = '1'
-  process.env.SYNCKIT_TS_ESM = '0'
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
