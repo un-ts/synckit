@@ -1,5 +1,11 @@
 # synckit
 
+## 0.7.0
+
+### Minor Changes
+
+- [#78](https://github.com/rx-ts/synckit/pull/78) [`fd85ccd`](https://github.com/rx-ts/synckit/commit/fd85ccd41f012f677619441694c3044f0b70c653) Thanks [@JounQin](https://github.com/JounQin)! - feat: support js as ts, ts as esm, etc
+
 ## 0.6.2
 
 ### Patch Changes
