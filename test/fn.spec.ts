@@ -1,4 +1,6 @@
 import { createRequire } from 'module'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
 import { jest } from '@jest/globals'
 
@@ -10,17 +12,51 @@ beforeEach(() => {
   jest.resetModules()
 
   delete process.env.SYNCKIT_BUFFER_SIZE
-  delete process.env.SYNCKIT_TIMEOUT
-
-  process.env.SYNCKIT_TS_ESM = '1'
+  // delete process.env.SYNCKIT_TIMEOUT
 })
 
 const cjsRequire = createRequire(import.meta.url)
 
-const workerEsmTsPath = cjsRequire.resolve('./worker-esm.ts')
+const _dirname =
+  typeof __dirname === 'undefined'
+    ? path.dirname(fileURLToPath(import.meta.url))
+    : __dirname
+
+const workerCjsTsPath = cjsRequire.resolve('./cjs/worker-cjs.ts')
+const workerEsmTsPath = cjsRequire.resolve('./esm/worker-esm.ts')
+const workerNoExtAsJsPath = path.resolve(_dirname, './worker-js')
+const workerJsAsTsPath = path.resolve(_dirname, './worker.js')
 const workerCjsPath = cjsRequire.resolve('./worker.cjs')
 const workerMjsPath = cjsRequire.resolve('./worker.mjs')
 const workerErrorPath = cjsRequire.resolve('./worker-error.cjs')
+
+test('ts as cjs', () => {
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsTsPath)
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+})
+
+test('ts as esm', () => {
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerEsmTsPath)
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+})
+
+test('no ext as js (as esm)', () => {
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerNoExtAsJsPath)
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+})
+
+test('js as ts (as esm)', () => {
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerJsAsTsPath)
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+})
 
 test('createSyncFn', () => {
   expect(() => createSyncFn('./fake')).toThrow('`workerPath` must be absolute')
@@ -29,10 +65,6 @@ test('createSyncFn', () => {
   const syncFn1 = createSyncFn<AsyncWorkerFn>(workerCjsPath)
   const syncFn2 = createSyncFn<AsyncWorkerFn>(workerCjsPath)
   const syncFn3 = createSyncFn<AsyncWorkerFn>(workerMjsPath)
-
-  expect(() => createSyncFn(workerEsmTsPath)).toThrow(
-    'Native esm in `.ts` file is not supported yet, please use `.cjs` instead',
-  )
 
   const errSyncFn = createSyncFn<() => Promise<void>>(workerErrorPath)
 
