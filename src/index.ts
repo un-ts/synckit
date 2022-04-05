@@ -1,4 +1,6 @@
+import { createRequire } from 'module'
 import path from 'path'
+import { pathToFileURL } from 'url'
 import {
   MessageChannel,
   Worker,
@@ -6,6 +8,8 @@ import {
   workerData,
   parentPort,
 } from 'worker_threads'
+
+import { findUp, tryExtensions } from '@pkgr/utils'
 
 import {
   AnyAsyncFn,
@@ -18,14 +22,7 @@ import {
 
 export * from './types.js'
 
-const {
-  SYNCKIT_BUFFER_SIZE,
-  SYNCKIT_TIMEOUT,
-  SYNCKIT_TS_ESM,
-  SYNCKIT_EXEC_ARV,
-} = process.env
-
-const TS_USE_ESM = !!SYNCKIT_TS_ESM && ['1', 'true'].includes(SYNCKIT_TS_ESM)
+const { SYNCKIT_BUFFER_SIZE, SYNCKIT_TIMEOUT, SYNCKIT_EXEC_ARV } = process.env
 
 export const DEFAULT_BUFFER_SIZE = SYNCKIT_BUFFER_SIZE
   ? +SYNCKIT_BUFFER_SIZE
@@ -35,6 +32,7 @@ export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
 export const DEFAULT_WORKER_BUFFER_SIZE = DEFAULT_BUFFER_SIZE || 1024
 
+/* istanbul ignore next */
 export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARV?.split(',') ?? []
 
 const syncFnCache = new Map<string, AnyFn>()
@@ -50,7 +48,7 @@ export interface SynckitOptions {
 // property copying manually.
 export const extractProperties = <T>(object?: T): T | undefined => {
   if (object && typeof object === 'object') {
-    const properties = {} as T
+    const properties = {} as unknown as T
     for (const key in object) {
       properties[key as keyof T] = object[key]
     }
@@ -84,7 +82,7 @@ export function createSyncFn<R, T extends AnyAsyncFn<R>>(
 
   const syncFn = startWorkerThread<R, T>(
     workerPath,
-    typeof bufferSizeOrOptions === 'number'
+    /* istanbul ignore next */ typeof bufferSizeOrOptions === 'number'
       ? { bufferSize: bufferSizeOrOptions, timeout }
       : bufferSizeOrOptions,
   )
@@ -94,8 +92,55 @@ export function createSyncFn<R, T extends AnyAsyncFn<R>>(
   return syncFn
 }
 
-const throwError = (msg: string) => {
-  throw new Error(msg)
+const cjsRequire =
+  typeof require === 'undefined'
+    ? createRequire(import.meta.url)
+    : /* istanbul ignore next */ require
+
+const dataUrl = (code: string) =>
+  new URL(`data:text/javascript,${encodeURIComponent(code)}`)
+
+// eslint-disable-next-line sonarjs/cognitive-complexity
+const setupTsNode = (workerPath: string, execArgv: string[]) => {
+  if (!/[/\\]node_modules[/\\]/.test(workerPath)) {
+    const ext = path.extname(workerPath)
+    // TODO: support `.cts` and `.mts` automatically
+    if (!ext || ext === '.js') {
+      const found = tryExtensions(
+        ext ? workerPath.replace(/\.js$/, '') : workerPath,
+        ['.ts', '.js'],
+      )
+      if (found) {
+        workerPath = found
+      }
+    }
+  }
+
+  const isTs = /\.[cm]?ts$/.test(workerPath)
+
+  // TODO: it does not work for `ts-node` for now
+  let tsUseEsm = workerPath.endsWith('.mts')
+
+  if (isTs) {
+    if (!tsUseEsm) {
+      const pkg = findUp(workerPath)
+      if (pkg) {
+        tsUseEsm =
+          (cjsRequire(pkg) as { type?: 'commonjs' | 'module' }).type ===
+          'module'
+      }
+    }
+    if (tsUseEsm && !execArgv.includes('--loader')) {
+      execArgv = ['--loader', 'ts-node/esm', ...execArgv]
+    }
+  }
+
+  return {
+    isTs,
+    tsUseEsm,
+    workerPath,
+    execArgv,
+  }
 }
 
 function startWorkerThread<R, T extends AnyAsyncFn<R>>(
@@ -108,21 +153,24 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
 ) {
   const { port1: mainPort, port2: workerPort } = new MessageChannel()
 
-  const isTs = workerPath.endsWith('.ts')
+  const {
+    isTs,
+    tsUseEsm,
+    workerPath: finalWorkerPath,
+    execArgv: finalExecArgv,
+  } = setupTsNode(workerPath, execArgv)
 
   const worker = new Worker(
     isTs
-      ? TS_USE_ESM
-        ? throwError(
-            'Native esm in `.ts` file is not supported yet, please use `.cjs` instead',
-          )
-        : `require('ts-node/register');require('${workerPath}')`
-      : workerPath,
+      ? tsUseEsm
+        ? dataUrl(`import '${String(pathToFileURL(finalWorkerPath))}'`)
+        : `require('ts-node/register');require('${finalWorkerPath}')`
+      : finalWorkerPath,
     {
-      eval: isTs,
+      eval: isTs && !tsUseEsm,
       workerData: { workerPort },
       transferList: [workerPort],
-      execArgv,
+      execArgv: finalExecArgv,
     },
   )
 
@@ -158,7 +206,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     }
 
     if (error) {
-      throw Object.assign(error, properties)
+      throw Object.assign(error as object, properties)
     }
 
     return result!
