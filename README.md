@@ -7,10 +7,6 @@
 [![npm](https://img.shields.io/npm/v/synckit.svg)](https://www.npmjs.com/package/synckit)
 [![GitHub Release](https://img.shields.io/github/release/rx-ts/synckit)](https://github.com/rx-ts/synckit/releases)
 
-[![David Peer](https://img.shields.io/david/peer/rx-ts/synckit.svg)](https://david-dm.org/rx-ts/synckit?type=peer)
-[![David](https://img.shields.io/david/rx-ts/synckit.svg)](https://david-dm.org/rx-ts/synckit)
-[![David Dev](https://img.shields.io/david/dev/rx-ts/synckit.svg)](https://david-dm.org/rx-ts/synckit?type=dev)
-
 [![Conventional Commits](https://img.shields.io/badge/conventional%20commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
 [![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://renovatebot.com)
 [![JavaScript Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://standardjs.com)
