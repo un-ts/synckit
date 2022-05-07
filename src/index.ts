@@ -165,7 +165,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       ? tsUseEsm
         ? dataUrl(`import '${String(pathToFileURL(finalWorkerPath))}'`)
         : `require('ts-node/register');require('${finalWorkerPath}')`
-      : finalWorkerPath,
+      : pathToFileURL(finalWorkerPath),
     {
       eval: isTs && !tsUseEsm,
       workerData: { workerPort },

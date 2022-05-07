@@ -6,14 +6,18 @@ on:
 
 jobs:
   ci:
-    name: Lint and Test with Node.js ${{ matrix.node }}
+    name: Lint and Test with Node.js ${{ matrix.node }} on ${{ matrix.os }}
     strategy:
       matrix:
         node:
-          - 12
           - 14
           - 16
-    runs-on: ubuntu-latest
+          - 18
+        os:
+          - macos-latest
+          - ubuntu-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v3
@@ -28,7 +32,7 @@ jobs:
         run: echo "$(yarn global bin)" >> $GITHUB_PATH
 
       - name: Install Dependencies
-        run: yarn --frozen-lockfile --ignore-engines
+        run: yarn --frozen-lockfile
 
       - name: Build, Lint and test
         run: |
