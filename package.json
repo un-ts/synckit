@@ -48,7 +48,7 @@
     "prerelease": "npm run build",
     "pretest": "yarn build",
     "release": "clean-publish && changeset publish",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "typecov": "type-coverage"
   },
   "dependencies": {
