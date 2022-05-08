@@ -1,5 +1,15 @@
 # synckit
 
+## 0.7.1
+
+### Patch Changes
+
+- [`f098d29`](https://github.com/rx-ts/synckit/commit/f098d2970b4aadd0a5687baaeeaec3d9b6697f30) Thanks [@JounQin](https://github.com/JounQin)! - fix: known Windows issues
+
+- [`c53d9dc`](https://github.com/rx-ts/synckit/commit/c53d9dc47e174bbf3e5c35b07d40194dda6173e9) Thanks [@JounQin](https://github.com/JounQin)! - feat: use workerPath as URL for Windows
+
+  related mdx-js/eslint-mdx#389
+
 ## 0.7.0
 
 ### Minor Changes
