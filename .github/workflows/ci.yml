@@ -43,9 +43,11 @@ jobs:
           PARSER_NO_WATCH: true
 
       - name: Benchmark
+        if: ${{ matrix.os != 'windows-latest' || matrix.node != '14' }}
         run: yarn benchmark
 
       - name: Codecov
+        if: matrix.os != 'windows-latest'
         run: |
           yarn global add codecov codacy-coverage
           codecov

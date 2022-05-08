@@ -1,6 +1,3 @@
 {
-  "extends": "@1stg",
-  "rules": {
-    "unicorn/require-post-message-target-origin": 0
-  }
+  "extends": "@1stg"
 }

@@ -164,7 +164,10 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     isTs
       ? tsUseEsm
         ? dataUrl(`import '${String(pathToFileURL(finalWorkerPath))}'`)
-        : `require('ts-node/register');require('${finalWorkerPath}')`
+        : `require('ts-node/register');require('${finalWorkerPath.replace(
+            /\\/g,
+            '\\\\',
+          )}')`
       : pathToFileURL(finalWorkerPath),
     {
       eval: isTs && !tsUseEsm,
