@@ -1,7 +1,7 @@
 // @ts-check
 
-import { performance } from 'perf_hooks'
-import { fileURLToPath } from 'url'
+import { performance } from 'node:perf_hooks'
+import { fileURLToPath } from 'node:url'
 
 const RUN_TIMES = +process.env.RUN_TIMES || 1000
 

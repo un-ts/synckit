@@ -1,6 +1,6 @@
 // @ts-check
 
-const { performance } = require('perf_hooks')
+const { performance } = require('node:perf_hooks')
 
 const RUN_TIMES = +process.env.RUN_TIMES || 1000
 
