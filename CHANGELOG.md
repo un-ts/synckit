@@ -1,5 +1,11 @@
 # synckit
 
+## 0.7.2
+
+### Patch Changes
+
+- [`1101ede`](https://github.com/un-ts/synckit/commit/1101ede3fbc02df1561c9f84a183b3dbd8f8e7cb) Thanks [@JounQin](https://github.com/JounQin)! - chore: add donate and funding fields, update node engine field
+
 ## 0.7.1
 
 ### Patch Changes
