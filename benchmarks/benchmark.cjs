@@ -2,7 +2,7 @@
 
 const { performance } = require('node:perf_hooks')
 
-const RUN_TIMES = +process.env.RUN_TIMES || 1000
+const RUN_TIMES = +(process.env.RUN_TIMES || 1000)
 
 /**
  * @param {string} name

@@ -22,6 +22,8 @@ Perform async work synchronously in Node.js using `worker_threads` with first-cl
   - [Envs](#envs)
   - [TypeScript](#typescript)
 - [Benchmark](#benchmark)
+- [Sponsors](#sponsors)
+- [Backers](#backers)
 - [Changelog](#changelog)
 - [License](#license)
 
@@ -85,6 +87,18 @@ And it's almost same as [`deasync`](https://github.com/abbr/deasync) but require
 See [benchmark.cjs](./benchmarks/benchmark.cjs.txt) and [benchmark.esm](./benchmarks/benchmark.esm.txt) for more details.
 
 You can try it with running `yarn benchmark` by yourself. [Here](./benchmarks/benchmark.js) is the benchmark source code.
+
+## Sponsors
+
+| 1stG                                                                                                                               | RxTS                                                                                                                               | UnTS                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/organizations.svg)](https://opencollective.com/1stG) | [![RxTS Open Collective backers and sponsors](https://opencollective.com/rxts/organizations.svg)](https://opencollective.com/rxts) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/organizations.svg)](https://opencollective.com/unts) |
+
+## Backers
+
+| 1stG                                                                                                                             | RxTS                                                                                                                             | UnTS                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/individuals.svg)](https://opencollective.com/1stG) | [![RxTS Open Collective backers and sponsors](https://opencollective.com/rxts/individuals.svg)](https://opencollective.com/rxts) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/individuals.svg)](https://opencollective.com/unts) |
 
 ## Changelog
 

@@ -5,9 +5,10 @@ import {
   MessageChannel,
   Worker,
   receiveMessageOnPort,
+  // type-coverage:ignore-next-line -- we can't control
   workerData,
   parentPort,
-} from 'worker_threads'
+} from 'node:worker_threads'
 
 import { findUp, tryExtensions } from '@pkgr/utils'
 
@@ -225,6 +226,7 @@ export function runAsWorker<
   R = unknown,
   T extends AnyAsyncFn<R> = AnyAsyncFn<R>,
 >(fn: T) {
+  // type-coverage:ignore-next-line -- we can't control
   if (!workerData) {
     return
   }

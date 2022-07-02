@@ -3,7 +3,7 @@
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
-const RUN_TIMES = +process.env.RUN_TIMES || 1000
+const RUN_TIMES = +(process.env.RUN_TIMES || 1000)
 
 const __filename = fileURLToPath(import.meta.url)
 
@@ -91,15 +91,11 @@ class Benchmark {
   }
 }
 
-const main = async () => {
-  console.table(
-    new Benchmark({
-      synckit: await perfCase('synckit'),
-      syncThreads: await perfCase('sync-threads'),
-      deasync: await perfCase('deasync'),
-      native: await perfCase('native'),
-    }),
-  )
-}
-
-main()
+console.table(
+  new Benchmark({
+    synckit: await perfCase('synckit'),
+    syncThreads: await perfCase('sync-threads'),
+    deasync: await perfCase('deasync'),
+    native: await perfCase('native'),
+  }),
+)

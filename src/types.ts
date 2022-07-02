@@ -1,4 +1,4 @@
-import { MessagePort } from 'worker_threads'
+import { MessagePort } from 'node:worker_threads'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyFn<R = any, T extends any[] = any[]> = (...args: T) => R
