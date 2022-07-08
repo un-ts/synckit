@@ -1,11 +1,11 @@
 # synckit
 
-[![GitHub Actions](https://github.com/rx-ts/synckit/workflows/CI/badge.svg)](https://github.com/rx-ts/synckit/actions/workflows/ci.yml)
-[![Codecov](https://img.shields.io/codecov/c/github/rx-ts/synckit.svg)](https://codecov.io/gh/rx-ts/synckit)
-[![Codacy Grade](https://img.shields.io/codacy/grade/3eaf9a96ad12491493b712a6a99028c5)](https://www.codacy.com/gh/rx-ts/synckit)
-[![type-coverage](https://img.shields.io/badge/dynamic/json.svg?label=type-coverage&prefix=%E2%89%A5&suffix=%&query=$.typeCoverage.atLeast&uri=https%3A%2F%2Fraw.githubusercontent.com%2Frx-ts%2Fsynckit%2Fmain%2Fpackage.json)](https://github.com/plantain-00/type-coverage)
+[![GitHub Actions](https://github.com/un-ts/synckit/workflows/CI/badge.svg)](https://github.com/un-ts/synckit/actions/workflows/ci.yml)
+[![Codecov](https://img.shields.io/codecov/c/github/un-ts/synckit.svg)](https://codecov.io/gh/un-ts/synckit)
+[![Language grade: JavaScript](https://img.shields.io/lgtm/grade/javascript/g/un-ts/synckit.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/un-ts/synckit/context:javascript)
+[![type-coverage](https://img.shields.io/badge/dynamic/json.svg?label=type-coverage&prefix=%E2%89%A5&suffix=%&query=$.typeCoverage.atLeast&uri=https%3A%2F%2Fraw.githubusercontent.com%2Fun-ts%2Fsynckit%2Fmain%2Fpackage.json)](https://github.com/plantain-00/type-coverage)
 [![npm](https://img.shields.io/npm/v/synckit.svg)](https://www.npmjs.com/package/synckit)
-[![GitHub Release](https://img.shields.io/github/release/rx-ts/synckit)](https://github.com/rx-ts/synckit/releases)
+[![GitHub Release](https://img.shields.io/github/release/un-ts/synckit)](https://github.com/un-ts/synckit/releases)
 
 [![Conventional Commits](https://img.shields.io/badge/conventional%20commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
 [![Renovate enabled](https://img.shields.io/badge/renovate-enabled-brightgreen.svg)](https://renovatebot.com)
@@ -90,15 +90,15 @@ You can try it with running `yarn benchmark` by yourself. [Here](./benchmarks/be
 
 ## Sponsors
 
-| 1stG                                                                                                                               | RxTS                                                                                                                               | UnTS                                                                                                                               |
+| 1stG                                                                                                                               | unTS                                                                                                                               | UnTS                                                                                                                               |
 | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/organizations.svg)](https://opencollective.com/1stG) | [![RxTS Open Collective backers and sponsors](https://opencollective.com/rxts/organizations.svg)](https://opencollective.com/rxts) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/organizations.svg)](https://opencollective.com/unts) |
+| [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/organizations.svg)](https://opencollective.com/1stG) | [![unTS Open Collective backers and sponsors](https://opencollective.com/unts/organizations.svg)](https://opencollective.com/unts) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/organizations.svg)](https://opencollective.com/unts) |
 
 ## Backers
 
-| 1stG                                                                                                                             | RxTS                                                                                                                             | UnTS                                                                                                                             |
+| 1stG                                                                                                                             | unTS                                                                                                                             | UnTS                                                                                                                             |
 | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/individuals.svg)](https://opencollective.com/1stG) | [![RxTS Open Collective backers and sponsors](https://opencollective.com/rxts/individuals.svg)](https://opencollective.com/rxts) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/individuals.svg)](https://opencollective.com/unts) |
+| [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/individuals.svg)](https://opencollective.com/1stG) | [![unTS Open Collective backers and sponsors](https://opencollective.com/unts/individuals.svg)](https://opencollective.com/unts) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/individuals.svg)](https://opencollective.com/unts) |
 
 ## Changelog
 
