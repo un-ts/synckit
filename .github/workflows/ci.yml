@@ -31,10 +31,8 @@ jobs:
       - name: Install Dependencies
         run: yarn --frozen-lockfile --ignore-engines
 
-      - name: Build, Lint and test
-        run: |
-          yarn test
-          yarn lint
+      - name: Build, Lint and Test
+        run: yarn run-s build lint test
         env:
           EFF_NO_LINK_RULES: true
           PARSER_NO_WATCH: true

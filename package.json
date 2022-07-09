@@ -77,8 +77,7 @@
     "lint:es": "eslint . --cache -f friendly --max-warnings 10",
     "lint:tsc": "tsc --noEmit",
     "prepare": "patch-package && simple-git-hooks && yarn-deduplicate --strategy fewer || exit 0",
-    "prerelease": "npm run build",
-    "pretest": "yarn build",
+    "prerelease": "yarn build",
     "release": "clean-publish && changeset publish",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "typecov": "type-coverage"
