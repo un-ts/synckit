@@ -105,13 +105,24 @@ const dataUrl = (code: string) =>
 const setupTsNode = (workerPath: string, execArgv: string[]) => {
   if (!/[/\\]node_modules[/\\]/.test(workerPath)) {
     const ext = path.extname(workerPath)
-    // TODO: support `.cts` and `.mts` automatically
-    if (!ext || ext === '.js') {
-      const found = tryExtensions(
-        ext ? workerPath.replace(/\.js$/, '') : workerPath,
-        ['.ts', '.js'],
-      )
-      if (found) {
+    if (!ext || /\.[cm]?js$/.test(ext)) {
+      const workPathWithoutExt = ext
+        ? workerPath.slice(0, -ext.length)
+        : workerPath
+      let extensions: string[]
+      switch (ext) {
+        case '.cjs':
+          extensions = ['cts', 'cjs']
+          break
+        case '.mjs':
+          extensions = ['mts', 'mjs']
+          break
+        default:
+          extensions = ['.ts', '.js']
+          break
+      }
+      const found = tryExtensions(workPathWithoutExt, extensions)
+      if (found && (!ext || found !== workPathWithoutExt)) {
         workerPath = found
       }
     }
@@ -119,7 +130,6 @@ const setupTsNode = (workerPath: string, execArgv: string[]) => {
 
   const isTs = /\.[cm]?ts$/.test(workerPath)
 
-  // TODO: it does not work for `ts-node` for now
   let tsUseEsm = workerPath.endsWith('.mts')
 
   if (isTs) {
