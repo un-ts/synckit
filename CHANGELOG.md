@@ -1,5 +1,11 @@
 # synckit
 
+## 0.7.3
+
+### Patch Changes
+
+- [#88](https://github.com/un-ts/synckit/pull/88) [`f9d0c3e`](https://github.com/un-ts/synckit/commit/f9d0c3e26f10a64c683bdb1117c5c1453b0036b4) Thanks [@JounQin](https://github.com/JounQin)! - feat: support map `cjs` to `cts`, `mjs` to `mts` automatically
+
 ## 0.7.2
 
 ### Patch Changes
