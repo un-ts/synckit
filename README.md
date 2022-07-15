@@ -62,7 +62,7 @@ runAsWorker(async (...args) => {
 })
 ```
 
-You must make sure, the `result` is serialized by [`Structured Clone Algorithm`](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm)
+You must make sure, the `result` is serializable by [`Structured Clone Algorithm`](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm)
 
 ### Envs
 
