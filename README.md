@@ -19,6 +19,7 @@ Perform async work synchronously in Node.js using `worker_threads` with first-cl
 - [Usage](#usage)
   - [Install](#install)
   - [API](#api)
+  - [Options](#options)
   - [Envs](#envs)
   - [TypeScript](#typescript)
     - [`ts-node`](#ts-node)
@@ -50,7 +51,9 @@ npm i synckit
 import { createSyncFn } from 'synckit'
 
 // the worker path must be absolute
-const syncFn = createSyncFn(require.resolve('./worker'))
+const syncFn = createSyncFn(require.resolve('./worker'), {
+  tsRunner: 'tsx', // optional, can be `'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'tsx'`
+})
 
 // do whatever you want, you will get the result synchronously!
 const result = syncFn(...args)
@@ -67,6 +70,13 @@ runAsWorker(async (...args) => {
 ```
 
 You must make sure, the `result` is serializable by [`Structured Clone Algorithm`](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm)
+
+### Options
+
+1. `bufferSize` same as env `SYNCKIT_BUFFER_SIZE`
+2. `timeout` same as env `SYNCKIT_TIMEOUT`
+3. `execArgv` same as env `SYNCKIT_EXEC_ARGV`
+4. `tsRunner` same as env `SYNCKIT_TS_RUNNER`
 
 ### Envs
 
