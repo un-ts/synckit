@@ -1,12 +1,8 @@
 {
   "extends": "@1stg/tsconfig/lib",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
-      "synckit": ["src"]
+      "synckit": ["./src"]
     }
-  },
-  "ts-node": {
-    "require": ["tsconfig-paths/register"]
   }
 }

@@ -19,6 +19,8 @@ export type PromiseType<T extends AnyPromise> = T extends Promise<infer R>
   ? R
   : never
 
+export type ValueOf<T> = T[keyof T]
+
 export interface MainToWorkerMessage<T extends unknown[]> {
   sharedBuffer: SharedArrayBuffer
   id: number
