@@ -1,5 +1,11 @@
 # synckit
 
+## 0.8.1
+
+### Patch Changes
+
+- [#92](https://github.com/un-ts/synckit/pull/92) [`396e964`](https://github.com/un-ts/synckit/commit/396e964549a1c7ede9faae07ab1b3165cd1bffce) Thanks [@JounQin](https://github.com/JounQin)! - fix: better compatibility on Node 14
+
 ## 0.8.0
 
 ### Minor Changes
