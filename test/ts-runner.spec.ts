@@ -7,7 +7,7 @@ import { jest } from '@jest/globals'
 import { _dirname } from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
-import { TsRunner } from 'synckit'
+import { MTS_SUPPORTED_NODE_VERSION, TsRunner } from 'synckit'
 
 beforeEach(() => {
   jest.resetModules()
@@ -27,14 +27,12 @@ it(TsRunner.EsbuildRegister, async () => {
 
   expect(() =>
     createSyncFn<AsyncWorkerFn>(
-      path.resolve(_dirname, 'esbuild-register-error.worker.mts'),
+      path.resolve(_dirname, 'esbuild-register-error.worker.mjs'),
       {
         tsRunner: TsRunner.EsbuildRegister,
       },
     ),
-  ).toThrowErrorMatchingInlineSnapshot(
-    `"esbuild-register is not supported for .mts files yet, you can try [tsx](https://github.com/esbuild-kit/tsx) instead"`,
-  )
+  ).toThrowError('esbuild-register is not supported for .mts files yet')
 })
 
 it(TsRunner.EsbuildRunner, async () => {
@@ -51,18 +49,27 @@ it(TsRunner.EsbuildRunner, async () => {
 
   expect(() =>
     createSyncFn<AsyncWorkerFn>(
-      path.resolve(_dirname, 'esbuild-runner-error.worker.mts'),
+      path.resolve(_dirname, 'esbuild-runner-error.worker.mjs'),
       {
         tsRunner: TsRunner.EsbuildRunner,
       },
     ),
-  ).toThrowErrorMatchingInlineSnapshot(
-    `"esbuild-runner is not supported for .mts files yet, you can try [tsx](https://github.com/esbuild-kit/tsx) instead"`,
-  )
+  ).toThrowError('esbuild-runner is not supported for .mts files yet')
 })
 
 it(TsRunner.TSX, async () => {
   const { createSyncFn } = await import('synckit')
+
+  if (Number.parseFloat(process.versions.node) < MTS_SUPPORTED_NODE_VERSION) {
+    // eslint-disable-next-line jest/no-conditional-expect
+    expect(() =>
+      createSyncFn<AsyncWorkerFn>(path.resolve(_dirname, 'tsx.worker.mjs'), {
+        tsRunner: TsRunner.TSX,
+      }),
+    ).toThrowError('tsx is not supported for .mts files yet')
+    return
+  }
+
   const syncFn = createSyncFn<AsyncWorkerFn>(
     path.resolve(_dirname, 'tsx.worker.mjs'),
     {
@@ -79,7 +86,7 @@ it('unknown ts runner', async () => {
 
   expect(() =>
     // @ts-expect-error
-    createSyncFn<AsyncWorkerFn>(path.resolve(_dirname, 'worker.ts'), {
+    createSyncFn<AsyncWorkerFn>(path.resolve(_dirname, 'worker.js'), {
       tsRunner: 'unknown',
     }),
   ).toThrowErrorMatchingInlineSnapshot(`"Unknown ts runner: unknown"`)

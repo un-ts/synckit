@@ -3685,16 +3685,6 @@ cjs-module-lexer@^1.0.0:
   resolved "https://registry.yarnpkg.com/cjs-module-lexer/-/cjs-module-lexer-1.2.2.tgz#9f84ba3244a512f3a54e5277e8eef4c489864e40"
   integrity sha512-cOU9usZw8/dXIXKtwa8pM0OTJQuJkxMN6w30csNRUerHfeQ5R6U3kkU/FtJeIf3M202OHfY2U8ccInBG7/xogA==
 
-clean-publish@^4.0.1:
-  version "4.0.1"
-  resolved "https://registry.yarnpkg.com/clean-publish/-/clean-publish-4.0.1.tgz#8492fa1ef9b5d5f8e26cbca76c849a2be14543a3"
-  integrity sha512-6v0bh5kQD5FDlxBgXDVNNc6KmAB7iIP/GHD91q9xsGVZT5XB9Y8TNqB7dL5u9PTZlBeLpBw+A1AseRlEEJLSWA==
-  dependencies:
-    cross-spawn "^7.0.3"
-    fast-glob "^3.2.11"
-    lilconfig "^2.0.5"
-    micromatch "^4.0.5"
-
 clean-regexp@^1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/clean-regexp/-/clean-regexp-1.0.0.tgz#8df7c7aae51fd36874e8f8d05b9180bc11a3fed7"
