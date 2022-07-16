@@ -78,7 +78,7 @@
     "lint:tsc": "tsc --noEmit",
     "prepare": "patch-package && simple-git-hooks && yarn-deduplicate --strategy fewer || exit 0",
     "prerelease": "yarn build",
-    "release": "clean-publish && changeset publish",
+    "release": "changeset publish",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "typecov": "type-coverage"
   },
@@ -92,7 +92,6 @@
     "@changesets/cli": "^2.23.2",
     "@types/jest": "^28.1.5",
     "@types/node": "^18.0.4",
-    "clean-publish": "^4.0.1",
     "deasync": "^0.1.27",
     "esbuild-register": "^3.3.3",
     "esbuild-runner": "^2.2.1",

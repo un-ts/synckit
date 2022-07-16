@@ -1,3 +1,11 @@
 {
-  "extends": "@1stg"
+  "extends": "@1stg",
+  "overrides": [
+    {
+      "files": ".github/FUNDING.yml",
+      "rules": {
+        "unicorn/filename-case": "off"
+      }
+    }
+  ]
 }
