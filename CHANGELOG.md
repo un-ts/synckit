@@ -1,5 +1,20 @@
 # synckit
 
+## 0.8.0
+
+### Minor Changes
+
+- [#90](https://github.com/un-ts/synckit/pull/90) [`ffcf174`](https://github.com/un-ts/synckit/commit/ffcf174aae7f735f3706c11673cf40d79c6cdc16) Thanks [@JounQin](https://github.com/JounQin)! - build!: drop Node 12 support, remove testing on Node 14
+
+- [#90](https://github.com/un-ts/synckit/pull/90) [`ffcf174`](https://github.com/un-ts/synckit/commit/ffcf174aae7f735f3706c11673cf40d79c6cdc16) Thanks [@JounQin](https://github.com/JounQin)! - feat: support more ts runners for TypeScript files
+
+  - https://github.com/TypeStrong/ts-node
+  - https://github.com/egoist/esbuild-register
+  - https://github.com/folke/esbuild-runner
+  - https://github.com/esbuild-kit/tsx
+
+  Feel free to PR to add more runner support like [`swc`](https://github.com/swc-project/swc) if you want
+
 ## 0.7.3
 
 ### Patch Changes
