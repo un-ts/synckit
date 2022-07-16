@@ -17,13 +17,32 @@ import {
   AnyFn,
   MainToWorkerMessage,
   Syncify,
+  ValueOf,
   WorkerData,
   WorkerToMainMessage,
 } from './types.js'
 
 export * from './types.js'
 
-const { SYNCKIT_BUFFER_SIZE, SYNCKIT_TIMEOUT, SYNCKIT_EXEC_ARV } = process.env
+export const TsRunner = {
+  // https://github.com/TypeStrong/ts-node
+  TsNode: 'ts-node',
+  // https://github.com/egoist/esbuild-register
+  EsbuildRegister: 'esbuild-register',
+  // https://github.com/folke/esbuild-runner
+  EsbuildRunner: 'esbuild-runner',
+  // https://github.com/esbuild-kit/tsx
+  TSX: 'tsx',
+} as const
+
+export type TsRunner = ValueOf<typeof TsRunner>
+
+const {
+  SYNCKIT_BUFFER_SIZE,
+  SYNCKIT_TIMEOUT,
+  SYNCKIT_EXEC_ARV,
+  SYNCKIT_TS_RUNNER,
+} = process.env
 
 export const DEFAULT_BUFFER_SIZE = SYNCKIT_BUFFER_SIZE
   ? +SYNCKIT_BUFFER_SIZE
@@ -34,7 +53,10 @@ export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 export const DEFAULT_WORKER_BUFFER_SIZE = DEFAULT_BUFFER_SIZE || 1024
 
 /* istanbul ignore next */
-export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARV?.split(',') ?? []
+export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARV?.split(',') || []
+
+export const DEFAULT_TS_RUNNER = (SYNCKIT_TS_RUNNER ||
+  TsRunner.TsNode) as TsRunner
 
 const syncFnCache = new Map<string, AnyFn>()
 
@@ -42,6 +64,7 @@ export interface SynckitOptions {
   bufferSize?: number
   timeout?: number
   execArgv?: string[]
+  tsRunner?: TsRunner
 }
 
 // MessagePort doesn't copy the properties of Error objects. We still want
@@ -101,30 +124,34 @@ const cjsRequire =
 const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
-// eslint-disable-next-line sonarjs/cognitive-complexity
-const setupTsNode = (workerPath: string, execArgv: string[]) => {
-  if (!/[/\\]node_modules[/\\]/.test(workerPath)) {
-    const ext = path.extname(workerPath)
-    if (!ext || /\.[cm]?js$/.test(ext)) {
-      const workPathWithoutExt = ext
-        ? workerPath.slice(0, -ext.length)
-        : workerPath
-      let extensions: string[]
-      switch (ext) {
-        case '.cjs':
-          extensions = ['cts', 'cjs']
-          break
-        case '.mjs':
-          extensions = ['mts', 'mjs']
-          break
-        default:
-          extensions = ['.ts', '.js']
-          break
-      }
-      const found = tryExtensions(workPathWithoutExt, extensions)
-      if (found && (!ext || found !== workPathWithoutExt)) {
-        workerPath = found
-      }
+const setupTsRunner = (
+  workerPath: string,
+  { execArgv, tsRunner }: { execArgv: string[]; tsRunner: TsRunner }, // eslint-disable-next-line sonarjs/cognitive-complexity
+) => {
+  const ext = path.extname(workerPath)
+
+  if (
+    !/[/\\]node_modules[/\\]/.test(workerPath) &&
+    (!ext || /^\.[cm]?js$/.test(ext))
+  ) {
+    const workPathWithoutExt = ext
+      ? workerPath.slice(0, -ext.length)
+      : workerPath
+    let extensions: string[]
+    switch (ext) {
+      case '.cjs':
+        extensions = ['.cts', '.cjs']
+        break
+      case '.mjs':
+        extensions = ['.mts', '.mjs']
+        break
+      default:
+        extensions = ['.ts', '.js']
+        break
+    }
+    const found = tryExtensions(workPathWithoutExt, extensions)
+    if (found && (!ext || found !== workPathWithoutExt)) {
+      workerPath = found
     }
   }
 
@@ -141,12 +168,43 @@ const setupTsNode = (workerPath: string, execArgv: string[]) => {
           'module'
       }
     }
-    if (tsUseEsm && !execArgv.includes('--loader')) {
-      execArgv = ['--loader', 'ts-node/esm', ...execArgv]
+    switch (tsRunner) {
+      case TsRunner.TsNode: {
+        if (tsUseEsm) {
+          if (!execArgv.includes('--loader')) {
+            execArgv = ['--loader', `${TsRunner.TsNode}/esm`, ...execArgv]
+          }
+        } else if (!execArgv.includes('-r')) {
+          execArgv = ['-r', `${TsRunner.TsNode}/register`, ...execArgv]
+        }
+        break
+      }
+      case TsRunner.EsbuildRegister: {
+        if (!execArgv.includes('-r')) {
+          execArgv = ['-r', TsRunner.EsbuildRegister, ...execArgv]
+        }
+        break
+      }
+      case TsRunner.EsbuildRunner: {
+        if (!execArgv.includes('-r')) {
+          execArgv = ['-r', `${TsRunner.EsbuildRunner}/register`, ...execArgv]
+        }
+        break
+      }
+      case TsRunner.TSX: {
+        if (!execArgv.includes('--loader')) {
+          execArgv = ['--loader', TsRunner.TSX, ...execArgv]
+        }
+        break
+      }
+      default: {
+        throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
+      }
     }
   }
 
   return {
+    ext,
     isTs,
     tsUseEsm,
     workerPath,
@@ -160,28 +218,50 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     bufferSize = DEFAULT_WORKER_BUFFER_SIZE,
     timeout = DEFAULT_TIMEOUT,
     execArgv = DEFAULT_EXEC_ARGV,
+    tsRunner = DEFAULT_TS_RUNNER,
   }: SynckitOptions = {},
 ) {
   const { port1: mainPort, port2: workerPort } = new MessageChannel()
 
   const {
-    isTs,
+    ext,
     tsUseEsm,
     workerPath: finalWorkerPath,
     execArgv: finalExecArgv,
-  } = setupTsNode(workerPath, execArgv)
+  } = setupTsRunner(workerPath, { execArgv, tsRunner })
+
+  const workerPathUrl = pathToFileURL(finalWorkerPath)
+
+  if (
+    /\.[cm]ts$/.test(finalWorkerPath) &&
+    (
+      [
+        // https://github.com/egoist/esbuild-register/issues/79
+        TsRunner.EsbuildRegister,
+        // https://github.com/folke/esbuild-runner/issues/67
+        TsRunner.EsbuildRunner,
+      ] as TsRunner[]
+    ).includes(tsRunner)
+  ) {
+    throw new Error(
+      `${tsRunner} is not supported for ${ext} files yet, you can try [tsx](https://github.com/esbuild-kit/tsx) instead`,
+    )
+  }
 
   const worker = new Worker(
-    isTs
-      ? tsUseEsm
-        ? dataUrl(`import '${String(pathToFileURL(finalWorkerPath))}'`)
-        : `require('ts-node/register');require('${finalWorkerPath.replace(
-            /\\/g,
-            '\\\\',
-          )}')`
-      : pathToFileURL(finalWorkerPath),
+    tsUseEsm &&
+    (
+      [
+        TsRunner.TsNode,
+        // https://github.com/egoist/esbuild-register/issues/79
+        // TsRunner.EsbuildRegister,
+        // https://github.com/folke/esbuild-runner/issues/67
+        // TsRunner.EsbuildRunner
+      ] as TsRunner[]
+    ).includes(tsRunner)
+      ? dataUrl(`import '${String(workerPathUrl)}'`)
+      : workerPathUrl,
     {
-      eval: isTs && !tsUseEsm,
       workerData: { workerPort },
       transferList: [workerPort],
       execArgv: finalExecArgv,

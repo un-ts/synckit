@@ -1,12 +1,12 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import { jest } from '@jest/globals'
 
-import { createSyncFn, extractProperties } from 'synckit'
+import { _dirname } from './helpers.js'
+import type { AsyncWorkerFn } from './types.js'
 
-type AsyncWorkerFn<T = number> = (result: T, timeout?: number) => Promise<T>
+import { createSyncFn, extractProperties } from 'synckit'
 
 beforeEach(() => {
   jest.resetModules()
@@ -17,18 +17,13 @@ beforeEach(() => {
 
 const cjsRequire = createRequire(import.meta.url)
 
-const _dirname =
-  typeof __dirname === 'undefined'
-    ? path.dirname(fileURLToPath(import.meta.url))
-    : __dirname
-
-const workerCjsTsPath = cjsRequire.resolve('./cjs/worker-cjs.ts')
-const workerEsmTsPath = cjsRequire.resolve('./esm/worker-esm.ts')
-const workerNoExtAsJsPath = path.resolve(_dirname, './worker-js')
-const workerJsAsTsPath = path.resolve(_dirname, './worker.js')
-const workerCjsPath = cjsRequire.resolve('./worker.cjs')
-const workerMjsPath = cjsRequire.resolve('./worker.mjs')
-const workerErrorPath = cjsRequire.resolve('./worker-error.cjs')
+const workerCjsTsPath = path.resolve(_dirname, 'cjs/worker-cjs.ts')
+const workerEsmTsPath = path.resolve(_dirname, 'esm/worker-esm.ts')
+const workerNoExtAsJsPath = path.resolve(_dirname, 'worker-js')
+const workerJsAsTsPath = path.resolve(_dirname, 'worker.js')
+const workerCjsPath = path.resolve(_dirname, 'worker.cjs')
+const workerMjsPath = path.resolve(_dirname, 'worker.mjs')
+const workerErrorPath = path.resolve(_dirname, 'worker-error.cjs')
 
 test('ts as cjs', () => {
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsTsPath)

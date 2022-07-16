@@ -21,6 +21,10 @@ Perform async work synchronously in Node.js using `worker_threads` with first-cl
   - [API](#api)
   - [Envs](#envs)
   - [TypeScript](#typescript)
+    - [`ts-node`](#ts-node)
+    - [`esbuild-register`](#esbuild-register)
+    - [`esbuild-runner`](#esbuild-runner)
+    - [`tsx`](#tsx)
 - [Benchmark](#benchmark)
 - [Sponsors](#sponsors)
 - [Backers](#backers)
@@ -69,14 +73,29 @@ You must make sure, the `result` is serializable by [`Structured Clone Algorithm
 1. `SYNCKIT_BUFFER_SIZE`: `bufferSize` to create `SharedArrayBuffer` for `worker_threads` (default as `1024`)
 2. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
 3. `SYNCKIT_EXEC_ARGV`: List of node CLI options passed to the worker, split with comma `,`. (default as `[]`), see also [`node` docs](https://nodejs.org/api/worker_threads.html)
+4. `SYNCKIT_TS_RUNNER`: Which TypeScript runner to be used, it could be very useful for development, could be `'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'tsx'`, `'ts-node'` is used by default, make sure you have installed them already
 
 ### TypeScript
+
+#### `ts-node`
 
 If you want to use `ts-node` for worker file (a `.ts` file), it is supported out of box!
 
 If you want to use a custom tsconfig as project instead of default `tsconfig.json`, use `TS_NODE_PROJECT` env. Please view [ts-node](https://github.com/TypeStrong/ts-node#tsconfig) for more details.
 
 If you want to integrate with [tsconfig-paths](https://www.npmjs.com/package/tsconfig-paths), please view [ts-node](https://github.com/TypeStrong/ts-node#paths-and-baseurl) for more details.
+
+#### `esbuild-register`
+
+Please view <https://github.com/egoist/esbuild-register> for its document
+
+#### `esbuild-runner`
+
+Please view <https://github.com/folke/esbuild-runner> for its document
+
+#### `tsx`
+
+Please view <https://github.com/esbuild-kit/tsx> for its document
 
 ## Benchmark
 
