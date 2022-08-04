@@ -40,7 +40,6 @@ export type TsRunner = ValueOf<typeof TsRunner>
 const {
   SYNCKIT_BUFFER_SIZE,
   SYNCKIT_TIMEOUT,
-  SYNCKIT_EXEC_ARV, // kept for backwards compatibility
   SYNCKIT_EXEC_ARGV,
   SYNCKIT_TS_RUNNER,
 } = process.env
@@ -54,7 +53,7 @@ export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 export const DEFAULT_WORKER_BUFFER_SIZE = DEFAULT_BUFFER_SIZE || 1024
 
 /* istanbul ignore next */
-export const DEFAULT_EXEC_ARGV = (SYNCKIT_EXEC_ARV || SYNCKIT_EXEC_ARGV)?.split(',') || []
+export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARGV?.split(',') || []
 
 export const DEFAULT_TS_RUNNER = (SYNCKIT_TS_RUNNER ||
   TsRunner.TsNode) as TsRunner
