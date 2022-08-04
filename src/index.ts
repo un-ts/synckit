@@ -42,6 +42,7 @@ const {
   SYNCKIT_TIMEOUT,
   SYNCKIT_EXEC_ARGV,
   SYNCKIT_TS_RUNNER,
+  NODE_OPTIONS,
 } = process.env
 
 export const DEFAULT_BUFFER_SIZE = SYNCKIT_BUFFER_SIZE
@@ -207,6 +208,18 @@ const setupTsRunner = (
         throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
       }
     }
+  }
+
+  if (process.versions.pnp) {
+    try {
+      const resolvedPnp = require.resolve('pnpapi')
+      if (
+        !NODE_OPTIONS?.includes(resolvedPnp) &&
+        !execArgv.includes(resolvedPnp)
+      ) {
+        execArgv = [...execArgv, `-r ${resolvedPnp}`]
+      }
+    } catch {}
   }
 
   return {
