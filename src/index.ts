@@ -210,14 +210,15 @@ const setupTsRunner = (
     }
   }
 
+  /* istanbul ignore if -- https://github.com/facebook/jest/issues/5274 */
   if (process.versions.pnp) {
     try {
-      const resolvedPnp = cjsRequire.resolve('pnpapi')
+      const pnpApiPath = cjsRequire.resolve('pnpapi')
       if (
-        !NODE_OPTIONS?.includes(resolvedPnp) &&
-        !execArgv.includes(resolvedPnp)
+        !NODE_OPTIONS?.includes(pnpApiPath) &&
+        !execArgv.includes(pnpApiPath)
       ) {
-        execArgv = ['-r', resolvedPnp, ...execArgv]
+        execArgv = ['-r', pnpApiPath, ...execArgv]
       }
     } catch {}
   }
