@@ -212,7 +212,7 @@ const setupTsRunner = (
 
   if (process.versions.pnp) {
     try {
-      const resolvedPnp = require.resolve('pnpapi')
+      const resolvedPnp = cjsRequire.resolve('pnpapi')
       if (
         !NODE_OPTIONS?.includes(resolvedPnp) &&
         !execArgv.includes(resolvedPnp)
