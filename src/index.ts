@@ -217,7 +217,7 @@ const setupTsRunner = (
         !NODE_OPTIONS?.includes(resolvedPnp) &&
         !execArgv.includes(resolvedPnp)
       ) {
-        execArgv.push('-r', resolvedPnp)
+        execArgv = ['-r', resolvedPnp, ...execArgv]
       }
     } catch {}
   }
