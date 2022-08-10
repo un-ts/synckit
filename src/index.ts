@@ -376,7 +376,7 @@ export function runAsWorker<
     /**
      * @see https://github.com/un-ts/synckit/issues/94
      *
-     * Creating the service can fail if the on-disk state is corrupt. In that case
+     * Starting the worker can fail, due to syntax error, for example. In that case
      * we just fail all incoming messages with whatever error message we got.
      * Otherwise incoming messages will hang forever waiting for a reply.
      */
