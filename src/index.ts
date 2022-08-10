@@ -42,6 +42,7 @@ const {
   SYNCKIT_TIMEOUT,
   SYNCKIT_EXEC_ARGV,
   SYNCKIT_TS_RUNNER,
+  NODE_OPTIONS,
 } = process.env
 
 export const DEFAULT_BUFFER_SIZE = SYNCKIT_BUFFER_SIZE
@@ -206,6 +207,22 @@ const setupTsRunner = (
       default: {
         throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
       }
+    }
+  }
+
+  /* istanbul ignore if -- https://github.com/facebook/jest/issues/5274 */
+  if (process.versions.pnp) {
+    const nodeOptions = NODE_OPTIONS?.split(/\s+/)
+    const pnpApiPath = cjsRequire.resolve('pnpapi')
+    if (
+      !nodeOptions?.some(
+        (option, index) =>
+          ['-r', '--require'].includes(option) &&
+          pnpApiPath === cjsRequire.resolve(nodeOptions[index + 1]),
+      ) &&
+      !execArgv.includes(pnpApiPath)
+    ) {
+      execArgv = ['-r', pnpApiPath, ...execArgv]
     }
   }
 
