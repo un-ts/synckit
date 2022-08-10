@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -127,6 +128,14 @@ const cjsRequire =
 const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
+export const isFile = (path: string) => {
+  try {
+    return fs.statSync(path).isFile()
+  } catch {
+    return false
+  }
+}
+
 const setupTsRunner = (
   workerPath: string,
   { execArgv, tsRunner }: { execArgv: string[]; tsRunner: TsRunner }, // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -223,6 +232,10 @@ const setupTsRunner = (
       !execArgv.includes(pnpApiPath)
     ) {
       execArgv = ['-r', pnpApiPath, ...execArgv]
+      const pnpLoaderPath = path.resolve(pnpApiPath, '../.pnp.loader.mjs')
+      if (isFile(pnpLoaderPath)) {
+        execArgv = ['--experimental-loader', pnpLoaderPath, ...execArgv]
+      }
     }
   }
 
