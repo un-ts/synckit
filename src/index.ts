@@ -32,6 +32,8 @@ export const TsRunner = {
   EsbuildRegister: 'esbuild-register',
   // https://github.com/folke/esbuild-runner
   EsbuildRunner: 'esbuild-runner',
+  // https://github.com/swc-project/swc-node/tree/master/packages/register
+  SWC: 'swc',
   // https://github.com/esbuild-kit/tsx
   TSX: 'tsx',
 } as const
@@ -207,6 +209,12 @@ const setupTsRunner = (
         }
         break
       }
+      case TsRunner.SWC: {
+        if (!execArgv.includes('-r')) {
+          execArgv = ['-r', `@${TsRunner.SWC}-node/register`, ...execArgv]
+        }
+        break
+      }
       case TsRunner.TSX: {
         if (!execArgv.includes('--loader')) {
           execArgv = ['--loader', TsRunner.TSX, ...execArgv]
@@ -282,6 +290,8 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
           TsRunner.EsbuildRegister,
           // https://github.com/folke/esbuild-runner/issues/67
           TsRunner.EsbuildRunner,
+          // https://github.com/swc-project/swc-node/issues/667
+          TsRunner.SWC,
           .../* istanbul ignore next */ (isTsxSupported ? [] : [TsRunner.TSX]),
         ] as TsRunner[]
       ).includes(tsRunner)
