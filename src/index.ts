@@ -128,6 +128,14 @@ const cjsRequire =
 const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
+export const isFile = (path: string) => {
+  try {
+    return fs.statSync(path).isFile()
+  } catch {
+    return false
+  }
+}
+
 const setupTsRunner = (
   workerPath: string,
   { execArgv, tsRunner }: { execArgv: string[]; tsRunner: TsRunner }, // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -215,7 +223,6 @@ const setupTsRunner = (
   if (process.versions.pnp) {
     const nodeOptions = NODE_OPTIONS?.split(/\s+/)
     const pnpApiPath = cjsRequire.resolve('pnpapi')
-    const pnpLoaderPath = path.join(path.dirname(pnpApiPath), '.pnp.loader.mjs')
     if (
       !nodeOptions?.some(
         (option, index) =>
@@ -224,14 +231,11 @@ const setupTsRunner = (
       ) &&
       !execArgv.includes(pnpApiPath)
     ) {
-      execArgv = [
-        '-r',
-        pnpApiPath,
-        ...(fs.existsSync(pnpLoaderPath)
-          ? ['--experimental-loader', pnpLoaderPath]
-          : []),
-        ...execArgv,
-      ]
+      execArgv = ['-r', pnpApiPath, ...execArgv]
+      const pnpLoaderPath = path.resolve(pnpApiPath, '../.pnp.loader.mjs')
+      if (isFile(pnpLoaderPath)) {
+        execArgv = ['--experimental-loader', pnpLoaderPath, ...execArgv]
+      }
     }
   }
 
