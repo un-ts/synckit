@@ -352,26 +352,47 @@ export function runAsWorker<
   }
 
   const { workerPort } = workerData as WorkerData
-  parentPort!.on(
-    'message',
-    ({ sharedBuffer, id, args }: MainToWorkerMessage<Parameters<T>>) => {
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      ;(async () => {
-        const sharedBufferView = new Int32Array(sharedBuffer)
-        let msg: WorkerToMainMessage<R>
-        try {
-          msg = { id, result: await fn(...args) }
-        } catch (error: unknown) {
-          msg = {
-            id,
-            error,
-            properties: extractProperties(error),
+
+  try {
+    parentPort!.on(
+      'message',
+      ({ sharedBuffer, id, args }: MainToWorkerMessage<Parameters<T>>) => {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        ;(async () => {
+          const sharedBufferView = new Int32Array(sharedBuffer)
+          let msg: WorkerToMainMessage<R>
+          try {
+            msg = { id, result: await fn(...args) }
+          } catch (error: unknown) {
+            msg = { id, error, properties: extractProperties(error) }
           }
-        }
-        workerPort.postMessage(msg)
+          workerPort.postMessage(msg)
+          Atomics.add(sharedBufferView, 0, 1)
+          Atomics.notify(sharedBufferView, 0)
+        })()
+      },
+    )
+
+    /**
+     * @see https://github.com/un-ts/synckit/issues/94
+     *
+     * Starting the worker can fail, due to syntax error, for example. In that case
+     * we just fail all incoming messages with whatever error message we got.
+     * Otherwise incoming messages will hang forever waiting for a reply.
+     */
+  } catch (error) {
+    parentPort!.on(
+      'message',
+      ({ sharedBuffer, id }: MainToWorkerMessage<Parameters<T>>) => {
+        const sharedBufferView = new Int32Array(sharedBuffer)
+        workerPort.postMessage({
+          id,
+          error,
+          properties: extractProperties(error),
+        })
         Atomics.add(sharedBufferView, 0, 1)
         Atomics.notify(sharedBufferView, 0)
-      })()
-    },
-  )
+      },
+    )
+  }
 }
