@@ -1,5 +1,13 @@
 # synckit
 
+## 0.8.3
+
+### Patch Changes
+
+- [#106](https://github.com/un-ts/synckit/pull/106) [`9f27ff9`](https://github.com/un-ts/synckit/commit/9f27ff9b10c802cd670af97d660387ec9a9f4333) Thanks [@JounQin](https://github.com/JounQin)! - feat: add `swc` (`@swc-node/register`) support out of box
+
+- [#103](https://github.com/un-ts/synckit/pull/103) [`b1308ac`](https://github.com/un-ts/synckit/commit/b1308accc392370fcac131c3d4d1a862c0c9170f) Thanks [@noahnu](https://github.com/noahnu)! - fix: pass yarn PnP experimental loader to worker if it exists
+
 ## 0.8.2
 
 ### Patch Changes
