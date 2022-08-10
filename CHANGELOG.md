@@ -1,5 +1,15 @@
 # synckit
 
+## 0.8.2
+
+### Patch Changes
+
+- [#98](https://github.com/un-ts/synckit/pull/98) [`4fe6aef`](https://github.com/un-ts/synckit/commit/4fe6aef243872ef5a1e05a72785f5f21d6736a41) Thanks [@noahnu](https://github.com/noahnu)! - feat: support yarn PnP out of box, propagate PnP runtime
+
+- [#97](https://github.com/un-ts/synckit/pull/97) [`d1bed37`](https://github.com/un-ts/synckit/commit/d1bed37310edf4e4b92f57402e4f950cf4ff01a8) Thanks [@noahnu](https://github.com/noahnu)! - fix: typo of `SYNCKIT_EXEC_ARGV` environment variable
+
+- [#101](https://github.com/un-ts/synckit/pull/101) [`34e44ae`](https://github.com/un-ts/synckit/commit/34e44ae42699dc3261affe8ad8e98a25a6134879) Thanks [@JounQin](https://github.com/JounQin)! - feat: propagate sync errors from worker
+
 ## 0.8.1
 
 ### Patch Changes
