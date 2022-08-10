@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -214,6 +215,11 @@ const setupTsRunner = (
   if (process.versions.pnp) {
     const nodeOptions = NODE_OPTIONS?.split(/\s+/)
     const pnpApiPath = cjsRequire.resolve('pnpapi')
+    const pnpLoaderPath = path.resolve(
+      path.dirname(pnpApiPath),
+      '.pnp.loader.mjs',
+    )
+
     if (
       !nodeOptions?.some(
         (option, index) =>
@@ -222,7 +228,11 @@ const setupTsRunner = (
       ) &&
       !execArgv.includes(pnpApiPath)
     ) {
-      execArgv = ['-r', pnpApiPath, ...execArgv]
+      const pnpLoaderArgv = existsSync(pnpLoaderPath)
+        ? ['--experimental-loader', pnpLoaderPath]
+        : []
+
+      execArgv = ['-r', pnpApiPath, ...pnpLoaderArgv, ...execArgv]
     }
   }
 
