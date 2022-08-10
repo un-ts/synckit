@@ -13,75 +13,111 @@ beforeEach(() => {
   jest.resetModules()
 })
 
-it(TsRunner.EsbuildRegister, async () => {
+const workerJsPath = path.resolve(_dirname, 'worker-js')
+const workerMjsPath = path.resolve(_dirname, 'worker.mjs')
+const workerMtsPath = path.resolve(_dirname, 'worker-mts.mjs')
+
+test(TsRunner.EsbuildRegister, async () => {
   const { createSyncFn } = await import('synckit')
-  const syncFn = createSyncFn<AsyncWorkerFn>(
-    path.resolve(_dirname, 'esbuild-register.worker.mjs'),
-    {
-      tsRunner: TsRunner.EsbuildRegister,
-    },
-  )
+
+  let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
+    tsRunner: TsRunner.EsbuildRegister,
+  })
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+
+  syncFn = createSyncFn<AsyncWorkerFn>(workerMjsPath, {
+    tsRunner: TsRunner.EsbuildRegister,
+  })
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 
   expect(() =>
-    createSyncFn<AsyncWorkerFn>(
-      path.resolve(_dirname, 'esbuild-register-error.worker.mjs'),
-      {
-        tsRunner: TsRunner.EsbuildRegister,
-      },
-    ),
+    createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+      tsRunner: TsRunner.EsbuildRegister,
+    }),
   ).toThrowError('esbuild-register is not supported for .mts files yet')
 })
 
-it(TsRunner.EsbuildRunner, async () => {
+test(TsRunner.EsbuildRunner, async () => {
   const { createSyncFn } = await import('synckit')
-  const syncFn = createSyncFn<AsyncWorkerFn>(
-    path.resolve(_dirname, 'esbuild-runner.worker.mjs'),
-    {
-      tsRunner: TsRunner.EsbuildRunner,
-    },
-  )
+
+  let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
+    tsRunner: TsRunner.EsbuildRunner,
+  })
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+
+  syncFn = createSyncFn<AsyncWorkerFn>(workerMjsPath, {
+    tsRunner: TsRunner.EsbuildRunner,
+  })
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 
   expect(() =>
-    createSyncFn<AsyncWorkerFn>(
-      path.resolve(_dirname, 'esbuild-runner-error.worker.mjs'),
-      {
-        tsRunner: TsRunner.EsbuildRunner,
-      },
-    ),
+    createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+      tsRunner: TsRunner.EsbuildRunner,
+    }),
   ).toThrowError('esbuild-runner is not supported for .mts files yet')
 })
 
-it(TsRunner.TSX, async () => {
+test(TsRunner.SWC, async () => {
   const { createSyncFn } = await import('synckit')
+
+  let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
+    tsRunner: TsRunner.SWC,
+  })
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+
+  syncFn = createSyncFn<AsyncWorkerFn>(workerMjsPath, {
+    tsRunner: TsRunner.SWC,
+  })
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+
+  expect(() =>
+    createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+      tsRunner: TsRunner.SWC,
+    }),
+  ).toThrowError('swc is not supported for .mts files yet')
+})
+
+test(TsRunner.TSX, async () => {
+  const { createSyncFn } = await import('synckit')
+
+  let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
+    tsRunner: TsRunner.TSX,
+  })
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
 
   if (Number.parseFloat(process.versions.node) < MTS_SUPPORTED_NODE_VERSION) {
     // eslint-disable-next-line jest/no-conditional-expect
     expect(() =>
-      createSyncFn<AsyncWorkerFn>(path.resolve(_dirname, 'tsx.worker.mjs'), {
+      createSyncFn<AsyncWorkerFn>(workerMtsPath, {
         tsRunner: TsRunner.TSX,
       }),
     ).toThrowError('tsx is not supported for .mts files yet')
     return
   }
 
-  const syncFn = createSyncFn<AsyncWorkerFn>(
-    path.resolve(_dirname, 'tsx.worker.mjs'),
-    {
-      tsRunner: TsRunner.TSX,
-    },
-  )
+  syncFn = createSyncFn<AsyncWorkerFn>(workerMjsPath, {
+    tsRunner: TsRunner.TSX,
+  })
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 })
 
-it('unknown ts runner', async () => {
+test('unknown ts runner', async () => {
   const { createSyncFn } = await import('synckit')
 
   expect(() =>

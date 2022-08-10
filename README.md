@@ -25,6 +25,7 @@ Perform async work synchronously in Node.js using `worker_threads` with first-cl
     - [`ts-node`](#ts-node)
     - [`esbuild-register`](#esbuild-register)
     - [`esbuild-runner`](#esbuild-runner)
+    - [`swc`](#swc)
     - [`tsx`](#tsx)
 - [Benchmark](#benchmark)
 - [Sponsors](#sponsors)
@@ -83,7 +84,7 @@ You must make sure, the `result` is serializable by [`Structured Clone Algorithm
 1. `SYNCKIT_BUFFER_SIZE`: `bufferSize` to create `SharedArrayBuffer` for `worker_threads` (default as `1024`)
 2. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
 3. `SYNCKIT_EXEC_ARGV`: List of node CLI options passed to the worker, split with comma `,`. (default as `[]`), see also [`node` docs](https://nodejs.org/api/worker_threads.html)
-4. `SYNCKIT_TS_RUNNER`: Which TypeScript runner to be used, it could be very useful for development, could be `'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'tsx'`, `'ts-node'` is used by default, make sure you have installed them already
+4. `SYNCKIT_TS_RUNNER`: Which TypeScript runner to be used, it could be very useful for development, could be `'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'swc' | 'tsx'`, `'ts-node'` is used by default, make sure you have installed them already
 
 ### TypeScript
 
@@ -97,15 +98,19 @@ If you want to integrate with [tsconfig-paths](https://www.npmjs.com/package/tsc
 
 #### `esbuild-register`
 
-Please view <https://github.com/egoist/esbuild-register> for its document
+Please view [`esbuild-register`][] for its document
 
 #### `esbuild-runner`
 
-Please view <https://github.com/folke/esbuild-runner> for its document
+Please view [`esbuild-runner`][] for its document
+
+#### `swc`
+
+Please view [`@swc-node/register`][] for its document
 
 #### `tsx`
 
-Please view <https://github.com/esbuild-kit/tsx> for its document
+Please view [`tsx`][] for its document
 
 ## Benchmark
 
@@ -137,6 +142,10 @@ Detailed changes for each release are documented in [CHANGELOG.md](./CHANGELOG.m
 
 [MIT][] © [JounQin][]@[1stG.me][]
 
+[`esbuild-register`]: https://github.com/egoist/esbuild-register
+[`esbuild-runner`]: https://github.com/folke/esbuild-runner
+[`@swc-node/register`]: https://github.com/swc-project/swc-node/tree/master/packages/register
+[`tsx`]: https://github.com/esbuild-kit/tsx
 [1stg.me]: https://www.1stg.me
 [jounqin]: https://GitHub.com/JounQin
 [mit]: http://opensource.org/licenses/MIT
