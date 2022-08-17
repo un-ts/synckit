@@ -1,5 +1,11 @@
 # synckit
 
+## 0.8.4
+
+### Patch Changes
+
+- [`74ca908`](https://github.com/un-ts/synckit/commit/74ca908cd38c456f63825d48d9e25b7a3dc4711f) Thanks [@JounQin](https://github.com/JounQin)! - chore(deps): update dependency synckit to ^0.8.3 for yarn PnP ([#169](https://github.com/import-js/eslint-import-resolver-typescript/pull/169))
+
 ## 0.8.3
 
 ### Patch Changes
