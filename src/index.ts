@@ -76,9 +76,11 @@ export interface SynckitOptions {
 // MessagePort doesn't copy the properties of Error objects. We still want
 // error objects to have extra properties such as "warnings" so implement the
 // property copying manually.
-export const extractProperties = <T>(object?: T): T | undefined => {
+export function extractProperties<T extends object>(object: T): T
+export function extractProperties<T>(object?: T): T | undefined
+export function extractProperties<T>(object?: T) {
   if (object && typeof object === 'object') {
-    const properties = {} as unknown as T
+    const properties = {} as T
     for (const key in object) {
       properties[key as keyof T] = object[key]
     }
@@ -230,8 +232,13 @@ const setupTsRunner = (
   /* istanbul ignore if -- https://github.com/facebook/jest/issues/5274 */
   if (process.versions.pnp) {
     const nodeOptions = NODE_OPTIONS?.split(/\s+/)
-    const pnpApiPath = cjsRequire.resolve('pnpapi')
+    let pnpApiPath: string | undefined
+    try {
+      /** @see https://github.com/facebook/jest/issues/9543 */
+      pnpApiPath = cjsRequire.resolve('pnpapi')
+    } catch {}
     if (
+      pnpApiPath &&
       !nodeOptions?.some(
         (option, index) =>
           ['-r', '--require'].includes(option) &&
