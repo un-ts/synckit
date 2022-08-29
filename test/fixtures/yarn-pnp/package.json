@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "type": "module",
   "license": "MIT",
-  "packageManager": "yarn@3.2.2",
+  "packageManager": "yarn@3.2.3",
   "main": "index.js"
 }
