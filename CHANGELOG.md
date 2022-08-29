@@ -1,5 +1,11 @@
 # synckit
 
+## 0.8.4
+
+### Patch Changes
+
+- [#109](https://github.com/un-ts/synckit/pull/109) [`b61087f`](https://github.com/un-ts/synckit/commit/b61087f02d9745375b85ed719126399d75b6be28) Thanks [@JounQin](https://github.com/JounQin)! - fix: incorrect `extractProperties` typings for known object
+
 ## 0.8.3
 
 ### Patch Changes
