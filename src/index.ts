@@ -232,8 +232,13 @@ const setupTsRunner = (
   /* istanbul ignore if -- https://github.com/facebook/jest/issues/5274 */
   if (process.versions.pnp) {
     const nodeOptions = NODE_OPTIONS?.split(/\s+/)
-    const pnpApiPath = cjsRequire.resolve('pnpapi')
+    let pnpApiPath: string | undefined
+    try {
+      /** @see https://github.com/facebook/jest/issues/9543 */
+      pnpApiPath = cjsRequire.resolve('pnpapi')
+    } catch {}
     if (
+      pnpApiPath &&
       !nodeOptions?.some(
         (option, index) =>
           ['-r', '--require'].includes(option) &&

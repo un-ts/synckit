@@ -11019,13 +11019,21 @@ sync-threads@^1.0.1:
   resolved "https://registry.yarnpkg.com/sync-threads/-/sync-threads-1.0.1.tgz#1e854ce579eaca0d0f1f0885a40bc2be6237b593"
   integrity sha512-hIdwt/c/e1ONnr2RJmfBxEAj/J6KQQWKdToF3Qw8ZNRsTNNteGkOe63rQy9I7J5UNlr8Yl0wkzIr9wgLY94x0Q==
 
-synckit@^0.8.0, synckit@^0.8.1, synckit@^0.8.3:
-  version "0.8.3"
-  resolved "https://registry.yarnpkg.com/synckit/-/synckit-0.8.3.tgz#f36ca23fb7cbcf2b2b78c9e553ce6764dc6aa415"
-  integrity sha512-1goXnDYNJlKwCM37f5MTzRwo+8SqutgVtg2d37D6YnHHT4E3IhQMRfKiGdfTZU7LBlI6T8inCQUxnMBFHrbqWw==
-  dependencies:
-    "@pkgr/utils" "^2.3.0"
-    tslib "^2.4.0"
+synckit@^0.8.0:
+  version "0.0.0"
+  uid ""
+
+synckit@^0.8.1:
+  version "0.0.0"
+  uid ""
+
+synckit@^0.8.3:
+  version "0.0.0"
+  uid ""
+
+"synckit@link:.":
+  version "0.0.0"
+  uid ""
 
 tapable@^2.2.0:
   version "2.2.1"
