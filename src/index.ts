@@ -249,7 +249,11 @@ const setupTsRunner = (
       execArgv = ['-r', pnpApiPath, ...execArgv]
       const pnpLoaderPath = path.resolve(pnpApiPath, '../.pnp.loader.mjs')
       if (isFile(pnpLoaderPath)) {
-        execArgv = ['--experimental-loader', pnpLoaderPath, ...execArgv]
+        // Transform path to file URL because nodejs does not accept
+        // absolute Windows paths in the --experimental-loader option.
+        // https://github.com/un-ts/synckit/issues/123
+        const experimentalLoader = pathToFileURL(pnpLoaderPath).toString()
+        execArgv = ['--experimental-loader', experimentalLoader, ...execArgv]
       }
     }
   }
