@@ -1,5 +1,11 @@
 # synckit
 
+## 0.8.5
+
+### Patch Changes
+
+- [#126](https://github.com/un-ts/synckit/pull/126) [`758aaf1`](https://github.com/un-ts/synckit/commit/758aaf13f3a27f050269fb46116b5123fda1bd71) Thanks [@krossekrabbe](https://github.com/krossekrabbe)! - fix: pnp loader path on Windows
+
 ## 0.8.4
 
 ### Patch Changes
