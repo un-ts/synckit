@@ -65,7 +65,7 @@
     "clean-pkg-json": "^1.2.0",
     "deasync": "^0.1.28",
     "esbuild-register": "^3.3.3",
-    "esbuild-runner": "^2.2.1",
+    "esbuild-runner": "^2.2.2",
     "execa": "^6.1.0",
     "jest": "^29.0.1",
     "patch-package": "^6.4.7",
