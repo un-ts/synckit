@@ -61,7 +61,7 @@
     "@changesets/cli": "^2.26.0",
     "@swc-node/register": "^1.5.5",
     "@types/jest": "^28.1.8",
-    "@types/node": "^18.7.13",
+    "@types/node": "^18.19.0",
     "clean-pkg-json": "^1.2.0",
     "deasync": "^0.1.28",
     "esbuild-register": "^3.3.3",
