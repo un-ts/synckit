@@ -1,5 +1,13 @@
 # synckit
 
+## 0.8.6
+
+### Patch Changes
+
+- [#141](https://github.com/un-ts/synckit/pull/141) [`608c9d9`](https://github.com/un-ts/synckit/commit/608c9d9f9f98acfc1ff681706034bddc5bebba98) Thanks [@JounQin](https://github.com/JounQin)! - fix: only fallback to `ts-node` when it's available - close #128
+
+- [#142](https://github.com/un-ts/synckit/pull/142) [`097e5cd`](https://github.com/un-ts/synckit/commit/097e5cd47a132b895f1f3d476197f909a364a9ec) Thanks [@JounQin](https://github.com/JounQin)! - feat: add custom transferList support - close #131
+
 ## 0.8.5
 
 ### Patch Changes
