@@ -2,4 +2,4 @@
 "synckit": patch
 ---
 
-fix: only fallback to ts-node when it's available
+fix: only fallback to `ts-node` when it's available - close #128
