@@ -4,11 +4,12 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   MessageChannel,
+  TransferListItem,
   Worker,
+  parentPort,
   receiveMessageOnPort,
   // type-coverage:ignore-next-line -- we can't control
   workerData,
-  parentPort,
 } from 'node:worker_threads'
 
 import { findUp, isPkgAvailable, tryExtensions } from '@pkgr/utils'
@@ -70,6 +71,7 @@ export interface SynckitOptions {
   timeout?: number
   execArgv?: string[]
   tsRunner?: TsRunner
+  transferList?: TransferListItem[]
 }
 
 // MessagePort doesn't copy the properties of Error objects. We still want
@@ -284,6 +286,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     timeout = DEFAULT_TIMEOUT,
     execArgv = DEFAULT_EXEC_ARGV,
     tsRunner = DEFAULT_TS_RUNNER,
+    transferList = [],
   }: SynckitOptions = {},
 ) {
   const { port1: mainPort, port2: workerPort } = new MessageChannel()
@@ -340,7 +343,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     {
       eval: useEval,
       workerData: { workerPort },
-      transferList: [workerPort],
+      transferList: [workerPort, ...transferList],
       execArgv: finalExecArgv,
     },
   )
