@@ -11,7 +11,7 @@ import {
   parentPort,
 } from 'node:worker_threads'
 
-import { findUp, tryExtensions } from '@pkgr/utils'
+import { findUp, isPkgAvailable, tryExtensions } from '@pkgr/utils'
 
 import {
   AnyAsyncFn,
@@ -59,8 +59,7 @@ export const DEFAULT_WORKER_BUFFER_SIZE = DEFAULT_BUFFER_SIZE || 1024
 /* istanbul ignore next */
 export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARGV?.split(',') || []
 
-export const DEFAULT_TS_RUNNER = (SYNCKIT_TS_RUNNER ||
-  TsRunner.TsNode) as TsRunner
+export const DEFAULT_TS_RUNNER = SYNCKIT_TS_RUNNER as TsRunner | undefined
 
 export const MTS_SUPPORTED_NODE_VERSION = 16
 
@@ -134,7 +133,7 @@ const dataUrl = (code: string) =>
 
 export const isFile = (path: string) => {
   try {
-    return fs.statSync(path).isFile()
+    return !!fs.statSync(path, { throwIfNoEntry: false })?.isFile()
   } catch {
     return false
   }
@@ -142,7 +141,7 @@ export const isFile = (path: string) => {
 
 const setupTsRunner = (
   workerPath: string,
-  { execArgv, tsRunner }: { execArgv: string[]; tsRunner: TsRunner }, // eslint-disable-next-line sonarjs/cognitive-complexity
+  { execArgv, tsRunner }: { execArgv: string[]; tsRunner?: TsRunner }, // eslint-disable-next-line sonarjs/cognitive-complexity
 ) => {
   let ext = path.extname(workerPath)
 
@@ -155,15 +154,18 @@ const setupTsRunner = (
       : workerPath
     let extensions: string[]
     switch (ext) {
-      case '.cjs':
+      case '.cjs': {
         extensions = ['.cts', '.cjs']
         break
-      case '.mjs':
+      }
+      case '.mjs': {
         extensions = ['.mts', '.mjs']
         break
-      default:
+      }
+      default: {
         extensions = ['.ts', '.js']
         break
+      }
     }
     const found = tryExtensions(workPathWithoutExt, extensions)
     let differentExt: boolean | undefined
@@ -188,6 +190,11 @@ const setupTsRunner = (
           'module'
       }
     }
+
+    if (tsRunner == null && isPkgAvailable(TsRunner.TsNode)) {
+      tsRunner = TsRunner.TsNode
+    }
+
     switch (tsRunner) {
       case TsRunner.TsNode: {
         if (tsUseEsm) {
@@ -261,6 +268,7 @@ const setupTsRunner = (
   return {
     ext,
     isTs,
+    tsRunner,
     tsUseEsm,
     workerPath,
     execArgv,
@@ -283,6 +291,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     isTs,
     ext,
     tsUseEsm,
+    tsRunner: finalTsRunner,
     workerPath: finalWorkerPath,
     execArgv: finalExecArgv,
   } = setupTsRunner(workerPath, { execArgv, tsRunner })
@@ -293,8 +302,9 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     const isTsxSupported =
       !tsUseEsm ||
       Number.parseFloat(process.versions.node) >= MTS_SUPPORTED_NODE_VERSION
-    /* istanbul ignore if */
-    if (
+    if (!finalTsRunner) {
+      throw new Error('No ts runner specified, ts worker path is not supported')
+    } /* istanbul ignore if */ else if (
       (
         [
           // https://github.com/egoist/esbuild-register/issues/79
@@ -305,10 +315,10 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
           TsRunner.SWC,
           .../* istanbul ignore next */ (isTsxSupported ? [] : [TsRunner.TSX]),
         ] as TsRunner[]
-      ).includes(tsRunner)
+      ).includes(finalTsRunner)
     ) {
       throw new Error(
-        `${tsRunner} is not supported for ${ext} files yet` +
+        `${finalTsRunner} is not supported for ${ext} files yet` +
           (isTsxSupported
             ? ', you can try [tsx](https://github.com/esbuild-kit/tsx) instead'
             : ''),
@@ -322,7 +332,8 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     tsUseEsm && tsRunner === TsRunner.TsNode
       ? dataUrl(`import '${String(workerPathUrl)}'`)
       : useEval
-      ? `require('${finalWorkerPath.replace(/\\/g, '\\\\')}')`
+      ? // eslint-disable-next-line unicorn/prefer-string-replace-all -- compatibility
+        `require('${finalWorkerPath.replace(/\\/g, '\\\\')}')`
       : workerPathUrl,
     {
       eval: useEval,
@@ -387,46 +398,22 @@ export function runAsWorker<
 
   const { workerPort } = workerData as WorkerData
 
-  try {
-    parentPort!.on(
-      'message',
-      ({ sharedBuffer, id, args }: MainToWorkerMessage<Parameters<T>>) => {
-        // eslint-disable-next-line @typescript-eslint/no-floating-promises
-        ;(async () => {
-          const sharedBufferView = new Int32Array(sharedBuffer)
-          let msg: WorkerToMainMessage<R>
-          try {
-            msg = { id, result: await fn(...args) }
-          } catch (error: unknown) {
-            msg = { id, error, properties: extractProperties(error) }
-          }
-          workerPort.postMessage(msg)
-          Atomics.add(sharedBufferView, 0, 1)
-          Atomics.notify(sharedBufferView, 0)
-        })()
-      },
-    )
-
-    /**
-     * @see https://github.com/un-ts/synckit/issues/94
-     *
-     * Starting the worker can fail, due to syntax error, for example. In that case
-     * we just fail all incoming messages with whatever error message we got.
-     * Otherwise incoming messages will hang forever waiting for a reply.
-     */
-  } catch (error) {
-    parentPort!.on(
-      'message',
-      ({ sharedBuffer, id }: MainToWorkerMessage<Parameters<T>>) => {
+  parentPort!.on(
+    'message',
+    ({ sharedBuffer, id, args }: MainToWorkerMessage<Parameters<T>>) => {
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
+      ;(async () => {
         const sharedBufferView = new Int32Array(sharedBuffer)
-        workerPort.postMessage({
-          id,
-          error,
-          properties: extractProperties(error),
-        })
+        let msg: WorkerToMainMessage<R>
+        try {
+          msg = { id, result: await fn(...args) }
+        } catch (error: unknown) {
+          msg = { id, error, properties: extractProperties(error) }
+        }
+        workerPort.postMessage(msg)
         Atomics.add(sharedBufferView, 0, 1)
         Atomics.notify(sharedBufferView, 0)
-      },
-    )
-  }
+      })()
+    },
+  )
 }
