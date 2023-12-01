@@ -2,4 +2,4 @@
 "synckit": patch
 ---
 
-feat: add custom transferList support
+feat: add custom transferList support - close #131
