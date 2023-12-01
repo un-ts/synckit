@@ -109,7 +109,7 @@ test(TsRunner.TSX, async () => {
     return
   }
 
-  syncFn = createSyncFn<AsyncWorkerFn>(workerMjsPath, {
+  syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
     tsRunner: TsRunner.TSX,
   })
   expect(syncFn(1)).toBe(1)

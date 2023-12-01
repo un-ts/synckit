@@ -135,6 +135,7 @@ export const isFile = (path: string) => {
   try {
     return !!fs.statSync(path, { throwIfNoEntry: false })?.isFile()
   } catch {
+    /* istanbul ignore next */
     return false
   }
 }
@@ -302,6 +303,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     const isTsxSupported =
       !tsUseEsm ||
       Number.parseFloat(process.versions.node) >= MTS_SUPPORTED_NODE_VERSION
+    /* istanbul ignore if */
     if (!finalTsRunner) {
       throw new Error('No ts runner specified, ts worker path is not supported')
     } /* istanbul ignore if */ else if (
@@ -319,7 +321,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     ) {
       throw new Error(
         `${finalTsRunner} is not supported for ${ext} files yet` +
-          (isTsxSupported
+          /* istanbul ignore next */ (isTsxSupported
             ? ', you can try [tsx](https://github.com/esbuild-kit/tsx) instead'
             : ''),
       )
@@ -329,7 +331,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   const useEval = isTs && !tsUseEsm
 
   const worker = new Worker(
-    tsUseEsm && tsRunner === TsRunner.TsNode
+    tsUseEsm && finalTsRunner === TsRunner.TsNode
       ? dataUrl(`import '${String(workerPathUrl)}'`)
       : useEval
       ? // eslint-disable-next-line unicorn/prefer-string-replace-all -- compatibility
