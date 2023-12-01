@@ -7,5 +7,11 @@ test('yarn-pnp', async () => {
     nodeOptions: ['-r', './.pnp.cjs'],
     cwd: resolve('test/fixtures/yarn-pnp'),
   })
-  expect(stdout).toBe([1, 2, 5].join(' '))
+
+  /**
+   * @see https://github.com/sindresorhus/execa/issues/587
+   */
+  expect(stdout).toContain('1')
+  expect(stdout).toContain('2')
+  expect(stdout).toContain('5')
 })

@@ -38,7 +38,7 @@ test(TsRunner.EsbuildRegister, async () => {
     createSyncFn<AsyncWorkerFn>(workerMtsPath, {
       tsRunner: TsRunner.EsbuildRegister,
     }),
-  ).toThrowError('esbuild-register is not supported for .mts files yet')
+  ).toThrow('esbuild-register is not supported for .mts files yet')
 })
 
 test(TsRunner.EsbuildRunner, async () => {
@@ -62,7 +62,7 @@ test(TsRunner.EsbuildRunner, async () => {
     createSyncFn<AsyncWorkerFn>(workerMtsPath, {
       tsRunner: TsRunner.EsbuildRunner,
     }),
-  ).toThrowError('esbuild-runner is not supported for .mts files yet')
+  ).toThrow('esbuild-runner is not supported for .mts files yet')
 })
 
 test(TsRunner.SWC, async () => {
@@ -86,7 +86,7 @@ test(TsRunner.SWC, async () => {
     createSyncFn<AsyncWorkerFn>(workerMtsPath, {
       tsRunner: TsRunner.SWC,
     }),
-  ).toThrowError('swc is not supported for .mts files yet')
+  ).toThrow('swc is not supported for .mts files yet')
 })
 
 test(TsRunner.TSX, async () => {
@@ -105,11 +105,11 @@ test(TsRunner.TSX, async () => {
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
         tsRunner: TsRunner.TSX,
       }),
-    ).toThrowError('tsx is not supported for .mts files yet')
+    ).toThrow('tsx is not supported for .mts files yet')
     return
   }
 
-  syncFn = createSyncFn<AsyncWorkerFn>(workerMjsPath, {
+  syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
     tsRunner: TsRunner.TSX,
   })
   expect(syncFn(1)).toBe(1)
