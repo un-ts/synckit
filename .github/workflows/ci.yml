@@ -39,7 +39,8 @@ jobs:
 
       - name: Benchmark
         run: yarn benchmark
-        continue-on-error: ${{ matrix.os == 'windows-latest' }}
+        continue-on-error: ${{ matrix.node == 20 }}
 
       - name: Codecov
         uses: codecov/codecov-action@v3
+        if: ${{ matrix.node != 20 }}

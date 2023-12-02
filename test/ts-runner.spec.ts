@@ -4,7 +4,7 @@ import path from 'node:path'
 
 import { jest } from '@jest/globals'
 
-import { _dirname } from './helpers.js'
+import { _dirname, nodeVersion, tsUseEsmSupported } from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
 import { MTS_SUPPORTED_NODE_VERSION, TsRunner } from 'synckit'
@@ -34,11 +34,14 @@ test(TsRunner.EsbuildRegister, async () => {
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 
-  expect(() =>
-    createSyncFn<AsyncWorkerFn>(workerMtsPath, {
-      tsRunner: TsRunner.EsbuildRegister,
-    }),
-  ).toThrow('esbuild-register is not supported for .mts files yet')
+  if (tsUseEsmSupported) {
+    // eslint-disable-next-line jest/no-conditional-expect
+    expect(() =>
+      createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+        tsRunner: TsRunner.EsbuildRegister,
+      }),
+    ).toThrow('esbuild-register is not supported for .mts files yet')
+  }
 })
 
 test(TsRunner.EsbuildRunner, async () => {
@@ -58,11 +61,14 @@ test(TsRunner.EsbuildRunner, async () => {
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 
-  expect(() =>
-    createSyncFn<AsyncWorkerFn>(workerMtsPath, {
-      tsRunner: TsRunner.EsbuildRunner,
-    }),
-  ).toThrow('esbuild-runner is not supported for .mts files yet')
+  if (tsUseEsmSupported) {
+    // eslint-disable-next-line jest/no-conditional-expect
+    expect(() =>
+      createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+        tsRunner: TsRunner.EsbuildRunner,
+      }),
+    ).toThrow('esbuild-runner is not supported for .mts files yet')
+  }
 })
 
 test(TsRunner.SWC, async () => {
@@ -82,11 +88,14 @@ test(TsRunner.SWC, async () => {
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 
-  expect(() =>
-    createSyncFn<AsyncWorkerFn>(workerMtsPath, {
-      tsRunner: TsRunner.SWC,
-    }),
-  ).toThrow('swc is not supported for .mts files yet')
+  if (tsUseEsmSupported) {
+    // eslint-disable-next-line jest/no-conditional-expect
+    expect(() =>
+      createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+        tsRunner: TsRunner.SWC,
+      }),
+    ).toThrow('swc is not supported for .mts files yet')
+  }
 })
 
 test(TsRunner.TSX, async () => {
@@ -99,13 +108,17 @@ test(TsRunner.TSX, async () => {
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 
-  if (Number.parseFloat(process.versions.node) < MTS_SUPPORTED_NODE_VERSION) {
+  if (nodeVersion < MTS_SUPPORTED_NODE_VERSION) {
     // eslint-disable-next-line jest/no-conditional-expect
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
         tsRunner: TsRunner.TSX,
       }),
     ).toThrow('tsx is not supported for .mts files yet')
+    return
+  }
+
+  if (!tsUseEsmSupported) {
     return
   }
 

@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { jest } from '@jest/globals'
 
-import { _dirname } from './helpers.js'
+import { _dirname, testIf, tsUseEsmSupported } from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
 import { createSyncFn, extractProperties } from 'synckit'
@@ -32,11 +32,13 @@ test('ts as cjs', () => {
   expect(syncFn(5)).toBe(5)
 })
 
-test('ts as esm', () => {
+testIf(tsUseEsmSupported)('ts as esm', () => {
   const syncFn = createSyncFn<AsyncWorkerFn>(workerEsmTsPath)
+  /* eslint-disable jest/no-standalone-expect */
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
+  /* eslint-enable jest/no-standalone-expect */
 })
 
 test('no ext as js (as esm)', () => {
@@ -46,11 +48,13 @@ test('no ext as js (as esm)', () => {
   expect(syncFn(5)).toBe(5)
 })
 
-test('js as ts (as esm)', () => {
+testIf(tsUseEsmSupported)('js as ts (as esm)', () => {
   const syncFn = createSyncFn<AsyncWorkerFn>(workerJsAsTsPath)
+  /* eslint-disable jest/no-standalone-expect */
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
+  /* eslint-enable jest/no-standalone-expect */
 })
 
 test('createSyncFn', () => {
