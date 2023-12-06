@@ -77,6 +77,7 @@ You must make sure, the `result` is serializable by [`Structured Clone Algorithm
 2. `timeout` same as env `SYNCKIT_TIMEOUT`
 3. `execArgv` same as env `SYNCKIT_EXEC_ARGV`
 4. `tsRunner` same as env `SYNCKIT_TS_RUNNER`
+5. `transferList`: Please refer Node.js [`worker_threads`](https://nodejs.org/api/worker_threads.html#:~:text=Default%3A%20true.-,transferList,-%3CObject%5B%5D%3E%20If) documentation
 
 ### Envs
 
