@@ -12,6 +12,7 @@ jobs:
         node:
           - 16
           - 18
+          - 18.18
           - 20
         os:
           - macos-latest
