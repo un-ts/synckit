@@ -1,0 +1,9 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`utils generateGlobals 1`] = `"import fetch from 'node-fetch';if(!globalThis.fetch)globalThis.fetch=fetch;import {performance} from 'node:perf_hooks';if(!globalThis.performance)globalThis.performance=performance"`;
+
+exports[`utils generateGlobals 2`] = `"const fetch=require('node-fetch');if(!globalThis.fetch)globalThis.fetch=fetch;const {performance}=require('node:perf_hooks');if(!globalThis.performance)globalThis.performance=performance"`;
+
+exports[`utils generateGlobals 3`] = `"import fetch from 'node-fetch';globalThis.fetch=fetch;import {performance} from 'node:perf_hooks';if(!globalThis.performance)globalThis.performance=performance"`;
+
+exports[`utils generateGlobals 4`] = `"const fetch=require('node-fetch');globalThis.fetch=fetch;const {performance}=require('node:perf_hooks');if(!globalThis.performance)globalThis.performance=performance"`;

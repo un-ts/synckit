@@ -18,6 +18,7 @@ Perform async work synchronously in Node.js using `worker_threads` with first-cl
 - [Usage](#usage)
   - [Install](#install)
   - [API](#api)
+  - [Types](#types)
   - [Options](#options)
   - [Envs](#envs)
   - [TypeScript](#typescript)
@@ -71,6 +72,43 @@ runAsWorker(async (...args) => {
 
 You must make sure, the `result` is serializable by [`Structured Clone Algorithm`](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Structured_clone_algorithm)
 
+### Types
+
+````ts
+export interface GlobalShim {
+  moduleName: string
+  /**
+   * `undefined` means side effect only
+   */
+  globalName?: string
+  /**
+   * 1. `undefined` or empty string means `default`, for example:
+   * ```js
+   * import globalName from 'module-name'
+   * ```
+   *
+   * 2. `null` means namespaced, for example:
+   * ```js
+   * import * as globalName from 'module-name'
+   * ```
+   *
+   */
+  named?: string | null
+  /**
+   * If not `false`, the shim will only be applied when the original `globalName` unavailable,
+   * for example you may only want polyfill `globalThis.fetch` when it's unavailable natively:
+   * ```js
+   * import fetch from 'node-fetch'
+   *
+   * if (!globalThis.fetch) {
+   *   globalThis.fetch = fetch
+   * }
+   * ```
+   */
+  conditional?: boolean
+}
+````
+
 ### Options
 
 1. `bufferSize` same as env `SYNCKIT_BUFFER_SIZE`
@@ -78,6 +116,7 @@ You must make sure, the `result` is serializable by [`Structured Clone Algorithm
 3. `execArgv` same as env `SYNCKIT_EXEC_ARGV`
 4. `tsRunner` same as env `SYNCKIT_TS_RUNNER`
 5. `transferList`: Please refer Node.js [`worker_threads`](https://nodejs.org/api/worker_threads.html#:~:text=Default%3A%20true.-,transferList,-%3CObject%5B%5D%3E%20If) documentation
+6. `globalShims`: Similar like env `SYNCKIT_GLOBAL_SHIMS` but much more flexible which can be a `GlobalShim` `Array`, see `GlobalShim`'s [definition](#types) for more details
 
 ### Envs
 
@@ -85,6 +124,7 @@ You must make sure, the `result` is serializable by [`Structured Clone Algorithm
 2. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
 3. `SYNCKIT_EXEC_ARGV`: List of node CLI options passed to the worker, split with comma `,`. (default as `[]`), see also [`node` docs](https://nodejs.org/api/worker_threads.html)
 4. `SYNCKIT_TS_RUNNER`: Which TypeScript runner to be used, it could be very useful for development, could be `'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'swc' | 'tsx'`, `'ts-node'` is used by default, make sure you have installed them already
+5. `SYNCKIT_GLOBAL_SHIMS`: Whether to enable the default `DEFAULT_GLOBAL_SHIMS_PRESET` as `globalShims`
 
 ### TypeScript
 

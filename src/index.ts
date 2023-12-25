@@ -1,10 +1,12 @@
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
   MessageChannel,
-  TransferListItem,
+  type TransferListItem,
   Worker,
   parentPort,
   receiveMessageOnPort,
@@ -14,9 +16,10 @@ import {
 
 import { findUp, isPkgAvailable, tryExtensions } from '@pkgr/utils'
 
-import {
+import type {
   AnyAsyncFn,
   AnyFn,
+  GlobalShim,
   MainToWorkerMessage,
   Syncify,
   ValueOf,
@@ -46,6 +49,7 @@ const {
   SYNCKIT_TIMEOUT,
   SYNCKIT_EXEC_ARGV,
   SYNCKIT_TS_RUNNER,
+  SYNCKIT_GLOBAL_SHIMS,
   NODE_OPTIONS,
 } = process.env
 
@@ -62,6 +66,22 @@ export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARGV?.split(',') || []
 
 export const DEFAULT_TS_RUNNER = SYNCKIT_TS_RUNNER as TsRunner | undefined
 
+export const DEFAULT_GLOBAL_SHIMS = ['1', 'true'].includes(
+  SYNCKIT_GLOBAL_SHIMS!,
+)
+
+export const DEFAULT_GLOBAL_SHIMS_PRESET: GlobalShim[] = [
+  {
+    moduleName: 'node-fetch',
+    globalName: 'fetch',
+  },
+  {
+    moduleName: 'node:perf_hooks',
+    globalName: 'performance',
+    named: 'performance',
+  },
+]
+
 export const MTS_SUPPORTED_NODE_VERSION = 16
 
 const syncFnCache = new Map<string, AnyFn>()
@@ -72,6 +92,7 @@ export interface SynckitOptions {
   execArgv?: string[]
   tsRunner?: TsRunner
   transferList?: TransferListItem[]
+  globalShims?: GlobalShim[] | boolean
 }
 
 // MessagePort doesn't copy the properties of Error objects. We still want
@@ -278,6 +299,114 @@ const setupTsRunner = (
   }
 }
 
+const md5Hash = (text: string) => createHash('md5').update(text).digest('hex')
+
+const encodeImportModule = (
+  moduleNameOrGlobalShim: GlobalShim | string,
+  type: 'import' | 'require' = 'import',
+  // eslint-disable-next-line sonarjs/cognitive-complexity
+) => {
+  const { moduleName, globalName, named, conditional }: GlobalShim =
+    typeof moduleNameOrGlobalShim === 'string'
+      ? { moduleName: moduleNameOrGlobalShim }
+      : moduleNameOrGlobalShim
+  const importStatement =
+    type === 'import'
+      ? `import${
+          globalName
+            ? ' ' +
+              (named === null
+                ? '* as ' + globalName
+                : named?.trim()
+                ? `{${named}}`
+                : globalName) +
+              ' from'
+            : ''
+        } '${
+          path.isAbsolute(moduleName)
+            ? String(pathToFileURL(moduleName))
+            : moduleName
+        }'`
+      : `${
+          globalName
+            ? 'const ' + (named?.trim() ? `{${named}}` : globalName) + '='
+            : ''
+        }require('${moduleName
+          // eslint-disable-next-line unicorn/prefer-string-replace-all -- compatibility
+          .replace(/\\/g, '\\\\')}')`
+
+  if (!globalName) {
+    return importStatement
+  }
+
+  const overrideStatement = `globalThis.${globalName}=${
+    named?.trim() ? named : globalName
+  }`
+
+  return (
+    importStatement +
+    (conditional === false
+      ? `;${overrideStatement}`
+      : `;if(!globalThis.${globalName})${overrideStatement}`)
+  )
+}
+
+/**
+ * @internal
+ */
+export const _generateGlobals = (
+  globalShims: GlobalShim[],
+  type: 'import' | 'require',
+) =>
+  globalShims.reduce(
+    (acc, shim) =>
+      isPkgAvailable(shim.moduleName)
+        ? `${acc}${acc ? ';' : ''}${encodeImportModule(shim, type)}`
+        : acc,
+    '',
+  )
+
+const globalsCache = new Map<string, [content: string, filepath?: string]>()
+
+let tempDir: string
+
+export const generateGlobals = (
+  workerPath: string,
+  globalShims: GlobalShim[],
+  type: 'import' | 'require' = 'import',
+) => {
+  const cached = globalsCache.get(workerPath)
+
+  if (cached) {
+    const [content, filepath] = cached
+
+    if (
+      (type === 'require' && !filepath) ||
+      (type === 'import' && filepath && isFile(filepath))
+    ) {
+      return content
+    }
+  }
+
+  const globals = _generateGlobals(globalShims, type)
+
+  let content = globals
+  let filepath: string | undefined
+
+  if (type === 'import') {
+    filepath = path.resolve(
+      (tempDir ||= fs.realpathSync(tmpdir())),
+      md5Hash(workerPath) + '.mjs',
+    )
+    content = encodeImportModule(filepath)
+    fs.writeFileSync(filepath, globals)
+  }
+
+  globalsCache.set(workerPath, [content, filepath])
+
+  return content
+}
+
 // eslint-disable-next-line sonarjs/cognitive-complexity
 function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   workerPath: string,
@@ -287,6 +416,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     execArgv = DEFAULT_EXEC_ARGV,
     tsRunner = DEFAULT_TS_RUNNER,
     transferList = [],
+    globalShims = DEFAULT_GLOBAL_SHIMS,
   }: SynckitOptions = {},
 ) {
   const { port1: mainPort, port2: workerPort } = new MessageChannel()
@@ -331,14 +461,29 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     }
   }
 
+  const finalGlobalShims =
+    globalShims === true
+      ? DEFAULT_GLOBAL_SHIMS_PRESET
+      : Array.isArray(globalShims)
+      ? globalShims
+      : []
+
   const useEval = isTs && !tsUseEsm
 
   const worker = new Worker(
     tsUseEsm && finalTsRunner === TsRunner.TsNode
-      ? dataUrl(`import '${String(workerPathUrl)}'`)
+      ? dataUrl(
+          `${generateGlobals(
+            finalWorkerPath,
+            finalGlobalShims,
+          )};import '${String(workerPathUrl)}'`,
+        )
       : useEval
-      ? // eslint-disable-next-line unicorn/prefer-string-replace-all -- compatibility
-        `require('${finalWorkerPath.replace(/\\/g, '\\\\')}')`
+      ? `${generateGlobals(
+          finalWorkerPath,
+          finalGlobalShims,
+          'require',
+        )};${encodeImportModule(finalWorkerPath, 'require')}`
       : workerPathUrl,
     {
       eval: useEval,
