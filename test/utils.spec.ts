@@ -1,12 +1,14 @@
-import fs from 'node:fs'
-import { tmpdir } from 'node:os'
+import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+
+import { findUp } from '@pkgr/utils'
 
 import { _dirname } from './helpers'
 
 import {
   DEFAULT_GLOBAL_SHIMS_PRESET,
   _generateGlobals,
+  extractProperties,
   generateGlobals,
   isFile,
 } from 'synckit'
@@ -31,13 +33,15 @@ describe('utils', () => {
     )
     expect(_requireGlobals).toMatchSnapshot()
 
-    const tempDir = String(pathToFileURL(fs.realpathSync(tmpdir())))
+    const tmpdir = String(
+      pathToFileURL(path.resolve(findUp(_dirname), '../node_modules/.synckit')),
+    )
     const importGlobals = generateGlobals(
       'fake.js',
       DEFAULT_GLOBAL_SHIMS_PRESET,
     )
     expect(importGlobals).not.toBe(_importGlobals)
-    expect(importGlobals).toMatch(tempDir)
+    expect(importGlobals).toMatch(tmpdir)
     expect(generateGlobals('fake.js', DEFAULT_GLOBAL_SHIMS_PRESET)).toBe(
       importGlobals,
     )
@@ -78,5 +82,20 @@ describe('utils', () => {
         'require',
       ),
     ).toMatchSnapshot()
+  })
+
+  test('extractProperties', () => {
+    expect(extractProperties()).toBeUndefined()
+    expect(extractProperties({})).toEqual({})
+    expect(extractProperties(new Error('message'))).toEqual({})
+    expect(
+      extractProperties(
+        Object.assign(new Error('message'), {
+          code: 'CODE',
+        }),
+      ),
+    ).toEqual({
+      code: 'CODE',
+    })
   })
 })

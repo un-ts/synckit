@@ -1,9 +1,8 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   MessageChannel,
   type TransferListItem,
@@ -373,7 +372,12 @@ export const _generateGlobals = (
 
 const globalsCache = new Map<string, [content: string, filepath?: string]>()
 
-let tempDir: string
+let tmpdir: string
+
+const _dirname =
+  typeof __dirname === 'undefined'
+    ? path.dirname(fileURLToPath(import.meta.url))
+    : __dirname
 
 export const generateGlobals = (
   workerPath: string,
@@ -399,10 +403,11 @@ export const generateGlobals = (
   let filepath: string | undefined
 
   if (type === 'import') {
-    filepath = path.resolve(
-      (tempDir ||= fs.realpathSync(tmpdir())),
-      md5Hash(workerPath) + '.mjs',
-    )
+    if (!tmpdir) {
+      tmpdir = path.resolve(findUp(_dirname), '../node_modules/.synckit')
+    }
+    fs.mkdirSync(tmpdir, { recursive: true })
+    filepath = path.resolve(tmpdir, md5Hash(workerPath) + '.mjs')
     content = encodeImportModule(filepath)
     fs.writeFileSync(filepath, globals)
   }

@@ -6,13 +6,21 @@ import { jest } from '@jest/globals'
 import { _dirname, testIf, tsUseEsmSupported } from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
-import { createSyncFn, extractProperties } from 'synckit'
+import { createSyncFn } from 'synckit'
+
+const { SYNCKIT_TIMEOUT } = process.env
 
 beforeEach(() => {
   jest.resetModules()
 
   delete process.env.SYNCKIT_BUFFER_SIZE
-  delete process.env.SYNCKIT_TIMEOUT
+  delete process.env.SYNCKIT_GLOBAL_SHIMS
+
+  if (SYNCKIT_TIMEOUT) {
+    process.env.SYNCKIT_TIMEOUT = SYNCKIT_TIMEOUT
+  } else {
+    delete process.env.SYNCKIT_TIMEOUT
+  }
 })
 
 const cjsRequire = createRequire(import.meta.url)
@@ -98,17 +106,29 @@ test('timeout', async () => {
   )
 })
 
-test('extractProperties', () => {
-  expect(extractProperties()).toBeUndefined()
-  expect(extractProperties({})).toEqual({})
-  expect(extractProperties(new Error('message'))).toEqual({})
-  expect(
-    extractProperties(
-      Object.assign(new Error('message'), {
-        code: 'CODE',
-      }),
-    ),
-  ).toEqual({
-    code: 'CODE',
+test('globalShims env', async () => {
+  process.env.SYNCKIT_GLOBAL_SHIMS = '1'
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5, 0)).toBe(5)
+})
+
+test('globalShims options', async () => {
+  const { createSyncFn } = await import('synckit')
+
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath, {
+    globalShims: [
+      {
+        moduleName: 'non-existed',
+      },
+    ],
   })
+
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5, 0)).toBe(5)
 })
