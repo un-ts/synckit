@@ -367,10 +367,7 @@ export const _generateGlobals = (
   type: 'import' | 'require',
 ) =>
   globalShims.reduce(
-    (acc, shim) =>
-      isPkgAvailable(shim.moduleName)
-        ? `${acc}${acc ? ';' : ''}${encodeImportModule(shim, type)}`
-        : acc,
+    (acc, shim) => `${acc}${acc ? ';' : ''}${encodeImportModule(shim, type)}`,
     '',
   )
 
@@ -470,12 +467,13 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     }
   }
 
-  const finalGlobalShims =
+  const finalGlobalShims = (
     globalShims === true
       ? DEFAULT_GLOBAL_SHIMS_PRESET
       : Array.isArray(globalShims)
       ? globalShims
       : []
+  ).filter(({ moduleName }) => isPkgAvailable(moduleName))
 
   const useEval = isTs && !tsUseEsm
 
