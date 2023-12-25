@@ -203,6 +203,7 @@ const setupTsRunner = (
 
   const isTs = /\.[cm]?ts$/.test(workerPath)
 
+  let jsUseEsm = workerPath.endsWith('.mjs')
   let tsUseEsm = workerPath.endsWith('.mts')
 
   if (isTs) {
@@ -258,6 +259,12 @@ const setupTsRunner = (
         throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
       }
     }
+  } else if (!jsUseEsm) {
+    const pkg = findUp(workerPath)
+    if (pkg) {
+      jsUseEsm =
+        (cjsRequire(pkg) as { type?: 'commonjs' | 'module' }).type === 'module'
+    }
   }
 
   /* istanbul ignore if -- https://github.com/facebook/jest/issues/5274 */
@@ -292,6 +299,7 @@ const setupTsRunner = (
   return {
     ext,
     isTs,
+    jsUseEsm,
     tsRunner,
     tsUseEsm,
     workerPath,
@@ -424,6 +432,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   const {
     isTs,
     ext,
+    jsUseEsm,
     tsUseEsm,
     tsRunner: finalTsRunner,
     workerPath: finalWorkerPath,
@@ -471,7 +480,8 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   const useEval = isTs && !tsUseEsm
 
   const worker = new Worker(
-    tsUseEsm && finalTsRunner === TsRunner.TsNode
+    (jsUseEsm && finalGlobalShims.length > 0) ||
+    (tsUseEsm && finalTsRunner === TsRunner.TsNode)
       ? dataUrl(
           `${generateGlobals(
             finalWorkerPath,
