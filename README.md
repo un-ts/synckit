@@ -154,9 +154,9 @@ Please view [`tsx`][] for its document
 
 ## Benchmark
 
-It is about 20x faster than [`sync-threads`](https://github.com/lambci/sync-threads) but 3x slower than native for reading the file content itself 1000 times during runtime, and 18x faster than `sync-threads` but 4x slower than native for total time.
+It is about 50x faster than [`sync-threads`](https://github.com/lambci/sync-threads) but 10x slower than native for reading the file content itself 1000 times during runtime, and 40x faster than `sync-threads` but 10x slower than native for total time on my personal MacBook Pro with 64G M1 Max.
 
-And it's almost same as [`deasync`](https://github.com/abbr/deasync) but requires no native bindings or `node-gyp`.
+And it's almost 5x faster than [`deasync`](https://github.com/abbr/deasync) but requires no native bindings or `node-gyp`.
 
 See [benchmark.cjs](./benchmarks/benchmark.cjs.txt) and [benchmark.esm](./benchmarks/benchmark.esm.txt) for more details.
 
