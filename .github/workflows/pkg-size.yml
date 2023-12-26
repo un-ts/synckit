@@ -1,9 +1,7 @@
 name: Package Size Report
 
 on:
-  pull_request_target:
-    branches:
-      - main
+  - pull_request
 
 jobs:
   pkg-size-report:
