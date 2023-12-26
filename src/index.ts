@@ -308,7 +308,7 @@ const setupTsRunner = (
 
 const md5Hash = (text: string) => createHash('md5').update(text).digest('hex')
 
-const encodeImportModule = (
+export const encodeImportModule = (
   moduleNameOrGlobalShim: GlobalShim | string,
   type: 'import' | 'require' = 'import',
   // eslint-disable-next-line sonarjs/cognitive-complexity
@@ -377,7 +377,7 @@ let tmpdir: string
 const _dirname =
   typeof __dirname === 'undefined'
     ? path.dirname(fileURLToPath(import.meta.url))
-    : __dirname
+    : /* istanbul ignore next */ __dirname
 
 export const generateGlobals = (
   workerPath: string,
@@ -480,11 +480,12 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       : []
   ).filter(({ moduleName }) => isPkgAvailable(moduleName))
 
-  const useEval = isTs && !tsUseEsm
+  const useGlobals = finalGlobalShims.length > 0
+
+  const useEval = isTs ? !tsUseEsm : !jsUseEsm && useGlobals
 
   const worker = new Worker(
-    (jsUseEsm && finalGlobalShims.length > 0) ||
-    (tsUseEsm && finalTsRunner === TsRunner.TsNode)
+    (jsUseEsm && useGlobals) || (tsUseEsm && finalTsRunner === TsRunner.TsNode)
       ? dataUrl(
           `${generateGlobals(
             finalWorkerPath,

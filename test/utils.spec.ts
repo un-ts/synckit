@@ -8,6 +8,7 @@ import { _dirname } from './helpers'
 import {
   DEFAULT_GLOBAL_SHIMS_PRESET,
   _generateGlobals,
+  encodeImportModule,
   extractProperties,
   generateGlobals,
   isFile,
@@ -18,6 +19,36 @@ describe('utils', () => {
     expect(isFile(_dirname)).toBe(false)
     expect(isFile('non-existed')).toBe(false)
     expect(isFile(fileURLToPath(import.meta.url))).toBe(true)
+  })
+
+  test('encodeImportModule', () => {
+    const moduleName = 'module-name'
+    const onlyModuleName = encodeImportModule(moduleName)
+    expect(onlyModuleName).toMatchSnapshot()
+    expect(encodeImportModule({ moduleName })).toBe(onlyModuleName)
+    expect(
+      encodeImportModule({ moduleName: './module-name' }),
+    ).toMatchSnapshot()
+    expect(
+      encodeImportModule({
+        moduleName,
+        globalName: 'globalName',
+      }),
+    ).toMatchSnapshot()
+    expect(
+      encodeImportModule({
+        moduleName,
+        globalName: 'globalName',
+        named: 'named',
+      }),
+    ).toMatchSnapshot()
+    expect(
+      encodeImportModule({
+        moduleName,
+        globalName: 'globalName',
+        named: null,
+      }),
+    ).toMatchSnapshot()
   })
 
   test('generateGlobals', () => {

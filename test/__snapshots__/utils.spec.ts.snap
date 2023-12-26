@@ -1,5 +1,15 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`utils encodeImportModule 1`] = `"import 'module-name'"`;
+
+exports[`utils encodeImportModule 2`] = `"import './module-name'"`;
+
+exports[`utils encodeImportModule 3`] = `"import globalName from 'module-name';if(!globalThis.globalName)globalThis.globalName=globalName"`;
+
+exports[`utils encodeImportModule 4`] = `"import {named} from 'module-name';if(!globalThis.globalName)globalThis.globalName=named"`;
+
+exports[`utils encodeImportModule 5`] = `"import * as globalName from 'module-name';if(!globalThis.globalName)globalThis.globalName=globalName"`;
+
 exports[`utils generateGlobals 1`] = `"import fetch from 'node-fetch';if(!globalThis.fetch)globalThis.fetch=fetch;import {performance} from 'node:perf_hooks';if(!globalThis.performance)globalThis.performance=performance"`;
 
 exports[`utils generateGlobals 2`] = `"const fetch=require('node-fetch');if(!globalThis.fetch)globalThis.fetch=fetch;const {performance}=require('node:perf_hooks');if(!globalThis.performance)globalThis.performance=performance"`;
