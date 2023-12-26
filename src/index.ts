@@ -13,7 +13,7 @@ import {
   workerData,
 } from 'node:worker_threads'
 
-import { findUp, isPkgAvailable, tryExtensions } from '@pkgr/utils'
+import { findUp, isPkgAvailable, tryExtensions } from '@pkgr/core'
 
 import type {
   AnyAsyncFn,
