@@ -1,5 +1,11 @@
 # synckit
 
+## 0.8.8
+
+### Patch Changes
+
+- [#148](https://github.com/un-ts/synckit/pull/148) [`7b6a0eb`](https://github.com/un-ts/synckit/commit/7b6a0eb2c7e1f4482c72dc89e0f7474cd1bcc6d9) Thanks [@JounQin](https://github.com/JounQin)! - feat: migrate `@pkgr/utils` to lite `@pkgr/core` - This will make the whole package much more smaller
+
 ## 0.8.7
 
 ### Patch Changes
