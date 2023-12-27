@@ -4,7 +4,12 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import v8 from 'node:v8'
-import { type TransferListItem, Worker, parentPort } from 'node:worker_threads'
+import {
+  type TransferListItem,
+  Worker,
+  parentPort,
+  workerData,
+} from 'node:worker_threads'
 
 import { findUp, isPkgAvailable, tryExtensions } from '@pkgr/core'
 
@@ -15,6 +20,7 @@ import type {
   MainToWorkerMessage,
   Syncify,
   ValueOf,
+  WorkerData,
   WorkerToMainMessage,
 } from './types.js'
 
@@ -479,6 +485,9 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
 
   const useEval = isTs ? !tsUseEsm : !jsUseEsm && useGlobals
 
+  const sharedBuffer = new SharedArrayBuffer(bufferSize)
+  const sharedBufferView = new Int32Array(sharedBuffer)
+
   const worker = new Worker(
     (jsUseEsm && useGlobals) || (tsUseEsm && finalTsRunner === TsRunner.TsNode)
       ? dataUrl(
@@ -496,6 +505,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       : workerPathUrl,
     {
       eval: useEval,
+      workerData: { sharedBuffer },
       transferList,
       execArgv: finalExecArgv,
     },
@@ -506,10 +516,10 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   const syncFn = (...args: Parameters<T>): R => {
     const id = nextID++
 
-    const sharedBuffer = new SharedArrayBuffer(bufferSize)
-    const sharedBufferView = new Int32Array(sharedBuffer)
+    // Reset SharedArrayBuffer
+    Atomics.store(sharedBufferView, 0, 0)
 
-    const msg: MainToWorkerMessage<Parameters<T>> = { sharedBuffer, id, args }
+    const msg: MainToWorkerMessage<Parameters<T>> = { id, args }
     worker.postMessage(msg)
 
     const status = Atomics.wait(sharedBufferView, 0, 0, timeout)
@@ -551,13 +561,15 @@ export function runAsWorker<
   T extends AnyAsyncFn<R> = AnyAsyncFn<R>,
 >(fn: T) {
   // type-coverage:ignore-next-line -- we can't control
-  if (!parentPort) {
+  if (!workerData || !parentPort) {
     return
   }
 
+  const { sharedBuffer } = workerData as WorkerData
+
   parentPort.on(
     'message',
-    ({ sharedBuffer, id, args }: MainToWorkerMessage<Parameters<T>>) => {
+    ({ id, args }: MainToWorkerMessage<Parameters<T>>) => {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       ;(async () => {
         const sharedBufferView = new Int32Array(sharedBuffer)
