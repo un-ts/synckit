@@ -8,6 +8,7 @@ import {
   type TransferListItem,
   Worker,
   parentPort,
+  // type-coverage:ignore-next-line -- we can't control
   workerData,
 } from 'node:worker_threads'
 
