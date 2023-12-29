@@ -1,3 +1,5 @@
+import { MessagePort } from 'node:worker_threads'
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyFn<R = any, T extends any[] = any[]> = (...args: T) => R
 
@@ -21,11 +23,13 @@ export type ValueOf<T> = T[keyof T]
 
 export interface MainToWorkerMessage<T extends unknown[]> {
   id: number
+  useBuffer: boolean
   args: T
 }
 
 export interface WorkerData {
   sharedBuffer: SharedArrayBuffer
+  workerPort: MessagePort
 }
 
 export interface DataMessage<T> {

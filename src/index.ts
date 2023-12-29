@@ -5,9 +5,11 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import v8 from 'node:v8'
 import {
+  MessageChannel,
   type TransferListItem,
   Worker,
   parentPort,
+  receiveMessageOnPort,
   // type-coverage:ignore-next-line -- we can't control
   workerData,
 } from 'node:worker_threads'
@@ -59,10 +61,7 @@ export const DEFAULT_BUFFER_SIZE = SYNCKIT_BUFFER_SIZE
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
-const DEFAULT_WORKER_BUFFER_KB = 64
-
-export const DEFAULT_WORKER_BUFFER_SIZE =
-  DEFAULT_BUFFER_SIZE || DEFAULT_WORKER_BUFFER_KB * 1024
+export const DEFAULT_WORKER_BUFFER_SIZE = DEFAULT_BUFFER_SIZE || 1024
 
 /* istanbul ignore next */
 export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARGV?.split(',') || []
@@ -433,6 +432,8 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     globalShims = DEFAULT_GLOBAL_SHIMS,
   }: SynckitOptions = {},
 ) {
+  const { port1: mainPort, port2: workerPort } = new MessageChannel()
+
   const {
     isTs,
     ext,
@@ -506,11 +507,15 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       : workerPathUrl,
     {
       eval: useEval,
-      workerData: { sharedBuffer },
-      transferList,
+      workerData: { workerPort, sharedBuffer },
+      transferList: [workerPort, ...transferList],
       execArgv: finalExecArgv,
     },
   )
+
+  // SharedArrayBuffer is faster to pass a response back, but has a limited size.
+  // We use this feature only if we can automatically resize the SharedArrayBuffer.
+  const useBuffer = sharedBuffer.growable
 
   let nextID = 0
 
@@ -520,7 +525,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     // Reset SharedArrayBuffer
     Atomics.store(sharedBufferView, 0, 0)
 
-    const msg: MainToWorkerMessage<Parameters<T>> = { id, args }
+    const msg: MainToWorkerMessage<Parameters<T>> = { id, useBuffer, args }
     worker.postMessage(msg)
 
     const status = Atomics.wait(sharedBufferView, 0, 0, timeout)
@@ -535,9 +540,12 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       result,
       error,
       properties,
-    } = v8.deserialize(
-      Buffer.from(sharedBuffer, INT32_BYTES, sharedBufferView[0]),
-    ) as WorkerToMainMessage<R>
+    } = useBuffer
+      ? (v8.deserialize(
+          Buffer.from(sharedBuffer, INT32_BYTES, sharedBufferView[0]),
+        ) as WorkerToMainMessage<R>)
+      : (receiveMessageOnPort(mainPort) as { message: WorkerToMainMessage<R> })
+          .message
 
     /* istanbul ignore if */
     if (id !== id2) {
@@ -562,15 +570,15 @@ export function runAsWorker<
   T extends AnyAsyncFn<R> = AnyAsyncFn<R>,
 >(fn: T) {
   // type-coverage:ignore-next-line -- we can't control
-  if (!workerData || !parentPort) {
+  if (!workerData) {
     return
   }
 
-  const { sharedBuffer } = workerData as WorkerData
+  const { sharedBuffer, workerPort } = workerData as WorkerData
 
-  parentPort.on(
+  parentPort!.on(
     'message',
-    ({ id, args }: MainToWorkerMessage<Parameters<T>>) => {
+    ({ id, useBuffer, args }: MainToWorkerMessage<Parameters<T>>) => {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       ;(async () => {
         const sharedBufferView = new Int32Array(sharedBuffer)
@@ -581,10 +589,20 @@ export function runAsWorker<
           msg = { id, error, properties: extractProperties(error) }
         }
 
-        const buf = v8.serialize(msg)
-        buf.copy(Buffer.from(sharedBuffer), INT32_BYTES)
+        if (useBuffer) {
+          const buf = v8.serialize(msg)
 
-        Atomics.store(sharedBufferView, 0, buf.length)
+          if (buf.length > sharedBuffer.byteLength) {
+            sharedBuffer.grow(buf.length)
+          }
+
+          buf.copy(Buffer.from(sharedBuffer), INT32_BYTES)
+          Atomics.store(sharedBufferView, 0, buf.length)
+        } else {
+          workerPort.postMessage(msg)
+          Atomics.store(sharedBufferView, 0, 1)
+        }
+
         Atomics.notify(sharedBufferView, 0)
       })()
     },
