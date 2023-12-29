@@ -490,6 +490,10 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   const sharedBuffer = new SharedArrayBuffer(bufferSize)
   const sharedBufferView = new Int32Array(sharedBuffer)
 
+  // SharedArrayBuffer is faster to pass a response back, but has a limited size.
+  // We use this feature only if we can automatically resize the SharedArrayBuffer.
+  const useBuffer = sharedBuffer.growable
+
   const worker = new Worker(
     (jsUseEsm && useGlobals) || (tsUseEsm && finalTsRunner === TsRunner.TsNode)
       ? dataUrl(
@@ -507,15 +511,11 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       : workerPathUrl,
     {
       eval: useEval,
-      workerData: { workerPort, sharedBuffer },
+      workerData: { workerPort, sharedBuffer, useBuffer },
       transferList: [workerPort, ...transferList],
       execArgv: finalExecArgv,
     },
   )
-
-  // SharedArrayBuffer is faster to pass a response back, but has a limited size.
-  // We use this feature only if we can automatically resize the SharedArrayBuffer.
-  const useBuffer = sharedBuffer.growable
 
   let nextID = 0
 
@@ -525,7 +525,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     // Reset SharedArrayBuffer
     Atomics.store(sharedBufferView, 0, 0)
 
-    const msg: MainToWorkerMessage<Parameters<T>> = { id, useBuffer, args }
+    const msg: MainToWorkerMessage<Parameters<T>> = { id, args }
     worker.postMessage(msg)
 
     const status = Atomics.wait(sharedBufferView, 0, 0, timeout)
@@ -574,11 +574,11 @@ export function runAsWorker<
     return
   }
 
-  const { sharedBuffer, workerPort } = workerData as WorkerData
+  const { sharedBuffer, useBuffer, workerPort } = workerData as WorkerData
 
   parentPort!.on(
     'message',
-    ({ id, useBuffer, args }: MainToWorkerMessage<Parameters<T>>) => {
+    ({ id, args }: MainToWorkerMessage<Parameters<T>>) => {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       ;(async () => {
         const sharedBufferView = new Int32Array(sharedBuffer)

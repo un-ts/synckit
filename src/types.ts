@@ -23,12 +23,12 @@ export type ValueOf<T> = T[keyof T]
 
 export interface MainToWorkerMessage<T extends unknown[]> {
   id: number
-  useBuffer: boolean
   args: T
 }
 
 export interface WorkerData {
   sharedBuffer: SharedArrayBuffer
+  useBuffer: boolean
   workerPort: MessagePort
 }
 
