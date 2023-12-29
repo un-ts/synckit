@@ -14,5 +14,6 @@ jobs:
 
       - name: Package Size Report
         uses: pkg-size/action@v1
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
