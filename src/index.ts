@@ -593,7 +593,7 @@ export function runAsWorker<
           const buf = v8.serialize(msg)
 
           if (buf.length > sharedBuffer.byteLength) {
-            sharedBuffer.grow(buf.length)
+            sharedBuffer.grow!(buf.length)
           }
 
           buf.copy(Buffer.from(sharedBuffer), INT32_BYTES)

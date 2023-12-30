@@ -7,10 +7,10 @@ interface SharedArrayBuffer {
   /**
    * returns whether this SharedArrayBuffer can be grow or not.
    */
-  readonly growable: boolean
+  readonly growable?: boolean
 
   /**
    * grows the SharedArrayBuffer to the specified size, in bytes.
    */
-  grow(newLength: number): undefined
+  grow?(newLength: number): void
 }
