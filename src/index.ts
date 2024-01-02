@@ -81,10 +81,6 @@ export const MTS_SUPPORTED_NODE_VERSION = 16
 const syncFnCache = new Map<string, AnyFn>()
 
 export interface SynckitOptions {
-  /**
-   * @deprecated bufferSize is not used anymore
-   */
-  bufferSize?: number
   timeout?: number
   execArgv?: string[]
   tsRunner?: TsRunner
