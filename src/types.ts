@@ -28,7 +28,6 @@ export interface MainToWorkerMessage<T extends unknown[]> {
 
 export interface WorkerData {
   sharedBuffer: SharedArrayBuffer
-  useBuffer: boolean
   workerPort: MessagePort
 }
 

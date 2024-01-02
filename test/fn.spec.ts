@@ -14,6 +14,7 @@ beforeEach(() => {
   jest.resetModules()
 
   delete process.env.SYNCKIT_BUFFER_SIZE
+  delete process.env.SYNCKIT_MAX_BUFFER_SIZE
   delete process.env.SYNCKIT_GLOBAL_SHIMS
 
   if (SYNCKIT_TIMEOUT) {
@@ -104,6 +105,29 @@ test('timeout', async () => {
   expect(() => syncFn(1, 100)).toThrow(
     'Internal error: Atomics.wait() failed: timed-out',
   )
+})
+
+test('works with responses bigger than the SharedArrayBuffer', async () => {
+  process.env.SYNCKIT_MAX_BUFFER_SIZE = `${1024 * 1024}`
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn<string>>(workerCjsPath)
+
+  const longString = 'x'.repeat(10 * 1024 * 1024)
+
+  expect(syncFn(longString)).toBe(longString)
+})
+
+test('works with responses that require the SharedArrayBuffer to grow', async () => {
+  process.env.SYNCKIT_BUFFER_SIZE = `1024`
+  process.env.SYNCKIT_MAX_BUFFER_SIZE = `${1024 * 1024}`
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn<string>>(workerCjsPath)
+
+  const longString = 'x'.repeat(1024 * 2)
+
+  expect(syncFn(longString)).toBe(longString)
 })
 
 test('globalShims env', async () => {

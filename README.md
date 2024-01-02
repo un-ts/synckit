@@ -120,11 +120,12 @@ export interface GlobalShim {
 
 ### Envs
 
-1. `SYNCKIT_BUFFER_SIZE`: `bufferSize` to create `SharedArrayBuffer` for `worker_threads` (default as `1024`)
-2. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
-3. `SYNCKIT_EXEC_ARGV`: List of node CLI options passed to the worker, split with comma `,`. (default as `[]`), see also [`node` docs](https://nodejs.org/api/worker_threads.html)
-4. `SYNCKIT_TS_RUNNER`: Which TypeScript runner to be used, it could be very useful for development, could be `'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'swc' | 'tsx'`, `'ts-node'` is used by default, make sure you have installed them already
-5. `SYNCKIT_GLOBAL_SHIMS`: Whether to enable the default `DEFAULT_GLOBAL_SHIMS_PRESET` as `globalShims`
+1. `SYNCKIT_BUFFER_SIZE`: Initial `bufferSize` for `SharedArrayBuffer` to transfer data from `worker_threads` (default as `1024` / 1KB)
+2. `SYNCKIT_MAX_BUFFER_SIZE`: Maximum `bufferSize` for `SharedArrayBuffer` to transfer data from `worker_threads` (default as `1024 * 1024` / 1MB)
+3. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
+4. `SYNCKIT_EXEC_ARGV`: List of node CLI options passed to the worker, split with comma `,`. (default as `[]`), see also [`node` docs](https://nodejs.org/api/worker_threads.html)
+5. `SYNCKIT_TS_RUNNER`: Which TypeScript runner to be used, it could be very useful for development, could be `'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'swc' | 'tsx'`, `'ts-node'` is used by default, make sure you have installed them already
+6. `SYNCKIT_GLOBAL_SHIMS`: Whether to enable the default `DEFAULT_GLOBAL_SHIMS_PRESET` as `globalShims`
 
 ### TypeScript
 
