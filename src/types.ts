@@ -22,12 +22,12 @@ export type PromiseType<T extends AnyPromise> = T extends Promise<infer R>
 export type ValueOf<T> = T[keyof T]
 
 export interface MainToWorkerMessage<T extends unknown[]> {
-  sharedBuffer: SharedArrayBuffer
   id: number
   args: T
 }
 
 export interface WorkerData {
+  sharedBuffer: SharedArrayBuffer
   workerPort: MessagePort
 }
 

@@ -26,6 +26,8 @@ import type {
   WorkerToMainMessage,
 } from './types.js'
 
+const INT32_BYTES = 4
+
 export * from './types.js'
 
 export const TsRunner = {
@@ -44,7 +46,6 @@ export const TsRunner = {
 export type TsRunner = ValueOf<typeof TsRunner>
 
 const {
-  SYNCKIT_BUFFER_SIZE,
   SYNCKIT_TIMEOUT,
   SYNCKIT_EXEC_ARGV,
   SYNCKIT_TS_RUNNER,
@@ -52,13 +53,7 @@ const {
   NODE_OPTIONS,
 } = process.env
 
-export const DEFAULT_BUFFER_SIZE = SYNCKIT_BUFFER_SIZE
-  ? +SYNCKIT_BUFFER_SIZE
-  : undefined
-
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
-
-export const DEFAULT_WORKER_BUFFER_SIZE = DEFAULT_BUFFER_SIZE || 1024
 
 /* istanbul ignore next */
 export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARGV?.split(',') || []
@@ -86,6 +81,9 @@ export const MTS_SUPPORTED_NODE_VERSION = 16
 const syncFnCache = new Map<string, AnyFn>()
 
 export interface SynckitOptions {
+  /**
+   * @deprecated bufferSize is not used anymore
+   */
   bufferSize?: number
   timeout?: number
   execArgv?: string[]
@@ -136,7 +134,7 @@ export function createSyncFn<R, T extends AnyAsyncFn<R>>(
   const syncFn = startWorkerThread<R, T>(
     workerPath,
     /* istanbul ignore next */ typeof bufferSizeOrOptions === 'number'
-      ? { bufferSize: bufferSizeOrOptions, timeout }
+      ? { timeout }
       : bufferSizeOrOptions,
   )
 
@@ -421,7 +419,6 @@ export const generateGlobals = (
 function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   workerPath: string,
   {
-    bufferSize = DEFAULT_WORKER_BUFFER_SIZE,
     timeout = DEFAULT_TIMEOUT,
     execArgv = DEFAULT_EXEC_ARGV,
     tsRunner = DEFAULT_TS_RUNNER,
@@ -480,6 +477,11 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       : []
   ).filter(({ moduleName }) => isPkgAvailable(moduleName))
 
+  // We store a single Byte in the SharedArrayBuffer
+  // for the notification, we can used a fixed size
+  const sharedBuffer = new SharedArrayBuffer(INT32_BYTES)
+  const sharedBufferView = new Int32Array(sharedBuffer, 0, 1)
+
   const useGlobals = finalGlobalShims.length > 0
 
   const useEval = isTs ? !tsUseEsm : !jsUseEsm && useGlobals
@@ -501,7 +503,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
       : workerPathUrl,
     {
       eval: useEval,
-      workerData: { workerPort },
+      workerData: { sharedBuffer, workerPort },
       transferList: [workerPort, ...transferList],
       execArgv: finalExecArgv,
     },
@@ -512,10 +514,10 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   const syncFn = (...args: Parameters<T>): R => {
     const id = nextID++
 
-    const sharedBuffer = new SharedArrayBuffer(bufferSize)
-    const sharedBufferView = new Int32Array(sharedBuffer)
+    // Reset SharedArrayBuffer
+    Atomics.store(sharedBufferView, 0, 0)
 
-    const msg: MainToWorkerMessage<Parameters<T>> = { sharedBuffer, id, args }
+    const msg: MainToWorkerMessage<Parameters<T>> = { id, args }
     worker.postMessage(msg)
 
     const status = Atomics.wait(sharedBufferView, 0, 0, timeout)
@@ -560,14 +562,14 @@ export function runAsWorker<
     return
   }
 
-  const { workerPort } = workerData as WorkerData
+  const { workerPort, sharedBuffer } = workerData as WorkerData
+  const sharedBufferView = new Int32Array(sharedBuffer, 0, 1)
 
   parentPort!.on(
     'message',
-    ({ sharedBuffer, id, args }: MainToWorkerMessage<Parameters<T>>) => {
+    ({ id, args }: MainToWorkerMessage<Parameters<T>>) => {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       ;(async () => {
-        const sharedBufferView = new Int32Array(sharedBuffer)
         let msg: WorkerToMainMessage<R>
         try {
           msg = { id, result: await fn(...args) }
