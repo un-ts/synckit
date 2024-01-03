@@ -103,20 +103,10 @@ export function extractProperties<T>(object?: T) {
   }
 }
 
-export function createSyncFn<T extends AnyAsyncFn>(
+export function createSyncFn<T extends AnyAsyncFn<R>, R = unknown>(
   workerPath: string,
-  bufferSize?: number,
-  timeout?: number,
-): Syncify<T>
-export function createSyncFn<T extends AnyAsyncFn>(
-  workerPath: string,
-  options?: SynckitOptions,
-): Syncify<T>
-export function createSyncFn<R, T extends AnyAsyncFn<R>>(
-  workerPath: string,
-  bufferSizeOrOptions?: SynckitOptions | number,
-  timeout?: number,
-) {
+  timeoutOrOptions?: SynckitOptions | number,
+): Syncify<T> {
   if (!path.isAbsolute(workerPath)) {
     throw new Error('`workerPath` must be absolute')
   }
@@ -124,19 +114,19 @@ export function createSyncFn<R, T extends AnyAsyncFn<R>>(
   const cachedSyncFn = syncFnCache.get(workerPath)
 
   if (cachedSyncFn) {
-    return cachedSyncFn
+    return cachedSyncFn as Syncify<T>
   }
 
   const syncFn = startWorkerThread<R, T>(
     workerPath,
-    /* istanbul ignore next */ typeof bufferSizeOrOptions === 'number'
-      ? { timeout }
-      : bufferSizeOrOptions,
+    /* istanbul ignore next */ typeof timeoutOrOptions === 'number'
+      ? { timeout: timeoutOrOptions }
+      : timeoutOrOptions,
   )
 
   syncFnCache.set(workerPath, syncFn)
 
-  return syncFn
+  return syncFn as Syncify<T>
 }
 
 const cjsRequire =
@@ -510,13 +500,12 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   const syncFn = (...args: Parameters<T>): R => {
     const id = nextID++
 
-    // Reset SharedArrayBuffer
-    Atomics.store(sharedBufferView, 0, 0)
-
     const msg: MainToWorkerMessage<Parameters<T>> = { id, args }
     worker.postMessage(msg)
 
     const status = Atomics.wait(sharedBufferView, 0, 0, timeout)
+    // Reset SharedArrayBuffer for next call
+    Atomics.store(sharedBufferView, 0, 0)
 
     /* istanbul ignore if */
     if (!['ok', 'not-equal'].includes(status)) {
