@@ -134,8 +134,8 @@ test('unknown ts runner', async () => {
   const { createSyncFn } = await import('synckit')
 
   expect(() =>
-    // @ts-expect-error
     createSyncFn<AsyncWorkerFn>(path.resolve(_dirname, 'worker.js'), {
+      // @ts-expect-error
       tsRunner: 'unknown',
     }),
   ).toThrowErrorMatchingInlineSnapshot(`"Unknown ts runner: unknown"`)

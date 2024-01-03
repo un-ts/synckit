@@ -13,7 +13,6 @@ const { SYNCKIT_TIMEOUT } = process.env
 beforeEach(() => {
   jest.resetModules()
 
-  delete process.env.SYNCKIT_BUFFER_SIZE
   delete process.env.SYNCKIT_GLOBAL_SHIMS
 
   if (SYNCKIT_TIMEOUT) {
@@ -95,7 +94,6 @@ test('createSyncFn', () => {
 })
 
 test('timeout', async () => {
-  process.env.SYNCKIT_BUFFER_SIZE = '0'
   process.env.SYNCKIT_TIMEOUT = '1'
 
   const { createSyncFn } = await import('synckit')
