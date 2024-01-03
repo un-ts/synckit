@@ -363,6 +363,9 @@ const _dirname =
     ? path.dirname(fileURLToPath(import.meta.url))
     : /* istanbul ignore next */ __dirname
 
+let sharedBuffer: SharedArrayBuffer | undefined
+let sharedBufferView: Int32Array | undefined
+
 export const generateGlobals = (
   workerPath: string,
   globalShims: GlobalShim[],
@@ -465,8 +468,8 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
 
   // We store a single Byte in the SharedArrayBuffer
   // for the notification, we can used a fixed size
-  const sharedBuffer = new SharedArrayBuffer(INT32_BYTES)
-  const sharedBufferView = new Int32Array(sharedBuffer, 0, 1)
+  sharedBuffer ??= new SharedArrayBuffer(INT32_BYTES)
+  sharedBufferView ??= new Int32Array(sharedBuffer, 0, 1)
 
   const useGlobals = finalGlobalShims.length > 0
 
@@ -503,9 +506,9 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     const msg: MainToWorkerMessage<Parameters<T>> = { id, args }
     worker.postMessage(msg)
 
-    const status = Atomics.wait(sharedBufferView, 0, 0, timeout)
+    const status = Atomics.wait(sharedBufferView!, 0, 0, timeout)
     // Reset SharedArrayBuffer for next call
-    Atomics.store(sharedBufferView, 0, 0)
+    Atomics.store(sharedBufferView!, 0, 0)
 
     /* istanbul ignore if */
     if (!['ok', 'not-equal'].includes(status)) {
