@@ -86,8 +86,8 @@ class Benchmark {
     return a === b
       ? 'same'
       : a > b
-      ? (a / b).toFixed(2) + 'x slower'
-      : (b / a).toFixed(2) + 'x faster'
+        ? (a / b).toFixed(2) + 'x slower'
+        : (b / a).toFixed(2) + 'x faster'
   }
 }
 
