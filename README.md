@@ -11,7 +11,7 @@
 [![JavaScript Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://standardjs.com)
 [![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://github.com/prettier/prettier)
 
-Perform async work synchronously in Node.js using `worker_threads` with first-class TypeScript support.
+Perform async work synchronously in Node.js using `worker_threads` with first-class TypeScript and Yarn P'n'P support.
 
 ## TOC <!-- omit in toc -->
 
@@ -111,18 +111,18 @@ export interface GlobalShim {
 
 ### Options
 
-1. `timeout` same as env `SYNCKIT_TIMEOUT`
-2. `execArgv` same as env `SYNCKIT_EXEC_ARGV`
-3. `tsRunner` same as env `SYNCKIT_TS_RUNNER`
+1. `execArgv` same as env `SYNCKIT_EXEC_ARGV`
+2. `globalShims`: Similar like env `SYNCKIT_GLOBAL_SHIMS` but much more flexible which can be a `GlobalShim` `Array`, see `GlobalShim`'s [definition](#types) for more details
+3. `timeout` same as env `SYNCKIT_TIMEOUT`
 4. `transferList`: Please refer Node.js [`worker_threads`](https://nodejs.org/api/worker_threads.html#:~:text=Default%3A%20true.-,transferList,-%3CObject%5B%5D%3E%20If) documentation
-5. `globalShims`: Similar like env `SYNCKIT_GLOBAL_SHIMS` but much more flexible which can be a `GlobalShim` `Array`, see `GlobalShim`'s [definition](#types) for more details
+5. `tsRunner` same as env `SYNCKIT_TS_RUNNER`
 
 ### Envs
 
-1. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
-2. `SYNCKIT_EXEC_ARGV`: List of node CLI options passed to the worker, split with comma `,`. (default as `[]`), see also [`node` docs](https://nodejs.org/api/worker_threads.html)
-3. `SYNCKIT_TS_RUNNER`: Which TypeScript runner to be used, it could be very useful for development, could be `'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'swc' | 'tsx'`, `'ts-node'` is used by default, make sure you have installed them already
-4. `SYNCKIT_GLOBAL_SHIMS`: Whether to enable the default `DEFAULT_GLOBAL_SHIMS_PRESET` as `globalShims`
+1. `SYNCKIT_EXEC_ARGV`: List of node CLI options passed to the worker, split with comma `,`. (default as `[]`), see also [`node` docs](https://nodejs.org/api/worker_threads.html)
+2. `SYNCKIT_GLOBAL_SHIMS`: Whether to enable the default `DEFAULT_GLOBAL_SHIMS_PRESET` as `globalShims`
+3. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
+4. `SYNCKIT_TS_RUNNER`: Which TypeScript runner to be used, it could be very useful for development, could be `'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'swc' | 'tsx'`, `'ts-node'` is used by default, make sure you have installed them already
 
 ### TypeScript
 
