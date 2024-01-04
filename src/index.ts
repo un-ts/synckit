@@ -473,7 +473,9 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   // We store a single Byte in the SharedArrayBuffer
   // for the notification, we can used a fixed size
   sharedBufferView ??= new Int32Array(
-    (sharedBuffer ??= new SharedArrayBuffer(INT32_BYTES)),
+    /* istanbul ignore next */ (sharedBuffer ??= new SharedArrayBuffer(
+      INT32_BYTES,
+    )),
     0,
     1,
   )
