@@ -1,5 +1,15 @@
 # synckit
 
+## 0.9.0
+
+### Minor Changes
+
+- [#154](https://github.com/un-ts/synckit/pull/154) [`2541a1e`](https://github.com/un-ts/synckit/commit/2541a1e9b3d0e8f01f29f78ac53cb835936f6a30) Thanks [@onigoetz](https://github.com/onigoetz)! - feat!: use a single SharedArrayBuffer, remove useless `bufferSize` option
+
+### Patch Changes
+
+- [#156](https://github.com/un-ts/synckit/pull/156) [`be4648c`](https://github.com/un-ts/synckit/commit/be4648c45a698aee1be8e267b78542b13c8596aa) Thanks [@JounQin](https://github.com/JounQin)! - refactor: lazy initialize caches
+
 ## 0.8.8
 
 ### Patch Changes
@@ -16,11 +26,11 @@
 
   ````ts
   export interface GlobalShim {
-    moduleName: string
+    moduleName: string;
     /**
      * `undefined` means side effect only
      */
-    globalName?: string
+    globalName?: string;
     /**
      * 1. `undefined` or empty string means `default`, for example:
      * ```js
@@ -33,7 +43,7 @@
      * ```
      *
      */
-    named?: string | null
+    named?: string | null;
     /**
      * If not `false`, the shim will only be applied when the original `globalName` unavailable,
      * for example you may only want polyfill `globalThis.fetch` when it's unavailable natively:
@@ -45,21 +55,21 @@
      * }
      * ```
      */
-    conditional?: boolean
+    conditional?: boolean;
   }
   ````
 
   You can aslo reuse the exported `DEFAULT_GLOBAL_SHIMS_PRESET` for extanding:
 
   ```js
-  import { DEFAULT_GLOBAL_SHIMS_PRESET, createSyncFn } from 'synckit'
+  import { DEFAULT_GLOBAL_SHIMS_PRESET, createSyncFn } from "synckit";
 
-  const syncFn = createSyncFn(require.resolve('./worker'), {
+  const syncFn = createSyncFn(require.resolve("./worker"), {
     globalShims: [
       ...DEFAULT_GLOBAL_SHIMS_PRESET,
       // your own shim here
     ],
-  })
+  });
   ```
 
 ## 0.8.6
