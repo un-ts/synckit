@@ -46,11 +46,15 @@ jobs:
           YARN_IGNORE_NODE: 1
 
       - name: Build, Lint and Test
-        run: yarn cross-env SYNCKIT_TIMEOUT=10000 concurrently -r -m 1 yarn:build yarn:lint yarn:test
+        run: |
+          yarn build
+          yarn lint
+          yarn test
         env:
           EFF_NO_LINK_RULES: true
           PARSER_NO_WATCH: true
           SKIP_YARN_COREPACK_CHECK: 1
+          SYNCKIT_TIMEOUT: 10000
           YARN_IGNORE_NODE: 1
 
       - name: Benchmark
