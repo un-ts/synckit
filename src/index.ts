@@ -46,11 +46,11 @@ export const TsRunner = {
 export type TsRunner = ValueOf<typeof TsRunner>
 
 const {
-  SYNCKIT_TIMEOUT,
-  SYNCKIT_EXEC_ARGV,
-  SYNCKIT_TS_RUNNER,
-  SYNCKIT_GLOBAL_SHIMS,
   NODE_OPTIONS,
+  SYNCKIT_EXEC_ARGV,
+  SYNCKIT_GLOBAL_SHIMS,
+  SYNCKIT_TIMEOUT,
+  SYNCKIT_TS_RUNNER,
 } = process.env
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
@@ -78,14 +78,14 @@ export const DEFAULT_GLOBAL_SHIMS_PRESET: GlobalShim[] = [
 
 export const MTS_SUPPORTED_NODE_VERSION = 16
 
-const syncFnCache = new Map<string, AnyFn>()
+let syncFnCache: Map<string, AnyFn> | undefined
 
 export interface SynckitOptions {
-  timeout?: number
   execArgv?: string[]
-  tsRunner?: TsRunner
-  transferList?: TransferListItem[]
   globalShims?: GlobalShim[] | boolean
+  timeout?: number
+  transferList?: TransferListItem[]
+  tsRunner?: TsRunner
 }
 
 // MessagePort doesn't copy the properties of Error objects. We still want
@@ -107,14 +107,16 @@ export function createSyncFn<T extends AnyAsyncFn<R>, R = unknown>(
   workerPath: string,
   timeoutOrOptions?: SynckitOptions | number,
 ): Syncify<T> {
-  if (!path.isAbsolute(workerPath)) {
-    throw new Error('`workerPath` must be absolute')
-  }
+  syncFnCache ??= new Map()
 
   const cachedSyncFn = syncFnCache.get(workerPath)
 
   if (cachedSyncFn) {
     return cachedSyncFn as Syncify<T>
+  }
+
+  if (!path.isAbsolute(workerPath)) {
+    throw new Error('`workerPath` must be absolute')
   }
 
   const syncFn = startWorkerThread<R, T>(
@@ -309,8 +311,8 @@ export const encodeImportModule = (
               (named === null
                 ? '* as ' + globalName
                 : named?.trim()
-                ? `{${named}}`
-                : globalName) +
+                  ? `{${named}}`
+                  : globalName) +
               ' from'
             : ''
         } '${
@@ -354,7 +356,7 @@ export const _generateGlobals = (
     '',
   )
 
-const globalsCache = new Map<string, [content: string, filepath?: string]>()
+let globalsCache: Map<string, [content: string, filepath?: string]> | undefined
 
 let tmpdir: string
 
@@ -371,6 +373,8 @@ export const generateGlobals = (
   globalShims: GlobalShim[],
   type: 'import' | 'require' = 'import',
 ) => {
+  globalsCache ??= new Map()
+
   const cached = globalsCache.get(workerPath)
 
   if (cached) {
@@ -462,14 +466,17 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     globalShims === true
       ? DEFAULT_GLOBAL_SHIMS_PRESET
       : Array.isArray(globalShims)
-      ? globalShims
-      : []
+        ? globalShims
+        : []
   ).filter(({ moduleName }) => isPkgAvailable(moduleName))
 
   // We store a single Byte in the SharedArrayBuffer
   // for the notification, we can used a fixed size
-  sharedBuffer ??= new SharedArrayBuffer(INT32_BYTES)
-  sharedBufferView ??= new Int32Array(sharedBuffer, 0, 1)
+  sharedBufferView ??= new Int32Array(
+    (sharedBuffer ??= new SharedArrayBuffer(INT32_BYTES)),
+    0,
+    1,
+  )
 
   const useGlobals = finalGlobalShims.length > 0
 
@@ -484,12 +491,12 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
           )};import '${String(workerPathUrl)}'`,
         )
       : useEval
-      ? `${generateGlobals(
-          finalWorkerPath,
-          finalGlobalShims,
-          'require',
-        )};${encodeImportModule(finalWorkerPath, 'require')}`
-      : workerPathUrl,
+        ? `${generateGlobals(
+            finalWorkerPath,
+            finalGlobalShims,
+            'require',
+          )};${encodeImportModule(finalWorkerPath, 'require')}`
+        : workerPathUrl,
     {
       eval: useEval,
       workerData: { sharedBuffer, workerPort },
@@ -504,9 +511,11 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     const id = nextID++
 
     const msg: MainToWorkerMessage<Parameters<T>> = { id, args }
+
     worker.postMessage(msg)
 
     const status = Atomics.wait(sharedBufferView!, 0, 0, timeout)
+
     // Reset SharedArrayBuffer for next call
     Atomics.store(sharedBufferView!, 0, 0)
 
@@ -551,6 +560,7 @@ export function runAsWorker<
   }
 
   const { workerPort, sharedBuffer } = workerData as WorkerData
+
   const sharedBufferView = new Int32Array(sharedBuffer, 0, 1)
 
   parentPort!.on(

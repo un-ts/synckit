@@ -135,7 +135,7 @@ test('unknown ts runner', async () => {
 
   expect(() =>
     createSyncFn<AsyncWorkerFn>(path.resolve(_dirname, 'worker.js'), {
-      // @ts-expect-error
+      // @ts-expect-error -- intended
       tsRunner: 'unknown',
     }),
   ).toThrowErrorMatchingInlineSnapshot(`"Unknown ts runner: unknown"`)
