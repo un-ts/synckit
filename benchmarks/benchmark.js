@@ -15,9 +15,11 @@ const __filename = fileURLToPath(import.meta.url)
 const perfCase = async name => {
   const loadStartTime = performance.now()
 
-  const syncFn =
-    // eslint-disable-next-line unicorn/no-await-expression-member
-    (await import(`./${name}.${name === 'synckit' ? 'js' : 'cjs'}`)).default
+  const { default: syncFn } = await import(
+    `./${name}.${
+      name === 'synckit' || name === 'make-synchronized' ? 'js' : 'cjs'
+    }`
+  )
 
   const loadTime = performance.now() - loadStartTime
 
@@ -96,6 +98,7 @@ console.table(
     synckit: await perfCase('synckit'),
     syncThreads: await perfCase('sync-threads'),
     deasync: await perfCase('deasync'),
+    makeSynchronized: await perfCase('make-synchronized'),
     native: await perfCase('native'),
   }),
 )

@@ -15,9 +15,8 @@ export type Syncify<T extends AnyAsyncFn> = T extends (
   ? (...args: Args) => R
   : never
 
-export type PromiseType<T extends AnyPromise> = T extends Promise<infer R>
-  ? R
-  : never
+export type PromiseType<T extends AnyPromise> =
+  T extends Promise<infer R> ? R : never
 
 export type ValueOf<T> = T[keyof T]
 
