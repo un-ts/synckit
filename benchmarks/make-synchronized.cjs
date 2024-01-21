@@ -1,6 +1,10 @@
 const { makeSynchronized } = require('make-synchronized')
 
-/** @type {() => string} */
-const syncFn = makeSynchronized(require.resolve('./native.cjs'))
+/**
+ * @param {string} filename
+ * @returns {() => string} syncified function
+ */
+const syncFn = filename =>
+  makeSynchronized('node:fs/promises').readFile(filename, 'utf8')
 
 module.exports = syncFn

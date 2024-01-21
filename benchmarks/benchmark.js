@@ -16,7 +16,9 @@ const perfCase = async name => {
   const loadStartTime = performance.now()
 
   const { default: syncFn } = await import(
-    `./${name}.${name === 'synckit' || name === 'make-synchronized' ? 'js' : 'cjs'}`
+    `./${name}.${
+      name === 'synckit' || name === 'make-synchronized' ? 'js' : 'cjs'
+    }`
   )
 
   const loadTime = performance.now() - loadStartTime
