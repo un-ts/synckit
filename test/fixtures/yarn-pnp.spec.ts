@@ -6,12 +6,10 @@ test('yarn-pnp', async () => {
   const { stdout } = await execaNode('index.js', [], {
     nodeOptions: ['-r', './.pnp.cjs'],
     cwd: resolve('test/fixtures/yarn-pnp'),
+    env: {
+      FORCE_COLOR: '0',
+    },
   })
 
-  /**
-   * @see https://github.com/sindresorhus/execa/issues/587
-   */
-  expect(stdout).toContain('1')
-  expect(stdout).toContain('2')
-  expect(stdout).toContain('5')
+  expect(stdout).toBe([1, 2, 5].join(' '))
 })
