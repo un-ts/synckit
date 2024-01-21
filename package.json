@@ -25,6 +25,7 @@
   ],
   "keywords": [
     "deasync",
+    "make-synchronized",
     "make-synchronous",
     "sync",
     "sync-exec",
