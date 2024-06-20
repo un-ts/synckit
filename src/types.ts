@@ -28,6 +28,7 @@ export interface MainToWorkerMessage<T extends unknown[]> {
 export interface WorkerData {
   sharedBuffer: SharedArrayBuffer
   workerPort: MessagePort
+  pnpLoaderPath: string | undefined
 }
 
 export interface DataMessage<T> {

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
-import { createRequire } from 'node:module'
+import module from 'node:module'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
@@ -52,6 +52,8 @@ const {
   SYNCKIT_TIMEOUT,
   SYNCKIT_TS_RUNNER,
 } = process.env
+
+const IS_NODE_20 = Number(process.versions.node.split('.')[0]) >= 20
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
@@ -133,7 +135,7 @@ export function createSyncFn<T extends AnyAsyncFn<R>, R = unknown>(
 
 const cjsRequire =
   typeof require === 'undefined'
-    ? createRequire(import.meta.url)
+    ? module.createRequire(import.meta.url)
     : /* istanbul ignore next */ require
 
 const dataUrl = (code: string) =>
@@ -252,6 +254,8 @@ const setupTsRunner = (
     }
   }
 
+  let resolvedPnpLoaderPath: string | undefined
+
   /* istanbul ignore if -- https://github.com/facebook/jest/issues/5274 */
   if (process.versions.pnp) {
     const nodeOptions = NODE_OPTIONS?.split(/\s+/)
@@ -275,8 +279,15 @@ const setupTsRunner = (
         // Transform path to file URL because nodejs does not accept
         // absolute Windows paths in the --experimental-loader option.
         // https://github.com/un-ts/synckit/issues/123
-        const experimentalLoader = pathToFileURL(pnpLoaderPath).toString()
-        execArgv = ['--experimental-loader', experimentalLoader, ...execArgv]
+        resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).toString()
+
+        if (!IS_NODE_20) {
+          execArgv = [
+            '--experimental-loader',
+            resolvedPnpLoaderPath,
+            ...execArgv,
+          ]
+        }
       }
     }
   }
@@ -288,6 +299,7 @@ const setupTsRunner = (
     tsRunner,
     tsUseEsm,
     workerPath,
+    pnpLoaderPath: resolvedPnpLoaderPath,
     execArgv,
   }
 }
@@ -428,6 +440,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     tsUseEsm,
     tsRunner: finalTsRunner,
     workerPath: finalWorkerPath,
+    pnpLoaderPath,
     execArgv: finalExecArgv,
   } = setupTsRunner(workerPath, { execArgv, tsRunner })
 
@@ -501,7 +514,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
         : workerPathUrl,
     {
       eval: useEval,
-      workerData: { sharedBuffer, workerPort },
+      workerData: { sharedBuffer, workerPort, pnpLoaderPath },
       transferList: [workerPort, ...transferList],
       execArgv: finalExecArgv,
     },
@@ -561,7 +574,11 @@ export function runAsWorker<
     return
   }
 
-  const { workerPort, sharedBuffer } = workerData as WorkerData
+  const { workerPort, sharedBuffer, pnpLoaderPath } = workerData as WorkerData
+
+  if (pnpLoaderPath && IS_NODE_20) {
+    module.register(pnpLoaderPath)
+  }
 
   const sharedBufferView = new Int32Array(sharedBuffer, 0, 1)
 
