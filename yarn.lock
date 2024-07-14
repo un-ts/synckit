@@ -10630,10 +10630,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"make-synchronized@npm:^0.0.3":
-  version: 0.0.3
-  resolution: "make-synchronized@npm:0.0.3"
-  checksum: 19b678fa1ca6c3a606cdf41f5ecdc36da8613bae2e981df9eda32931e76e009c0c27d81d3a3c7f00204e9e31177ec362c1b68a6ecc0344f4c6839a4c5c7116dc
+"make-synchronized@npm:^0.2.9":
+  version: 0.2.9
+  resolution: "make-synchronized@npm:0.2.9"
+  checksum: 3b2d235d7f4fdb99e5a66edb3592d277986286c2f26f549ec7ca5c74523dcf7088f7238dc48644ac50305e9bc5bcb4515d0b8d8a25e0894e0a791657eb884709
   languageName: node
   linkType: hard
 
@@ -15157,7 +15157,7 @@ __metadata:
     execa: "npm:^8.0.1"
     jest: "npm:^29.7.0"
     lint-staged: "npm:^15.2.0"
-    make-synchronized: "npm:^0.0.3"
+    make-synchronized: "npm:^0.2.9"
     node-gyp: "npm:^10.0.1"
     patch-package: "npm:^8.0.0"
     prettier: "npm:^3.1.1"
