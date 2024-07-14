@@ -5604,20 +5604,20 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chalk@npm:5.3.0":
-  version: 5.3.0
-  resolution: "chalk@npm:5.3.0"
-  checksum: 8297d436b2c0f95801103ff2ef67268d362021b8210daf8ddbe349695333eb3610a71122172ff3b0272f1ef2cf7cc2c41fdaa4715f52e49ffe04c56340feed09
-  languageName: node
-  linkType: hard
-
-"chalk@npm:^4.0.0, chalk@npm:^4.1.0, chalk@npm:^4.1.2":
+"chalk@npm:4.1.2, chalk@npm:^4.0.0, chalk@npm:^4.1.0, chalk@npm:^4.1.2":
   version: 4.1.2
   resolution: "chalk@npm:4.1.2"
   dependencies:
     ansi-styles: "npm:^4.1.0"
     supports-color: "npm:^7.1.0"
   checksum: 4a3fef5cc34975c898ffe77141450f679721df9dde00f6c304353fa9c8b571929123b26a0e4617bde5018977eb655b31970c297b91b63ee83bb82aeb04666880
+  languageName: node
+  linkType: hard
+
+"chalk@npm:5.3.0":
+  version: 5.3.0
+  resolution: "chalk@npm:5.3.0"
+  checksum: 8297d436b2c0f95801103ff2ef67268d362021b8210daf8ddbe349695333eb3610a71122172ff3b0272f1ef2cf7cc2c41fdaa4715f52e49ffe04c56340feed09
   languageName: node
   linkType: hard
 
@@ -15169,7 +15169,7 @@ __metadata:
     ts-node: "npm:^10.9.2"
     tslib: "npm:^2.6.2"
     tsx: "npm:^4.7.0"
-    type-coverage: "npm:^2.27.1"
+    type-coverage: "npm:^2.29.1"
     typescript: "npm:^5.3.3"
   languageName: unknown
   linkType: soft
@@ -15513,9 +15513,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"type-coverage-core@npm:^2.27.1":
-  version: 2.27.1
-  resolution: "type-coverage-core@npm:2.27.1"
+"type-coverage-core@npm:^2.29.1":
+  version: 2.29.1
+  resolution: "type-coverage-core@npm:2.29.1"
   dependencies:
     fast-glob: "npm:3"
     minimatch: "npm:6 || 7 || 8 || 9"
@@ -15524,19 +15524,20 @@ __metadata:
     tsutils: "npm:3"
   peerDependencies:
     typescript: 2 || 3 || 4 || 5
-  checksum: 76270bf63d718b09066c097a09b49a98bd2518d615d42d963c8620f1545345c81efbdd295388df1eef53e3b07d68130f1c22026462ebdb67d66c2473f054259f
+  checksum: ec48cacda64766894d17523733d1fd5376079090a0febd0a1eb7d444ef030468ec767bc3ffaa26c0841575d8d3f1391fcd7df22e8784f39a260bcc0b89fcb785
   languageName: node
   linkType: hard
 
-"type-coverage@npm:^2.27.1":
-  version: 2.27.1
-  resolution: "type-coverage@npm:2.27.1"
+"type-coverage@npm:^2.29.1":
+  version: 2.29.1
+  resolution: "type-coverage@npm:2.29.1"
   dependencies:
+    chalk: "npm:4.1.2"
     minimist: "npm:1"
-    type-coverage-core: "npm:^2.27.1"
+    type-coverage-core: "npm:^2.29.1"
   bin:
     type-coverage: bin/type-coverage
-  checksum: 3652416f2785375e395919763404314d507e43bbf7c28f5faec74be6ca762823082fa0723de68111a5b227b433f161cdc7472d906bb709870c205640ace91192
+  checksum: 51b88cdefb404ea9dcdd0a50a798cbbd2611deeba1d415dadc3d65d482c71b3b68f2daa1a2d368c62c21a44d5fa9a85a203ffbbfc200a5a1e74c73b068698860
   languageName: node
   linkType: hard
 
