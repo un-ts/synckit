@@ -3629,7 +3629,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@pkgr/core@npm:^0.1.0":
+"@pkgr/core@npm:^0.1.0, @pkgr/core@npm:^0.1.1":
   version: 0.1.1
   resolution: "@pkgr/core@npm:0.1.1"
   checksum: 3f7536bc7f57320ab2cf96f8973664bef624710c403357429fbf680a5c3b4843c1dbd389bb43daa6b1f6f1f007bb082f5abcb76bb2b5dc9f421647743b71d3d8
@@ -15142,7 +15142,7 @@ __metadata:
     "@changesets/changelog-github": "npm:^0.5.0"
     "@changesets/cli": "npm:^2.27.1"
     "@commitlint/cli": "npm:^18.4.3"
-    "@pkgr/core": "npm:^0.1.0"
+    "@pkgr/core": "npm:^0.1.1"
     "@pkgr/rollup": "npm:^5.0.0"
     "@swc-node/register": "npm:^1.6.8"
     "@types/jest": "npm:^29.5.11"

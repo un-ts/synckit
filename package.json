@@ -54,7 +54,7 @@
     "version": "changeset version && yarn --no-immutable"
   },
   "dependencies": {
-    "@pkgr/core": "^0.1.0",
+    "@pkgr/core": "^0.1.1",
     "tslib": "^2.6.2"
   },
   "devDependencies": {
