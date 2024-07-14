@@ -44,7 +44,6 @@
     "build": "concurrently -r 'yarn:build:*'",
     "build:r": "r -f cjs",
     "build:ts": "tsc -p src",
-    "codesandbox:install": "yarn --ignore-engines",
     "lint": "concurrently -r 'yarn:lint:*'",
     "lint:es": "eslint . --cache -f friendly --max-warnings 10",
     "lint:tsc": "tsc --noEmit",
