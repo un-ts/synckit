@@ -6296,13 +6296,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"deasync@npm:^0.1.29":
-  version: 0.1.29
-  resolution: "deasync@npm:0.1.29"
+"deasync@npm:^0.1.30":
+  version: 0.1.30
+  resolution: "deasync@npm:0.1.30"
   dependencies:
     bindings: "npm:^1.5.0"
     node-addon-api: "npm:^1.7.1"
-  checksum: 16b7dbadd6a8785f8e1dc11e0e1fc537c5b1d392500accec55b9de52318debab3579731e2665867d3e83f687dd2ab9fc3417716304905cccaedc56945d26e449
+  checksum: 5bf6fab59695c706960793328da19d07afcc200cdcf64de85e7d15eb8ed237768a51e0331af995a07b8673ac004e9d5c690daa747dc3100895201b2fff5911c4
   languageName: node
   linkType: hard
 
@@ -15150,7 +15150,7 @@ __metadata:
     clean-pkg-json: "npm:^1.2.0"
     concurrently: "npm:^8.2.2"
     cross-env: "npm:^7.0.3"
-    deasync: "npm:^0.1.29"
+    deasync: "npm:^0.1.30"
     esbuild-register: "npm:^3.5.0"
     esbuild-runner: "npm:^2.2.2"
     eslint: "npm:^8.56.0"
