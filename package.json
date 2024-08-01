@@ -69,7 +69,7 @@
     "clean-pkg-json": "^1.2.0",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "deasync": "^0.1.29",
+    "deasync": "^0.1.30",
     "esbuild-register": "^3.5.0",
     "esbuild-runner": "^2.2.2",
     "eslint": "^8.56.0",
