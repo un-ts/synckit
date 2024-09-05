@@ -543,7 +543,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     if (id < expectedId) {
       const waitingTime = Date.now() - start
       console.log(
-        `Expected id ${expectedId} but got id ${id}, waiting again...`,
+        `Received old message ${id}, keep waiting for ${expectedId}...`,
       )
       return receiveMessageWithId(
         port,
