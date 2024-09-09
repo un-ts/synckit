@@ -20,6 +20,7 @@ import type {
   AnyAsyncFn,
   AnyFn,
   GlobalShim,
+  MainToWorkerAbortMessage,
   MainToWorkerMessage,
   Syncify,
   ValueOf,
@@ -533,6 +534,8 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     Atomics.store(sharedBufferView!, 0, 0)
 
     if (!['ok', 'not-equal'].includes(status)) {
+      const abortMsg: MainToWorkerAbortMessage = { id: expectedId, abort: true }
+      port.postMessage(abortMsg)
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
     }
 
@@ -542,9 +545,6 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
 
     if (id < expectedId) {
       const waitingTime = Date.now() - start
-      console.log(
-        `Received old message ${id}, keep waiting for ${expectedId}...`,
-      )
       return receiveMessageWithId(
         port,
         expectedId,
@@ -609,11 +609,23 @@ export function runAsWorker<
     ({ id, args }: MainToWorkerMessage<Parameters<T>>) => {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       ;(async () => {
+        let isAborted = false
+        const handleAbortMessage = (msg: MainToWorkerAbortMessage) => {
+          if (msg.id === id && msg.abort) {
+            isAborted = true
+          }
+        }
+        workerPort.on('message', handleAbortMessage)
         let msg: WorkerToMainMessage<R>
         try {
           msg = { id, result: await fn(...args) }
         } catch (error: unknown) {
           msg = { id, error, properties: extractProperties(error) }
+        }
+        workerPort.off('message', handleAbortMessage)
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (isAborted) {
+          return
         }
         workerPort.postMessage(msg)
         Atomics.add(sharedBufferView, 0, 1)
