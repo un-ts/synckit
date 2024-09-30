@@ -104,6 +104,26 @@ test('timeout', async () => {
   )
 })
 
+test('subsequent executions after timeout', async () => {
+  const SYNCKIT_TIMEOUT = 30
+  process.env.SYNCKIT_TIMEOUT = SYNCKIT_TIMEOUT.toString()
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+
+  // start an execution in worker that will definitely time out
+  expect(() => syncFn(1, SYNCKIT_TIMEOUT * 2)).toThrow(
+    'Internal error: Atomics.wait() failed: timed-out',
+  )
+
+  // wait for timed out execution to finish inside worker
+  await new Promise(resolve => setTimeout(resolve, SYNCKIT_TIMEOUT * 2))
+
+  // subsequent executions should work correctly
+  expect(syncFn(2, 1)).toBe(2)
+  expect(syncFn(3, 1)).toBe(3)
+})
+
 test('globalShims env', async () => {
   process.env.SYNCKIT_GLOBAL_SHIMS = '1'
 
