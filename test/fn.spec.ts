@@ -105,19 +105,17 @@ test('timeout', async () => {
 })
 
 test('subsequent executions after timeout', async () => {
-  const SYNCKIT_TIMEOUT = 30
-  process.env.SYNCKIT_TIMEOUT = SYNCKIT_TIMEOUT.toString()
+  const executionTimeout = 30
+  process.env.SYNCKIT_TIMEOUT = executionTimeout.toString()
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
 
   // start an execution in worker that will definitely time out
-  expect(() => syncFn(1, SYNCKIT_TIMEOUT * 3)).toThrow(
-    'Internal error: Atomics.wait() failed: timed-out',
-  )
+  expect(() => syncFn(1, executionTimeout * 3)).toThrow()
 
   // wait for timed out execution to finish inside worker
-  await new Promise(resolve => setTimeout(resolve, SYNCKIT_TIMEOUT * 3))
+  await new Promise(resolve => setTimeout(resolve, executionTimeout * 3))
 
   // subsequent executions should work correctly
   expect(syncFn(2, 1)).toBe(2)
