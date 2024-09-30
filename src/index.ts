@@ -20,7 +20,7 @@ import type {
   AnyAsyncFn,
   AnyFn,
   GlobalShim,
-  MainToWorkerAbortMessage,
+  MainToWorkerCommandMessage,
   MainToWorkerMessage,
   Syncify,
   ValueOf,
@@ -534,7 +534,10 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     Atomics.store(sharedBufferView!, 0, 0)
 
     if (!['ok', 'not-equal'].includes(status)) {
-      const abortMsg: MainToWorkerAbortMessage = { id: expectedId, abort: true }
+      const abortMsg: MainToWorkerCommandMessage = {
+        id: expectedId,
+        cmd: 'abort',
+      }
       port.postMessage(abortMsg)
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
     }
@@ -610,8 +613,8 @@ export function runAsWorker<
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       ;(async () => {
         let isAborted = false
-        const handleAbortMessage = (msg: MainToWorkerAbortMessage) => {
-          if (msg.id === id && msg.abort) {
+        const handleAbortMessage = (msg: MainToWorkerCommandMessage) => {
+          if (msg.id === id && msg.cmd === 'abort') {
             isAborted = true
           }
         }

@@ -25,9 +25,9 @@ export interface MainToWorkerMessage<T extends unknown[]> {
   args: T
 }
 
-export interface MainToWorkerAbortMessage {
+export interface MainToWorkerCommandMessage {
   id: number
-  abort: boolean
+  cmd: string
 }
 
 export interface WorkerData {
