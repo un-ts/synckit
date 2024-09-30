@@ -106,16 +106,17 @@ test('timeout', async () => {
 
 test('subsequent executions after timeout', async () => {
   const executionTimeout = 30
+  const longRunningTaskDuration = executionTimeout * 10
   process.env.SYNCKIT_TIMEOUT = executionTimeout.toString()
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
 
   // start an execution in worker that will definitely time out
-  expect(() => syncFn(1, executionTimeout * 3)).toThrow()
+  expect(() => syncFn(1, longRunningTaskDuration)).toThrow()
 
   // wait for timed out execution to finish inside worker
-  await new Promise(resolve => setTimeout(resolve, executionTimeout * 3))
+  await new Promise(resolve => setTimeout(resolve, longRunningTaskDuration))
 
   // subsequent executions should work correctly
   expect(syncFn(2, 1)).toBe(2)
