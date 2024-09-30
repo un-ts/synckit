@@ -70,5 +70,7 @@ jobs:
           YARN_IGNORE_NODE: 1
 
       - name: Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         if: ${{ matrix.node != 20 }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
