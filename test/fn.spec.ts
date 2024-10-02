@@ -130,8 +130,8 @@ test('subsequent executions after timeout', async () => {
 })
 
 test('handling of outdated message from worker', async () => {
-  const synckitTimeout = 60
-  process.env.SYNCKIT_TIMEOUT = synckitTimeout.toString()
+  const executionTimeout = 60
+  process.env.SYNCKIT_TIMEOUT = executionTimeout.toString()
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
 
   jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
@@ -147,9 +147,10 @@ test('handling of outdated message from worker', async () => {
 })
 
 test('propagation of undefined timeout', async () => {
+  delete process.env.SYNCKIT_TIMEOUT
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
 
-  jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
+  const atomicsWaitSpy = jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
 
   receiveMessageOnPortMock
     .mockReturnValueOnce({ message: { id: -1 } })
@@ -160,9 +161,8 @@ test('propagation of undefined timeout', async () => {
   expect(syncFn(1)).toBe(1)
   expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
 
-  const [firstAtomicsWaitArgs, secondAtomicsWaitArgs] = (
-    Atomics.wait as unknown as jest.SpiedFunction<typeof Atomics.wait>
-  ).mock.calls
+  const [firstAtomicsWaitArgs, secondAtomicsWaitArgs] =
+    atomicsWaitSpy.mock.calls
   const [, , , firstAtomicsWaitCallTimeout] = firstAtomicsWaitArgs
   const [, , , secondAtomicsWaitCallTimeout] = secondAtomicsWaitArgs
 
@@ -175,7 +175,7 @@ test('reduction of waiting time', async () => {
   process.env.SYNCKIT_TIMEOUT = synckitTimeout.toString()
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
 
-  jest.spyOn(Atomics, 'wait').mockImplementation(() => {
+  const atomicsWaitSpy = jest.spyOn(Atomics, 'wait').mockImplementation(() => {
     const start = Date.now()
     // simulate waiting 10ms for worker to respond
     while (Date.now() - start < 10) {
@@ -194,9 +194,8 @@ test('reduction of waiting time', async () => {
   expect(syncFn(1)).toBe(1)
   expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
 
-  const [firstAtomicsWaitArgs, secondAtomicsWaitArgs] = (
-    Atomics.wait as unknown as jest.SpiedFunction<typeof Atomics.wait>
-  ).mock.calls
+  const [firstAtomicsWaitArgs, secondAtomicsWaitArgs] =
+    atomicsWaitSpy.mock.calls
   const [, , , firstAtomicsWaitCallTimeout] = firstAtomicsWaitArgs
   const [, , , secondAtomicsWaitCallTimeout] = secondAtomicsWaitArgs
 
