@@ -26,7 +26,6 @@ export const setupReceiveMessageOnPortMock =
       return {
         ...WorkerThreads,
         receiveMessageOnPort: jest.fn(WorkerThreads.receiveMessageOnPort),
-        __esModule: true,
       }
     })
 
