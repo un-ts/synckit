@@ -1,5 +1,8 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import WorkerThreads from 'node:worker_threads'
+
+import { jest } from '@jest/globals'
 
 import { MTS_SUPPORTED_NODE_VERSION } from 'synckit'
 
@@ -13,3 +16,25 @@ export const tsUseEsmSupported =
   nodeVersion >= MTS_SUPPORTED_NODE_VERSION && nodeVersion <= 18.18
 
 export const testIf = (condition: boolean) => (condition ? it : it.skip)
+
+type ReceiveMessageOnPortMock = jest.Mock<
+  typeof WorkerThreads.receiveMessageOnPort
+>
+export const setupReceiveMessageOnPortMock =
+  async (): Promise<ReceiveMessageOnPortMock> => {
+    jest.unstable_mockModule('node:worker_threads', () => {
+      return {
+        ...WorkerThreads,
+        receiveMessageOnPort: jest.fn(WorkerThreads.receiveMessageOnPort),
+        __esModule: true,
+      }
+    })
+
+    const { receiveMessageOnPort: receiveMessageOnPortMock } = (await import(
+      'node:worker_threads'
+    )) as unknown as {
+      receiveMessageOnPort: ReceiveMessageOnPortMock
+    }
+
+    return receiveMessageOnPortMock
+  }
