@@ -3,7 +3,12 @@ import path from 'node:path'
 
 import { jest } from '@jest/globals'
 
-import { _dirname, testIf, tsUseEsmSupported } from './helpers.js'
+import {
+  _dirname,
+  setupReceiveMessageOnPortMock,
+  testIf,
+  tsUseEsmSupported,
+} from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
 import { createSyncFn } from 'synckit'
@@ -12,6 +17,7 @@ const { SYNCKIT_TIMEOUT } = process.env
 
 beforeEach(() => {
   jest.resetModules()
+  jest.restoreAllMocks()
 
   delete process.env.SYNCKIT_GLOBAL_SHIMS
 
@@ -101,6 +107,114 @@ test('timeout', async () => {
 
   expect(() => syncFn(1, 100)).toThrow(
     'Internal error: Atomics.wait() failed: timed-out',
+  )
+})
+
+test('subsequent executions after timeout', async () => {
+  const executionTimeout = 30
+  const longRunningTaskDuration = executionTimeout * 10
+  process.env.SYNCKIT_TIMEOUT = executionTimeout.toString()
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+
+  // start an execution in worker that will definitely time out
+  expect(() => syncFn(1, longRunningTaskDuration)).toThrow()
+
+  // wait for timed out execution to finish inside worker
+  await new Promise(resolve => setTimeout(resolve, longRunningTaskDuration))
+
+  // subsequent executions should work correctly
+  expect(syncFn(2, 1)).toBe(2)
+  expect(syncFn(3, 1)).toBe(3)
+})
+
+test('handling of outdated message from worker', async () => {
+  const executionTimeout = 60
+  process.env.SYNCKIT_TIMEOUT = executionTimeout.toString()
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+
+  jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
+
+  receiveMessageOnPortMock
+    .mockReturnValueOnce({ message: { id: -1 } })
+    .mockReturnValueOnce({ message: { id: 0, result: 1 } })
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+  expect(syncFn(1)).toBe(1)
+  expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
+})
+
+test('propagation of undefined timeout', async () => {
+  delete process.env.SYNCKIT_TIMEOUT
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+
+  const atomicsWaitSpy = jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
+
+  receiveMessageOnPortMock
+    .mockReturnValueOnce({ message: { id: -1 } })
+    .mockReturnValueOnce({ message: { id: 0, result: 1 } })
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+  expect(syncFn(1)).toBe(1)
+  expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
+
+  const [firstAtomicsWaitArgs, secondAtomicsWaitArgs] =
+    atomicsWaitSpy.mock.calls
+  const [, , , firstAtomicsWaitCallTimeout] = firstAtomicsWaitArgs
+  const [, , , secondAtomicsWaitCallTimeout] = secondAtomicsWaitArgs
+
+  expect(typeof firstAtomicsWaitCallTimeout).toBe('undefined')
+  expect(typeof secondAtomicsWaitCallTimeout).toBe('undefined')
+})
+
+test('reduction of waiting time', async () => {
+  const synckitTimeout = 60
+  process.env.SYNCKIT_TIMEOUT = synckitTimeout.toString()
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+
+  const atomicsWaitSpy = jest.spyOn(Atomics, 'wait').mockImplementation(() => {
+    const start = Date.now()
+    // simulate waiting 10ms for worker to respond
+    while (Date.now() - start < 10) {
+      continue
+    }
+
+    return 'ok'
+  })
+
+  receiveMessageOnPortMock
+    .mockReturnValueOnce({ message: { id: -1 } })
+    .mockReturnValueOnce({ message: { id: 0, result: 1 } })
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+  expect(syncFn(1)).toBe(1)
+  expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
+
+  const [firstAtomicsWaitArgs, secondAtomicsWaitArgs] =
+    atomicsWaitSpy.mock.calls
+  const [, , , firstAtomicsWaitCallTimeout] = firstAtomicsWaitArgs
+  const [, , , secondAtomicsWaitCallTimeout] = secondAtomicsWaitArgs
+
+  expect(typeof firstAtomicsWaitCallTimeout).toBe('number')
+  expect(firstAtomicsWaitCallTimeout).toBe(synckitTimeout)
+  expect(typeof secondAtomicsWaitCallTimeout).toBe('number')
+  expect(secondAtomicsWaitCallTimeout).toBeLessThan(synckitTimeout)
+})
+
+test('unexpected message from worker', async () => {
+  jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
+
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+  receiveMessageOnPortMock.mockReturnValueOnce({ message: { id: 100 } })
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+  expect(() => syncFn(1)).toThrow(
+    'Internal error: Expected id 0 but got id 100',
   )
 })
 

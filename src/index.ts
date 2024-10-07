@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   MessageChannel,
+  MessagePort,
   type TransferListItem,
   Worker,
   parentPort,
@@ -19,6 +20,7 @@ import type {
   AnyAsyncFn,
   AnyFn,
   GlobalShim,
+  MainToWorkerCommandMessage,
   MainToWorkerMessage,
   Syncify,
   ValueOf,
@@ -522,6 +524,46 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
 
   let nextID = 0
 
+  const receiveMessageWithId = (
+    port: MessagePort,
+    expectedId: number,
+    waitingTimeout?: number,
+  ): WorkerToMainMessage<R> => {
+    const start = Date.now()
+    const status = Atomics.wait(sharedBufferView!, 0, 0, waitingTimeout)
+    Atomics.store(sharedBufferView!, 0, 0)
+
+    if (!['ok', 'not-equal'].includes(status)) {
+      const abortMsg: MainToWorkerCommandMessage = {
+        id: expectedId,
+        cmd: 'abort',
+      }
+      port.postMessage(abortMsg)
+      throw new Error('Internal error: Atomics.wait() failed: ' + status)
+    }
+
+    const { id, ...message } = (
+      receiveMessageOnPort(mainPort) as { message: WorkerToMainMessage<R> }
+    ).message
+
+    if (id < expectedId) {
+      const waitingTime = Date.now() - start
+      return receiveMessageWithId(
+        port,
+        expectedId,
+        waitingTimeout ? waitingTimeout - waitingTime : undefined,
+      )
+    }
+
+    if (expectedId !== id) {
+      throw new Error(
+        `Internal error: Expected id ${expectedId} but got id ${id}`,
+      )
+    }
+
+    return { id, ...message }
+  }
+
   const syncFn = (...args: Parameters<T>): R => {
     const id = nextID++
 
@@ -529,28 +571,11 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
 
     worker.postMessage(msg)
 
-    const status = Atomics.wait(sharedBufferView!, 0, 0, timeout)
-
-    // Reset SharedArrayBuffer for next call
-    Atomics.store(sharedBufferView!, 0, 0)
-
-    /* istanbul ignore if */
-    if (!['ok', 'not-equal'].includes(status)) {
-      throw new Error('Internal error: Atomics.wait() failed: ' + status)
-    }
-
-    const {
-      id: id2,
-      result,
-      error,
-      properties,
-    } = (receiveMessageOnPort(mainPort) as { message: WorkerToMainMessage<R> })
-      .message
-
-    /* istanbul ignore if */
-    if (id !== id2) {
-      throw new Error(`Internal error: Expected id ${id} but got id ${id2}`)
-    }
+    const { result, error, properties } = receiveMessageWithId(
+      mainPort,
+      id,
+      timeout,
+    )
 
     if (error) {
       throw Object.assign(error as object, properties)
@@ -587,11 +612,23 @@ export function runAsWorker<
     ({ id, args }: MainToWorkerMessage<Parameters<T>>) => {
       // eslint-disable-next-line @typescript-eslint/no-floating-promises
       ;(async () => {
+        let isAborted = false
+        const handleAbortMessage = (msg: MainToWorkerCommandMessage) => {
+          if (msg.id === id && msg.cmd === 'abort') {
+            isAborted = true
+          }
+        }
+        workerPort.on('message', handleAbortMessage)
         let msg: WorkerToMainMessage<R>
         try {
           msg = { id, result: await fn(...args) }
         } catch (error: unknown) {
           msg = { id, error, properties: extractProperties(error) }
+        }
+        workerPort.off('message', handleAbortMessage)
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (isAborted) {
+          return
         }
         workerPort.postMessage(msg)
         Atomics.add(sharedBufferView, 0, 1)

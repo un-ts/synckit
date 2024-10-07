@@ -25,6 +25,11 @@ export interface MainToWorkerMessage<T extends unknown[]> {
   args: T
 }
 
+export interface MainToWorkerCommandMessage {
+  id: number
+  cmd: string
+}
+
 export interface WorkerData {
   sharedBuffer: SharedArrayBuffer
   workerPort: MessagePort
