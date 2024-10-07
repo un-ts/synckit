@@ -1,5 +1,11 @@
 # synckit
 
+## 0.9.2
+
+### Patch Changes
+
+- [#184](https://github.com/un-ts/synckit/pull/184) [`30d28ae`](https://github.com/un-ts/synckit/commit/30d28aefd5a5cdc86f82ee9f1d53853909814fc5) Thanks [@jedlikowski](https://github.com/jedlikowski)! - fix: handle outdated message in channel queue
+
 ## 0.9.1
 
 ### Patch Changes
