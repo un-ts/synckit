@@ -79,7 +79,7 @@
     "make-synchronized": "^0.0.3",
     "node-gyp": "^10.0.1",
     "patch-package": "^8.0.0",
-    "prettier": "^3.1.1",
+    "prettier": "^3.5.3",
     "simple-git-hooks": "^2.9.0",
     "sync-threads": "^1.0.1",
     "synckit": "link:.",
@@ -91,7 +91,7 @@
     "typescript": "^5.3.3"
   },
   "resolutions": {
-    "prettier": "^3.1.1",
+    "prettier": "^3.5.3",
     "synckit": "link:."
   },
   "commitlint": {
