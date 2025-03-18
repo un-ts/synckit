@@ -33,6 +33,8 @@ const INT32_BYTES = 4
 export * from './types.js'
 
 export const TsRunner = {
+  // https://nodejs.org/docs/latest/api/typescript.html#type-stripping
+  Node: 'node',
   // https://github.com/TypeStrong/ts-node
   TsNode: 'ts-node',
   // https://github.com/egoist/esbuild-register
@@ -55,7 +57,8 @@ const {
   SYNCKIT_TS_RUNNER,
 } = process.env
 
-const IS_NODE_20 = Number(process.versions.node.split('.')[0]) >= 20
+const NODE_VERSION = parseFloat(process.versions.node);
+const IS_TYPE_STRIPPING_ENABLED = (NODE_VERSION >= 23 && !NODE_OPTIONS?.includes('--no-experimental-strip-types')) || (NODE_VERSION >= 22 && NODE_OPTIONS?.includes('--experimental-strip-types'));
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
@@ -79,8 +82,6 @@ export const DEFAULT_GLOBAL_SHIMS_PRESET: GlobalShim[] = [
     named: 'performance',
   },
 ]
-
-export const MTS_SUPPORTED_NODE_VERSION = 16
 
 let syncFnCache: Map<string, AnyFn> | undefined
 
@@ -205,11 +206,17 @@ const setupTsRunner = (
       }
     }
 
-    if (tsRunner == null && isPkgAvailable(TsRunner.TsNode)) {
-      tsRunner = TsRunner.TsNode
+    if (tsRunner == null && IS_TYPE_STRIPPING_ENABLED) {
+        tsRunner = TsRunner.Node;
+    }
+    else if (tsRunner == null && isPkgAvailable(TsRunner.TsNode)) {
+        tsRunner = TsRunner.TsNode;
     }
 
     switch (tsRunner) {
+      case TsRunner.Node: {
+        break;
+      }
       case TsRunner.TsNode: {
         if (tsUseEsm) {
           if (!execArgv.includes('--loader')) {
@@ -245,7 +252,7 @@ const setupTsRunner = (
         break
       }
       default: {
-        throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
+        if (!)throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
       }
     }
   } else if (!jsUseEsm) {
@@ -283,7 +290,7 @@ const setupTsRunner = (
         // https://github.com/un-ts/synckit/issues/123
         resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).toString()
 
-        if (!IS_NODE_20) {
+        if (!NODE_VERSION >= 20) {
           execArgv = [
             '--experimental-loader',
             resolvedPnpLoaderPath,
@@ -453,7 +460,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   if (/\.[cm]ts$/.test(finalWorkerPath)) {
     const isTsxSupported =
       !tsUseEsm ||
-      Number.parseFloat(process.versions.node) >= MTS_SUPPORTED_NODE_VERSION
+      Number.parseFloat(process.versions.node) >= 16
     /* istanbul ignore if */
     if (!finalTsRunner) {
       throw new Error('No ts runner specified, ts worker path is not supported')
@@ -604,7 +611,7 @@ export function runAsWorker<
 
   const { workerPort, sharedBuffer, pnpLoaderPath } = workerData as WorkerData
 
-  if (pnpLoaderPath && IS_NODE_20) {
+  if (pnpLoaderPath && NODE_VERSION >= 20) {
     module.register(pnpLoaderPath)
   }
 
