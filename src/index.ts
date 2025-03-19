@@ -206,11 +206,12 @@ const setupTsRunner = (
       }
     }
 
-    if (tsRunner == null && IS_TYPE_STRIPPING_ENABLED) {
+    if (tsRunner == null) {
+      if (IS_TYPE_STRIPPING_ENABLED) {
         tsRunner = TsRunner.Node;
-    }
-    else if (tsRunner == null && isPkgAvailable(TsRunner.TsNode)) {
+      } else if (isPkgAvailable(TsRunner.TsNode)) {
         tsRunner = TsRunner.TsNode;
+      }
     }
 
     switch (tsRunner) {
