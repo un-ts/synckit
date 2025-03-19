@@ -57,7 +57,7 @@ const {
   SYNCKIT_TS_RUNNER,
 } = process.env
 
-const NODE_VERSION = parseFloat(process.versions.node);
+const NODE_VERSION = Number.parseFloat(process.versions.node);
 const IS_TYPE_STRIPPING_ENABLED = (NODE_VERSION >= 23 && !NODE_OPTIONS?.includes('--no-experimental-strip-types')) || (NODE_VERSION >= 22 && NODE_OPTIONS?.includes('--experimental-strip-types'));
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
