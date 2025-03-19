@@ -57,6 +57,5 @@ jobs:
 
       - name: Codecov
         uses: codecov/codecov-action@v5
-        if: ${{ matrix.node == 18 || matrix.node == 18.18 }}
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
