@@ -137,30 +137,24 @@ test(TsRunner.TSX, async () => {
 test(TsRunner.Node, async () => {
   const { createSyncFn } = await import('synckit')
 
-  let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
-    tsRunner: TsRunner.Node,
-  })
+  if (nodeVersion < STRIP_TYPES_SUPPORTED_NODE_VERSION) {
+    // eslint-disable-next-line jest/no-conditional-expect
+    expect(() => createSyncFn<AsyncWorkerFn>(workerMtsPath)).toThrow(
+      'type stripping is not supported in this node version',
+    )
+    return
+  }
+
+  let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath)
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
-
-  if (nodeVersion < STRIP_TYPES_SUPPORTED_NODE_VERSION) {
-    // eslint-disable-next-line jest/no-conditional-expect
-    expect(() =>
-      createSyncFn<AsyncWorkerFn>(workerMtsPath, {
-        tsRunner: TsRunner.Node,
-      }),
-    ).toThrow('type stripping is not supported in this node version')
-    return
-  }
 
   if (!tsUseEsmSupported) {
     return
   }
 
-  syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
-    tsRunner: TsRunner.Node,
-  })
+  syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath)
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
