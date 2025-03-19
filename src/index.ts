@@ -58,7 +58,11 @@ const {
 } = process.env
 
 const NODE_VERSION = Number.parseFloat(process.versions.node);
-const IS_TYPE_STRIPPING_ENABLED = (NODE_VERSION >= 23 && !NODE_OPTIONS?.includes('--no-experimental-strip-types')) || (NODE_VERSION >= 22 && NODE_OPTIONS?.includes('--experimental-strip-types'));
+const IS_TYPE_STRIPPING_ENABLED = (
+    NODE_VERSION >= 23 && !(NODE_OPTIONS?.includes('--no-experimental-strip-types') || process.argv.includes('--no-experimental-strip-types'))
+) || (
+    NODE_VERSION >= 22 && (NODE_OPTIONS?.includes('--experimental-strip-types') || process.argv.includes('--experimental-strip-types'))
+);
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
@@ -219,6 +223,7 @@ const setupTsRunner = (
 
     switch (tsRunner) {
       case TsRunner.Node: {
+        execArgv = ['--experimental-strip-types', ...execArgv.filter(arg => arg !== '--no-experimental-strip-types')]
         break;
       }
       case TsRunner.TsNode: {
