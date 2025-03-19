@@ -294,7 +294,7 @@ const setupTsRunner = (
         // https://github.com/un-ts/synckit/issues/123
         resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).toString()
 
-        if (!(NODE_VERSION >= LOADER_SUPPORTED_NODE_VERSION)) {
+        if (NODE_VERSION < LOADER_SUPPORTED_NODE_VERSION) {
           execArgv = [
             '--experimental-loader',
             resolvedPnpLoaderPath,
