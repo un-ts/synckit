@@ -232,7 +232,9 @@ const setupTsRunner = (
     switch (tsRunner) {
       case TsRunner.Node: {
         if (NODE_VERSION < STRIP_TYPES_SUPPORTED_NODE_VERSION) {
-          throw new Error(`type stripping is not supported in this node version`)
+          throw new Error(
+            'type stripping is not supported in this node version',
+          )
         }
         execArgv = [
           STRIP_TYPES_FLAG,
