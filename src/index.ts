@@ -232,7 +232,7 @@ const setupTsRunner = (
     switch (tsRunner) {
       case TsRunner.Node: {
         execArgv = [
-          STRIP_TYPES_FLAG, 
+          STRIP_TYPES_FLAG,
           ...execArgv.filter(arg => arg !== NO_STRIP_TYPES_FLAG),
         ]
         break
