@@ -252,7 +252,7 @@ const setupTsRunner = (
         break
       }
       default: {
-        if (!)throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
+        throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
       }
     }
   } else if (!jsUseEsm) {
