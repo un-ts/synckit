@@ -139,9 +139,11 @@ test(TsRunner.Node, async () => {
 
   if (nodeVersion < STRIP_TYPES_SUPPORTED_NODE_VERSION) {
     // eslint-disable-next-line jest/no-conditional-expect
-    expect(() => createSyncFn<AsyncWorkerFn>(workerMtsPath)).toThrow(
-      'type stripping is not supported in this node version',
-    )
+    expect(() =>
+      createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+        tsRunner: TsRunner.Node,
+      }),
+    ).toThrow('type stripping is not supported in this node version')
     return
   }
 
