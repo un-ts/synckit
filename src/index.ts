@@ -57,12 +57,17 @@ const {
   SYNCKIT_TS_RUNNER,
 } = process.env
 
-const NODE_VERSION = Number.parseFloat(process.versions.node);
+export const MTS_SUPPORTED_NODE_VERSION = 16
+export const LOADER_SUPPORTED_NODE_VERSION = 20
+export const STRIP_TYPES_DEFAULT_NODE_VERSION = 23
+export const STRIP_TYPES_SUPPORTED_NODE_VERSION = 22
+
+const NODE_VERSION = Number.parseFloat(process.versions.node)
 const IS_TYPE_STRIPPING_ENABLED = (
-    NODE_VERSION >= 23 && !(NODE_OPTIONS?.includes('--no-experimental-strip-types') || process.argv.includes('--no-experimental-strip-types'))
+    NODE_VERSION >= STRIP_TYPES_DEFAULT_NODE_VERSION && !(NODE_OPTIONS?.includes('--no-experimental-strip-types') || process.argv.includes('--no-experimental-strip-types'))
 ) || (
-    NODE_VERSION >= 22 && (NODE_OPTIONS?.includes('--experimental-strip-types') || process.argv.includes('--experimental-strip-types'))
-);
+    NODE_VERSION >= STRIP_TYPES_SUPPORTED_NODE_VERSION && (NODE_OPTIONS?.includes('--experimental-strip-types') || process.argv.includes('--experimental-strip-types'))
+)
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
@@ -86,9 +91,6 @@ export const DEFAULT_GLOBAL_SHIMS_PRESET: GlobalShim[] = [
     named: 'performance',
   },
 ]
-
-export const MTS_SUPPORTED_NODE_VERSION = 16
-export const LOADER_SUPPORTED_NODE_VERSION = 20
 
 let syncFnCache: Map<string, AnyFn> | undefined
 
@@ -217,14 +219,14 @@ const setupTsRunner = (
       if (IS_TYPE_STRIPPING_ENABLED) {
         tsRunner = TsRunner.Node;
       } else if (isPkgAvailable(TsRunner.TsNode)) {
-        tsRunner = TsRunner.TsNode;
+        tsRunner = TsRunner.TsNode
       }
     }
 
     switch (tsRunner) {
       case TsRunner.Node: {
         execArgv = ['--experimental-strip-types', ...execArgv.filter(arg => arg !== '--no-experimental-strip-types')]
-        break;
+        break
       }
       case TsRunner.TsNode: {
         if (tsUseEsm) {
@@ -467,7 +469,8 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   const workerPathUrl = pathToFileURL(finalWorkerPath)
 
   if (/\.[cm]ts$/.test(finalWorkerPath)) {
-    const isTsxSupported = !tsUseEsm || NODE_VERSION >= MTS_SUPPORTED_NODE_VERSION
+    const isTsxSupported = 
+      !tsUseEsm || NODE_VERSION >= MTS_SUPPORTED_NODE_VERSION
     /* istanbul ignore if */
     if (!finalTsRunner) {
       throw new Error('No ts runner specified, ts worker path is not supported')
