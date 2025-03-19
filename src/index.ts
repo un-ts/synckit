@@ -63,11 +63,17 @@ export const STRIP_TYPES_DEFAULT_NODE_VERSION = 23
 export const STRIP_TYPES_SUPPORTED_NODE_VERSION = 22
 
 const NODE_VERSION = Number.parseFloat(process.versions.node)
-const IS_TYPE_STRIPPING_ENABLED = (
-    NODE_VERSION >= STRIP_TYPES_DEFAULT_NODE_VERSION && !(NODE_OPTIONS?.includes('--no-experimental-strip-types') || process.argv.includes('--no-experimental-strip-types'))
-) || (
-    NODE_VERSION >= STRIP_TYPES_SUPPORTED_NODE_VERSION && (NODE_OPTIONS?.includes('--experimental-strip-types') || process.argv.includes('--experimental-strip-types'))
-)
+const STRIP_TYPES_FLAG = '--experimental-strip-types'
+const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
+const IS_TYPE_STRIPPING_ENABLED =
+  (NODE_VERSION >= STRIP_TYPES_DEFAULT_NODE_VERSION &&
+    !(
+      NODE_OPTIONS?.includes(NO_STRIP_TYPES_FLAG) ||
+      process.argv.includes(NO_STRIP_TYPES_FLAG)
+    )) ||
+  (NODE_VERSION >= STRIP_TYPES_SUPPORTED_NODE_VERSION &&
+    (NODE_OPTIONS?.includes(STRIP_TYPES_FLAG) ||
+      process.argv.includes(STRIP_TYPES_FLAG)))
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
@@ -217,7 +223,7 @@ const setupTsRunner = (
 
     if (tsRunner == null) {
       if (IS_TYPE_STRIPPING_ENABLED) {
-        tsRunner = TsRunner.Node;
+        tsRunner = TsRunner.Node
       } else if (isPkgAvailable(TsRunner.TsNode)) {
         tsRunner = TsRunner.TsNode
       }
@@ -225,7 +231,10 @@ const setupTsRunner = (
 
     switch (tsRunner) {
       case TsRunner.Node: {
-        execArgv = ['--experimental-strip-types', ...execArgv.filter(arg => arg !== '--no-experimental-strip-types')]
+        execArgv = [
+          STRIP_TYPES_FLAG, 
+          ...execArgv.filter(arg => arg !== NO_STRIP_TYPES_FLAG),
+        ]
         break
       }
       case TsRunner.TsNode: {
@@ -469,7 +478,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   const workerPathUrl = pathToFileURL(finalWorkerPath)
 
   if (/\.[cm]ts$/.test(finalWorkerPath)) {
-    const isTsxSupported = 
+    const isTsxSupported =
       !tsUseEsm || NODE_VERSION >= MTS_SUPPORTED_NODE_VERSION
     /* istanbul ignore if */
     if (!finalTsRunner) {
