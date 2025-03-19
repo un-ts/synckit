@@ -10,6 +10,10 @@ on:
   schedule:
     - cron: '3 2 * * 6'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze
@@ -34,6 +38,9 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           queries: +security-and-quality
+          config: |
+            paths-ignore:
+              - test/fixtures/yarn-pnp/.pnp.*
 
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3

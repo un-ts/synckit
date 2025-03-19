@@ -1,11 +1,11 @@
-import { TypeEqual, expectType } from 'ts-expect'
+import { expectType, type TypeEqual } from 'ts-expect'
 
 import {
-  AnyPromise,
+  type AnyPromise,
+  type PromiseType,
+  type Syncify,
   createSyncFn,
-  PromiseType,
   runAsWorker,
-  Syncify,
 } from 'synckit'
 
 // @ts-expect-error -- intended

@@ -1,11 +1,11 @@
-import { resolve } from 'node:path'
+import path from 'node:path'
 
 import { execaNode } from 'execa'
 
 test('yarn-pnp', async () => {
   const { stdout } = await execaNode('index.js', [], {
     nodeOptions: ['-r', './.pnp.cjs'],
-    cwd: resolve('test/fixtures/yarn-pnp'),
+    cwd: path.resolve('test/fixtures/yarn-pnp'),
     env: {
       FORCE_COLOR: '0',
     },
