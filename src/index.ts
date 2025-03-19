@@ -83,6 +83,9 @@ export const DEFAULT_GLOBAL_SHIMS_PRESET: GlobalShim[] = [
   },
 ]
 
+export const MTS_SUPPORTED_NODE_VERSION = 16
+export const LOADER_SUPPORTED_NODE_VERSION = 20
+
 let syncFnCache: Map<string, AnyFn> | undefined
 
 export interface SynckitOptions {
@@ -291,7 +294,7 @@ const setupTsRunner = (
         // https://github.com/un-ts/synckit/issues/123
         resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).toString()
 
-        if (!(NODE_VERSION >= 20)) {
+        if (!(NODE_VERSION >= LOADER_SUPPORTED_NODE_VERSION)) {
           execArgv = [
             '--experimental-loader',
             resolvedPnpLoaderPath,
@@ -459,9 +462,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
   const workerPathUrl = pathToFileURL(finalWorkerPath)
 
   if (/\.[cm]ts$/.test(finalWorkerPath)) {
-    const isTsxSupported =
-      !tsUseEsm ||
-      Number.parseFloat(process.versions.node) >= 16
+    const isTsxSupported = !tsUseEsm || NODE_VERSION >= MTS_SUPPORTED_NODE_VERSION
     /* istanbul ignore if */
     if (!finalTsRunner) {
       throw new Error('No ts runner specified, ts worker path is not supported')
@@ -612,7 +613,7 @@ export function runAsWorker<
 
   const { workerPort, sharedBuffer, pnpLoaderPath } = workerData as WorkerData
 
-  if (pnpLoaderPath && NODE_VERSION >= 20) {
+  if (pnpLoaderPath && NODE_VERSION >= LOADER_SUPPORTED_NODE_VERSION) {
     module.register(pnpLoaderPath)
   }
 
