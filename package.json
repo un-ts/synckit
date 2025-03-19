@@ -70,7 +70,7 @@
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "deasync": "^0.1.29",
-    "esbuild-register": "^3.5.0",
+    "esbuild-register": "^3.6.0",
     "esbuild-runner": "^2.2.2",
     "eslint": "^8.56.0",
     "execa": "^8.0.1",
