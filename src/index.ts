@@ -236,10 +236,10 @@ const setupTsRunner = (
             'type stripping is not supported in this node version',
           )
         }
-        execArgv = [
-          STRIP_TYPES_FLAG,
-          ...execArgv.filter(arg => arg !== NO_STRIP_TYPES_FLAG),
-        ]
+        execArgv =
+          NODE_VERSION >= STRIP_TYPES_DEFAULT_NODE_VERSION
+            ? execArgv.filter((arg) => arg !== NO_STRIP_TYPES_FLAG)
+            : [STRIP_TYPES_FLAG, ...execArgv]
         break
       }
       case TsRunner.TsNode: {
