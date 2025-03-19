@@ -91,6 +91,7 @@
     "yarn-berry-deduplicate": "^6.1.1"
   },
   "resolutions": {
+    "es5-ext": "npm:@unes/es5-ext@^0.10.64-1",
     "prettier": "^3.5.3",
     "synckit": "link:."
   },
