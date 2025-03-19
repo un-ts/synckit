@@ -64,7 +64,7 @@
     "@commitlint/cli": "^18.4.3",
     "@pkgr/rollup": "^5.0.0",
     "@swc-node/register": "^1.6.8",
-    "@types/jest": "^29.5.11",
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.10.6",
     "clean-pkg-json": "^1.2.0",
     "concurrently": "^8.2.2",

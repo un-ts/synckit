@@ -4214,13 +4214,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/jest@npm:^29.5.11":
-  version: 29.5.11
-  resolution: "@types/jest@npm:29.5.11"
+"@types/jest@npm:^29.5.14":
+  version: 29.5.14
+  resolution: "@types/jest@npm:29.5.14"
   dependencies:
     expect: "npm:^29.0.0"
     pretty-format: "npm:^29.0.0"
-  checksum: 524a3394845214581278bf4d75055927261fbeac7e1a89cd621bd0636da37d265fe0a85eac58b5778758faad1cbd7c7c361dfc190c78ebde03a91cce33463261
+  checksum: 18e0712d818890db8a8dab3d91e9ea9f7f19e3f83c2e50b312f557017dc81466207a71f3ed79cf4428e813ba939954fa26ffa0a9a7f153181ba174581b1c2aed
   languageName: node
   linkType: hard
 
@@ -15145,7 +15145,7 @@ __metadata:
     "@pkgr/core": "npm:^0.1.0"
     "@pkgr/rollup": "npm:^5.0.0"
     "@swc-node/register": "npm:^1.6.8"
-    "@types/jest": "npm:^29.5.11"
+    "@types/jest": "npm:^29.5.14"
     "@types/node": "npm:^20.10.6"
     clean-pkg-json: "npm:^1.2.0"
     concurrently: "npm:^8.2.2"
