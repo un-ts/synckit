@@ -1,8 +1,0 @@
-.yarn
-.pnp.*
-coverage
-dist
-lib
-CHANGELOG.md
-!/.github
-!/.*.cjs

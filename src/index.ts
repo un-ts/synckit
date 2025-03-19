@@ -306,7 +306,9 @@ const setupTsRunner = (
   }
 }
 
-const md5Hash = (text: string) => createHash('md5').update(text).digest('hex')
+const md5Hash = (text: string) =>
+  // eslint-disable-next-line sonarjs/hashing
+  createHash('md5').update(text).digest('hex')
 
 export const encodeImportModule = (
   moduleNameOrGlobalShim: GlobalShim | string,
@@ -578,6 +580,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
     )
 
     if (error) {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw Object.assign(error as object, properties)
     }
 
