@@ -33,6 +33,8 @@ const INT32_BYTES = 4
 export * from './types.js'
 
 export const TsRunner = {
+  // https://nodejs.org/docs/latest/api/typescript.html#type-stripping
+  Node: 'node',
   // https://github.com/TypeStrong/ts-node
   TsNode: 'ts-node',
   // https://github.com/egoist/esbuild-register
@@ -55,7 +57,23 @@ const {
   SYNCKIT_TS_RUNNER,
 } = process.env
 
-const IS_NODE_20 = Number(process.versions.node.split('.')[0]) >= 20
+export const MTS_SUPPORTED_NODE_VERSION = 16
+export const LOADER_SUPPORTED_NODE_VERSION = 20
+export const STRIP_TYPES_DEFAULT_NODE_VERSION = 23
+export const STRIP_TYPES_SUPPORTED_NODE_VERSION = 22
+
+const NODE_VERSION = Number.parseFloat(process.versions.node)
+const STRIP_TYPES_FLAG = '--experimental-strip-types'
+const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
+const IS_TYPE_STRIPPING_ENABLED =
+  (NODE_VERSION >= STRIP_TYPES_DEFAULT_NODE_VERSION &&
+    !(
+      NODE_OPTIONS?.includes(NO_STRIP_TYPES_FLAG) ||
+      process.argv.includes(NO_STRIP_TYPES_FLAG)
+    )) ||
+  (NODE_VERSION >= STRIP_TYPES_SUPPORTED_NODE_VERSION &&
+    (NODE_OPTIONS?.includes(STRIP_TYPES_FLAG) ||
+      process.argv.includes(STRIP_TYPES_FLAG)))
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
@@ -79,8 +97,6 @@ export const DEFAULT_GLOBAL_SHIMS_PRESET: GlobalShim[] = [
     named: 'performance',
   },
 ]
-
-export const MTS_SUPPORTED_NODE_VERSION = 16
 
 let syncFnCache: Map<string, AnyFn> | undefined
 
@@ -205,11 +221,27 @@ const setupTsRunner = (
       }
     }
 
-    if (tsRunner == null && isPkgAvailable(TsRunner.TsNode)) {
-      tsRunner = TsRunner.TsNode
+    if (tsRunner == null) {
+      if (IS_TYPE_STRIPPING_ENABLED) {
+        tsRunner = TsRunner.Node
+      } else if (isPkgAvailable(TsRunner.TsNode)) {
+        tsRunner = TsRunner.TsNode
+      }
     }
 
     switch (tsRunner) {
+      case TsRunner.Node: {
+        if (NODE_VERSION < STRIP_TYPES_SUPPORTED_NODE_VERSION) {
+          throw new Error(
+            'type stripping is not supported in this node version',
+          )
+        }
+        execArgv =
+          NODE_VERSION >= STRIP_TYPES_DEFAULT_NODE_VERSION
+            ? execArgv.filter(arg => arg !== NO_STRIP_TYPES_FLAG)
+            : [STRIP_TYPES_FLAG, ...execArgv]
+        break
+      }
       case TsRunner.TsNode: {
         if (tsUseEsm) {
           if (!execArgv.includes('--loader')) {
@@ -283,7 +315,7 @@ const setupTsRunner = (
         // https://github.com/un-ts/synckit/issues/123
         resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).toString()
 
-        if (!IS_NODE_20) {
+        if (NODE_VERSION < LOADER_SUPPORTED_NODE_VERSION) {
           execArgv = [
             '--experimental-loader',
             resolvedPnpLoaderPath,
@@ -452,8 +484,7 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
 
   if (/\.[cm]ts$/.test(finalWorkerPath)) {
     const isTsxSupported =
-      !tsUseEsm ||
-      Number.parseFloat(process.versions.node) >= MTS_SUPPORTED_NODE_VERSION
+      !tsUseEsm || NODE_VERSION >= MTS_SUPPORTED_NODE_VERSION
     /* istanbul ignore if */
     if (!finalTsRunner) {
       throw new Error('No ts runner specified, ts worker path is not supported')
@@ -604,7 +635,7 @@ export function runAsWorker<
 
   const { workerPort, sharedBuffer, pnpLoaderPath } = workerData as WorkerData
 
-  if (pnpLoaderPath && IS_NODE_20) {
+  if (pnpLoaderPath && NODE_VERSION >= LOADER_SUPPORTED_NODE_VERSION) {
     module.register(pnpLoaderPath)
   }
 

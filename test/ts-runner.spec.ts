@@ -7,7 +7,12 @@ import { jest } from '@jest/globals'
 import { _dirname, nodeVersion, tsUseEsmSupported } from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
-import { MTS_SUPPORTED_NODE_VERSION, TsRunner } from 'synckit'
+import {
+  MTS_SUPPORTED_NODE_VERSION,
+  STRIP_TYPES_DEFAULT_NODE_VERSION,
+  STRIP_TYPES_SUPPORTED_NODE_VERSION,
+  TsRunner,
+} from 'synckit'
 
 beforeEach(() => {
   jest.resetModules()
@@ -124,6 +129,44 @@ test(TsRunner.TSX, async () => {
 
   syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
     tsRunner: TsRunner.TSX,
+  })
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+})
+
+test(TsRunner.Node, async () => {
+  const { createSyncFn } = await import('synckit')
+
+  if (nodeVersion < STRIP_TYPES_SUPPORTED_NODE_VERSION) {
+    // eslint-disable-next-line jest/no-conditional-expect
+    expect(() =>
+      createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+        tsRunner: TsRunner.Node,
+      }),
+    ).toThrow('type stripping is not supported in this node version')
+    return
+  }
+
+  let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
+    tsRunner:
+      nodeVersion >= STRIP_TYPES_DEFAULT_NODE_VERSION
+        ? undefined
+        : TsRunner.Node,
+  })
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+
+  if (!tsUseEsmSupported) {
+    return
+  }
+
+  syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+    tsRunner:
+      nodeVersion >= STRIP_TYPES_DEFAULT_NODE_VERSION
+        ? undefined
+        : TsRunner.Node,
   })
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
