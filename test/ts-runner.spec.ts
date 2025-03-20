@@ -9,6 +9,7 @@ import type { AsyncWorkerFn } from './types.js'
 
 import {
   MTS_SUPPORTED_NODE_VERSION,
+  STRIP_TYPES_DEFAULT_NODE_VERSION,
   STRIP_TYPES_SUPPORTED_NODE_VERSION,
   TsRunner,
 } from 'synckit'
@@ -148,7 +149,10 @@ test(TsRunner.Node, async () => {
   }
 
   let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
-    tsRunner: nodeVersion >= 23 ? undefined : TSRunner.Node,
+    tsRunner:
+      nodeVersion >= STRIP_TYPES_DEFAULT_NODE_VERSION
+        ? undefined
+        : TsRunner.Node,
   })
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
@@ -159,7 +163,10 @@ test(TsRunner.Node, async () => {
   }
 
   syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
-    tsRunner: nodeVersion >= 23 ? undefined : TSRunner.Node,
+    tsRunner:
+      nodeVersion >= STRIP_TYPES_DEFAULT_NODE_VERSION
+        ? undefined
+        : TsRunner.Node,
   })
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
