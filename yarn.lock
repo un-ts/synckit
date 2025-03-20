@@ -11277,10 +11277,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"make-synchronized@npm:^0.2.9":
-  version: 0.2.9
-  resolution: "make-synchronized@npm:0.2.9"
-  checksum: 10c0/3b2d235d7f4fdb99e5a66edb3592d277986286c2f26f549ec7ca5c74523dcf7088f7238dc48644ac50305e9bc5bcb4515d0b8d8a25e0894e0a791657eb884709
+"make-synchronized@npm:^0.2.10":
+  version: 0.2.10
+  resolution: "make-synchronized@npm:0.2.10"
+  checksum: 10c0/8c94eeb6923a7237d61455c0a98720d5cb349be6c377c84406b39bd7d4e268a75c0556b9892d802269ca2adf4cac88412c0039154e7824d1a4288226f843e875
   languageName: node
   linkType: hard
 
@@ -15586,7 +15586,7 @@ __metadata:
     execa: "npm:^9.5.2"
     jest: "npm:^29.7.0"
     lint-staged: "npm:^15.5.0"
-    make-synchronized: "npm:^0.2.9"
+    make-synchronized: "npm:^0.2.10"
     node-gyp: "npm:^11.1.0"
     prettier: "npm:^3.5.3"
     simple-git-hooks: "npm:^2.11.1"
