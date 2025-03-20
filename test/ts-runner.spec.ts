@@ -147,7 +147,9 @@ test(TsRunner.Node, async () => {
     return
   }
 
-  let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath)
+  let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
+    tsRunner: nodeVersion >= 23 ? undefined : TSRunner.Node,
+  })
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
@@ -156,7 +158,9 @@ test(TsRunner.Node, async () => {
     return
   }
 
-  syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath)
+  syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+    tsRunner: nodeVersion >= 23 ? undefined : TSRunner.Node,
+  })
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
