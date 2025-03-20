@@ -1,5 +1,21 @@
 # synckit
 
+## 0.10.0
+
+### Minor Changes
+
+- [#199](https://github.com/un-ts/synckit/pull/199) [`7a5f1bd`](https://github.com/un-ts/synckit/commit/7a5f1bd22d5535a896457b4bcc8028f0d15e3cde) Thanks [@nwidynski](https://github.com/nwidynski)! - feat: add support for `--experimental-strip-types`
+
+  Introducing the `node` runner, which will replace `ts-node` as the new default:
+
+  - when running on Node 22 with the `--experimental-strip-types`
+    flag enabled via `NODE_OPTIONS` env or cli args
+  - or when running on Node 23+ without `--no-experimental-strip-types`
+    flag enabled via `NODE_OPTIONS` env or cli args
+
+  An error will be thrown when attempting to run with `node` on unsupported versions (<22).
+  On these versions, the default runner remains `ts-node` when available.
+
 ## 0.9.2
 
 ### Patch Changes
@@ -38,11 +54,11 @@
 
   ````ts
   export interface GlobalShim {
-    moduleName: string;
+    moduleName: string
     /**
      * `undefined` means side effect only
      */
-    globalName?: string;
+    globalName?: string
     /**
      * 1. `undefined` or empty string means `default`, for example:
      * ```js
@@ -55,7 +71,7 @@
      * ```
      *
      */
-    named?: string | null;
+    named?: string | null
     /**
      * If not `false`, the shim will only be applied when the original `globalName` unavailable,
      * for example you may only want polyfill `globalThis.fetch` when it's unavailable natively:
@@ -67,21 +83,21 @@
      * }
      * ```
      */
-    conditional?: boolean;
+    conditional?: boolean
   }
   ````
 
   You can aslo reuse the exported `DEFAULT_GLOBAL_SHIMS_PRESET` for extanding:
 
   ```js
-  import { DEFAULT_GLOBAL_SHIMS_PRESET, createSyncFn } from "synckit";
+  import { DEFAULT_GLOBAL_SHIMS_PRESET, createSyncFn } from 'synckit'
 
-  const syncFn = createSyncFn(require.resolve("./worker"), {
+  const syncFn = createSyncFn(require.resolve('./worker'), {
     globalShims: [
       ...DEFAULT_GLOBAL_SHIMS_PRESET,
       // your own shim here
     ],
-  });
+  })
   ```
 
 ## 0.8.6
