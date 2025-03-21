@@ -60,7 +60,7 @@ const {
 export const MTS_SUPPORTED_NODE_VERSION = 16
 export const LOADER_SUPPORTED_NODE_VERSION = 20
 export const STRIP_TYPES_DEFAULT_NODE_VERSION = 23.6
-export const STRIP_TYPES_SUPPORTED_NODE_VERSION = 22
+export const STRIP_TYPES_SUPPORTED_NODE_VERSION = 22.6
 
 const NODE_VERSION = Number.parseFloat(process.versions.node)
 const STRIP_TYPES_FLAG = '--experimental-strip-types'
