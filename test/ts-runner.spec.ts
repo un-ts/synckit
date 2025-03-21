@@ -138,7 +138,7 @@ test(TsRunner.TSX, async () => {
 test(TsRunner.Node, async () => {
   const { createSyncFn } = await import('synckit')
 
-  if (nodeVersion < STRIP_TYPES_SUPPORTED_NODE_VERSION) {
+  if (nodeVersion < TYPESCRIPT_SUPPORTED_NODE_VERSION) {
     // eslint-disable-next-line jest/no-conditional-expect
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
@@ -150,7 +150,7 @@ test(TsRunner.Node, async () => {
 
   let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
     tsRunner:
-      nodeVersion >= STRIP_TYPES_DEFAULT_NODE_VERSION
+      nodeVersion >= TYPESCRIPT_DEFAULT_NODE_VERSION
         ? undefined
         : TsRunner.Node,
   })
@@ -164,7 +164,7 @@ test(TsRunner.Node, async () => {
 
   syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
     tsRunner:
-      nodeVersion >= STRIP_TYPES_DEFAULT_NODE_VERSION
+      nodeVersion >= TYPESCRIPT_DEFAULT_NODE_VERSION
         ? undefined
         : TsRunner.Node,
   })
