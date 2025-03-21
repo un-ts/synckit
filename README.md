@@ -127,7 +127,7 @@ export interface GlobalShim {
 
 ### TypeScript
 
-#### `node` (Default, Node 23+)
+#### `node` (Default, Node 23.6+)
 
 On recent Node versions, you may select this runner to execute your worker file (a `.ts` file) in the native runtime.
 
