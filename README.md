@@ -131,13 +131,13 @@ export interface GlobalShim {
 
 On recent Node versions, you may select this runner to execute your worker file (a `.ts` file) in the native runtime.
 
-As of Node v23, this feature is supported out of the box. To enable it in the current LTS, you can pass the [`--experimental-strip-types`](https://nodejs.org/docs/latest-v22.x/api/typescript.html#type-stripping) flag to the process. Visit the [documentation](https://nodejs.org/docs/latest/api/typescript.html#type-stripping) to learn more.
+As of Node v23.6, this feature is supported out of the box. To enable it in the current LTS, you can pass the [`--experimental-strip-types`](https://nodejs.org/docs/latest-v22.x/api/typescript.html#type-stripping) flag to the process. Visit the [documentation](https://nodejs.org/docs/latest/api/typescript.html#type-stripping) to learn more.
 
 When `synckit` detects the process to be running with this flag, it will execute the worker file with the `node` runner by default.
 
 #### `ts-node` (Default)
 
-Prior to Node v23, you may want to use `ts-node` to execute your worker file (a `.ts` file).
+Prior to Node v23.6, you may want to use `ts-node` to execute your worker file (a `.ts` file).
 
 If you want to use a custom tsconfig as project instead of default `tsconfig.json`, use `TS_NODE_PROJECT` env. Please view [ts-node](https://github.com/TypeStrong/ts-node#tsconfig) for more details.
 
