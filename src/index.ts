@@ -226,10 +226,12 @@ const setupTsRunner = (
             'type stripping is not supported in this node version',
           )
         }
-        execArgv =
-          NODE_VERSION >= TYPESCRIPT_DEFAULT_NODE_VERSION
+        execArgv = [
+          '--experimental-transform-types', 
+          ...(NODE_VERSION >= TYPESCRIPT_DEFAULT_NODE_VERSION
             ? execArgv.filter(arg => arg !== '--no-experimental-strip-types')
-            : ['--experimental-transform-types', ...execArgv]
+            : execArgv),
+        ]
         break
       }
       case TsRunner.TsNode: {
