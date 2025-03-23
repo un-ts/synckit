@@ -4,7 +4,10 @@ exports[`bun 1`] = `
 {
   "exitCode": 0,
   "stderr": "",
-  "stdout": "1 2 5
+  "stdout": "Worker: 1
+Worker: 2
+Worker: 5
+1 2 5
 ",
 }
 `;
@@ -13,7 +16,10 @@ exports[`yarn-pnp 1`] = `
 {
   "exitCode": 0,
   "stderr": "",
-  "stdout": "1 2 5
+  "stdout": "Worker: 1
+Worker: 2
+Worker: 5
+1 2 5
 ",
 }
 `;

@@ -22,6 +22,7 @@ import type {
   MainToWorkerCommandMessage,
   MainToWorkerMessage,
   PackageJson,
+  StdioChunk,
   Syncify,
   ValueOf,
   WorkerData,
@@ -685,11 +686,15 @@ function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
 
     worker.postMessage(msg)
 
-    const { result, error, properties } = receiveMessageWithId(
+    const { result, error, properties, stdio } = receiveMessageWithId(
       mainPort,
       id,
       timeout,
     )
+
+    for (const { type, chunk, encoding } of stdio) {
+      process[type].write(chunk, encoding)
+    }
 
     if (error) {
       // eslint-disable-next-line @typescript-eslint/only-throw-error
@@ -711,6 +716,27 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
   // type-coverage:ignore-next-line -- we can't control
   if (!workerData) {
     return
+  }
+
+  const stdio: StdioChunk[] = []
+
+  // https://github.com/nodejs/node/blob/66556f53a7b36384bce305865c30ca43eaa0874b/lib/internal/worker/io.js#L369
+  for (const type of ['stdout', 'stderr'] as const) {
+    process[type]._writev = (chunks, callback) => {
+      for (const {
+        // type-coverage:ignore-next-line -- we can't control
+        chunk,
+        encoding,
+      } of chunks) {
+        stdio.push({
+          type,
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- we can't control
+          chunk,
+          encoding,
+        })
+      }
+      callback()
+    }
   }
 
   const { workerPort, sharedBuffer, pnpLoaderPath } = workerData as WorkerData
@@ -739,18 +765,23 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
         workerPort.on('message', handleAbortMessage)
         let msg: WorkerToMainMessage<Awaited<R>>
         try {
-          msg = { id, result: await fn(...args) }
+          msg = { id, stdio, result: await fn(...args) }
         } catch (error: unknown) {
-          msg = { id, error, properties: extractProperties(error) }
+          msg = { id, stdio, error, properties: extractProperties(error) }
         }
         workerPort.off('message', handleAbortMessage)
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- false positive for `handleAbortMessage`
         if (isAborted) {
+          stdio.length = 0
           return
         }
-        workerPort.postMessage(msg)
-        Atomics.add(sharedBufferView, 0, 1)
-        Atomics.notify(sharedBufferView, 0)
+        try {
+          workerPort.postMessage(msg)
+          Atomics.add(sharedBufferView, 0, 1)
+          Atomics.notify(sharedBufferView, 0)
+        } finally {
+          stdio.length = 0
+        }
       })()
     },
   )

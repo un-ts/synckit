@@ -11,7 +11,7 @@
 [![JavaScript Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://standardjs.com)
 [![Code Style: Prettier](https://img.shields.io/badge/code_style-prettier-ff69b4.svg)](https://github.com/prettier/prettier)
 
-Perform async work synchronously in Node.js using `worker_threads` with first-class TypeScript and Yarn P'n'P support.
+Perform async work synchronously in Node.js/Bun using `worker_threads` with first-class TypeScript and Yarn P'n'P support.
 
 ## TOC <!-- omit in toc -->
 
