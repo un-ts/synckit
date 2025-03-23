@@ -9,8 +9,7 @@ import type { AsyncWorkerFn } from './types.js'
 
 import {
   MTS_SUPPORTED_NODE_VERSION,
-  STRIP_TYPES_DEFAULT_NODE_VERSION,
-  STRIP_TYPES_SUPPORTED_NODE_VERSION,
+  TYPESCRIPT_DEFAULT_NODE_VERSION,
   TsRunner,
 } from 'synckit'
 
@@ -138,7 +137,7 @@ test(TsRunner.TSX, async () => {
 test(TsRunner.Node, async () => {
   const { createSyncFn } = await import('synckit')
 
-  if (nodeVersion < STRIP_TYPES_SUPPORTED_NODE_VERSION) {
+  if (!process.features.typescript) {
     // eslint-disable-next-line jest/no-conditional-expect
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
@@ -150,7 +149,7 @@ test(TsRunner.Node, async () => {
 
   let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
     tsRunner:
-      nodeVersion >= STRIP_TYPES_DEFAULT_NODE_VERSION
+      nodeVersion >= TYPESCRIPT_DEFAULT_NODE_VERSION
         ? undefined
         : TsRunner.Node,
   })
@@ -164,7 +163,7 @@ test(TsRunner.Node, async () => {
 
   syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
     tsRunner:
-      nodeVersion >= STRIP_TYPES_DEFAULT_NODE_VERSION
+      nodeVersion >= TYPESCRIPT_DEFAULT_NODE_VERSION
         ? undefined
         : TsRunner.Node,
   })

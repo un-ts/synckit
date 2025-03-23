@@ -4,9 +4,9 @@ import module from 'node:module'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
-  MessageChannel,
-  MessagePort,
+  type MessagePort,
   type TransferListItem,
+  MessageChannel,
   Worker,
   parentPort,
   receiveMessageOnPort,
@@ -59,21 +59,10 @@ const {
 
 export const MTS_SUPPORTED_NODE_VERSION = 16
 export const LOADER_SUPPORTED_NODE_VERSION = 20
-export const STRIP_TYPES_DEFAULT_NODE_VERSION = 23
-export const STRIP_TYPES_SUPPORTED_NODE_VERSION = 22
+export const TYPESCRIPT_DEFAULT_NODE_VERSION = 23.6
 
+const NODE_TYPESCRIPT = process.features.typescript
 const NODE_VERSION = Number.parseFloat(process.versions.node)
-const STRIP_TYPES_FLAG = '--experimental-strip-types'
-const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
-const IS_TYPE_STRIPPING_ENABLED =
-  (NODE_VERSION >= STRIP_TYPES_DEFAULT_NODE_VERSION &&
-    !(
-      NODE_OPTIONS?.includes(NO_STRIP_TYPES_FLAG) ||
-      process.argv.includes(NO_STRIP_TYPES_FLAG)
-    )) ||
-  (NODE_VERSION >= STRIP_TYPES_SUPPORTED_NODE_VERSION &&
-    (NODE_OPTIONS?.includes(STRIP_TYPES_FLAG) ||
-      process.argv.includes(STRIP_TYPES_FLAG)))
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
@@ -222,7 +211,7 @@ const setupTsRunner = (
     }
 
     if (tsRunner == null) {
-      if (IS_TYPE_STRIPPING_ENABLED) {
+      if (NODE_TYPESCRIPT) {
         tsRunner = TsRunner.Node
       } else if (isPkgAvailable(TsRunner.TsNode)) {
         tsRunner = TsRunner.TsNode
@@ -231,15 +220,17 @@ const setupTsRunner = (
 
     switch (tsRunner) {
       case TsRunner.Node: {
-        if (NODE_VERSION < STRIP_TYPES_SUPPORTED_NODE_VERSION) {
+        if (!NODE_TYPESCRIPT) {
           throw new Error(
             'type stripping is not supported in this node version',
           )
         }
-        execArgv =
-          NODE_VERSION >= STRIP_TYPES_DEFAULT_NODE_VERSION
-            ? execArgv.filter(arg => arg !== NO_STRIP_TYPES_FLAG)
-            : [STRIP_TYPES_FLAG, ...execArgv]
+        execArgv = [
+          '--experimental-transform-types',
+          ...(NODE_VERSION >= TYPESCRIPT_DEFAULT_NODE_VERSION
+            ? execArgv.filter(arg => arg !== '--no-experimental-strip-types')
+            : execArgv),
+        ]
         break
       }
       case TsRunner.TsNode: {
