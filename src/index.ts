@@ -61,7 +61,12 @@ const {
 
 export const MTS_SUPPORTED_NODE_VERSION = 16
 export const LOADER_SUPPORTED_NODE_VERSION = 20
+
+// https://nodejs.org/docs/latest/api/typescript.html
+export const TYPESCRIPT_TRANSFORM_NODE_VERSION = 22.7
 export const TYPESCRIPT_DEFAULT_NODE_VERSION = 23.6
+
+const TRANSFORM_TYPES_FLAG = '--experimental-transform-types'
 
 const NODE_TYPESCRIPT = process.features.typescript
 const NODE_VERSION = Number.parseFloat(process.versions.node)
@@ -230,11 +235,16 @@ const setupTsRunner = (
           )
         }
         execArgv = [
-          '--experimental-transform-types',
           ...(NODE_VERSION >= TYPESCRIPT_DEFAULT_NODE_VERSION
             ? execArgv.filter(arg => arg !== '--no-experimental-strip-types')
             : execArgv),
         ]
+        if (
+          NODE_VERSION >= TYPESCRIPT_TRANSFORM_NODE_VERSION &&
+          !execArgv.includes(TRANSFORM_TYPES_FLAG)
+        ) {
+          execArgv.unshift(TRANSFORM_TYPES_FLAG)
+        }
         break
       }
       case TsRunner.TsNode: {
