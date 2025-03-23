@@ -229,7 +229,8 @@ const setupTsRunner = (
         break
       }
       case TsRunner.Node: {
-        if (!NODE_TYPESCRIPT) {
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- false positive for Node < 22.10
+        if (NODE_TYPESCRIPT == null) {
           throw new Error(
             'type stripping is not supported in this node version',
           )
@@ -667,7 +668,7 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
           msg = { id, error, properties: extractProperties(error) }
         }
         workerPort.off('message', handleAbortMessage)
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- false positive for `handleAbortMessage`
         if (isAborted) {
           return
         }

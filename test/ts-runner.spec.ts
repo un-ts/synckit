@@ -137,7 +137,8 @@ test(TsRunner.TSX, async () => {
 test(TsRunner.Node, async () => {
   const { createSyncFn } = await import('synckit')
 
-  if (!process.features.typescript) {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- false positive for Node < 22.10
+  if (process.features.typescript == null) {
     // eslint-disable-next-line jest/no-conditional-expect
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
