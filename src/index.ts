@@ -52,8 +52,8 @@ export const TsRunner = {
 export type TsRunner = ValueOf<typeof TsRunner>
 
 const {
-  NODE_OPTIONS,
-  SYNCKIT_EXEC_ARGV,
+  NODE_OPTIONS: NODE_OPTIONS_ = '',
+  SYNCKIT_EXEC_ARGV = '',
   SYNCKIT_GLOBAL_SHIMS,
   SYNCKIT_TIMEOUT,
   SYNCKIT_TS_RUNNER,
@@ -62,19 +62,30 @@ const {
 export const MTS_SUPPORTED_NODE_VERSION = 16
 export const LOADER_SUPPORTED_NODE_VERSION = 20
 
-// https://nodejs.org/docs/latest/api/typescript.html
-export const TYPESCRIPT_TRANSFORM_NODE_VERSION = 22.7
-export const TYPESCRIPT_DEFAULT_NODE_VERSION = 23.6
+// https://nodejs.org/docs/latest-v22.x/api/typescript.html#type-stripping
+export const STRIP_TYPES_NODE_VERSION = 22.6
 
+// https://nodejs.org/docs/latest-v23.x/api/typescript.html#modules-typescript
+export const TRANSFORM_TYPES_NODE_VERSION = 22.7
+
+// https://nodejs.org/docs/latest-v23.x/api/typescript.html#type-stripping
+export const DEFAULT_TYPES_NODE_VERSION = 23.6
+
+const STRIP_TYPES_FLAG = '--experimental-strip-types'
 const TRANSFORM_TYPES_FLAG = '--experimental-transform-types'
+const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
 
-const NODE_TYPESCRIPT = process.features.typescript
-const NODE_VERSION = Number.parseFloat(process.versions.node)
+const NODE_OPTIONS = NODE_OPTIONS_.split(/\s+/)
+
+const NO_STRIP_TYPES =
+  NODE_OPTIONS.includes(NO_STRIP_TYPES_FLAG) ||
+  process.argv.includes(NO_STRIP_TYPES_FLAG)
+
+export const NODE_VERSION = Number.parseFloat(process.versions.node)
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
-/* istanbul ignore next */
-export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARGV?.split(',') || []
+export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARGV.split(',')
 
 export const DEFAULT_TS_RUNNER = SYNCKIT_TS_RUNNER as TsRunner | undefined
 
@@ -217,7 +228,11 @@ const setupTsRunner = (
     if (tsRunner == null) {
       if (process.versions.bun) {
         tsRunner = TsRunner.Bun
-      } else if (NODE_TYPESCRIPT) {
+      } else if (
+        !NO_STRIP_TYPES &&
+        !execArgv.includes(NO_STRIP_TYPES_FLAG) &&
+        NODE_VERSION >= STRIP_TYPES_NODE_VERSION
+      ) {
         tsRunner = TsRunner.Node
       } else if (isPkgAvailable(TsRunner.TsNode)) {
         tsRunner = TsRunner.TsNode
@@ -229,23 +244,32 @@ const setupTsRunner = (
         break
       }
       case TsRunner.Node: {
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- false positive for Node < 22.10
-        if (NODE_TYPESCRIPT == null) {
+        if (NODE_VERSION < STRIP_TYPES_NODE_VERSION) {
           throw new Error(
             'type stripping is not supported in this node version',
           )
         }
-        execArgv = [
-          ...(NODE_VERSION >= TYPESCRIPT_DEFAULT_NODE_VERSION
-            ? execArgv.filter(arg => arg !== '--no-experimental-strip-types')
-            : execArgv),
-        ]
+
+        if (NO_STRIP_TYPES || execArgv.includes(NO_STRIP_TYPES_FLAG)) {
+          throw new Error('type stripping is disabled explicitly')
+        }
+
+        if (NODE_VERSION >= DEFAULT_TYPES_NODE_VERSION) {
+          break
+        }
+
         if (
-          NODE_VERSION >= TYPESCRIPT_TRANSFORM_NODE_VERSION &&
+          NODE_VERSION >= TRANSFORM_TYPES_NODE_VERSION &&
           !execArgv.includes(TRANSFORM_TYPES_FLAG)
         ) {
-          execArgv.unshift(TRANSFORM_TYPES_FLAG)
+          execArgv = [TRANSFORM_TYPES_FLAG, ...execArgv]
+        } else if (
+          NODE_VERSION >= STRIP_TYPES_NODE_VERSION &&
+          !execArgv.includes(STRIP_TYPES_FLAG)
+        ) {
+          execArgv = [STRIP_TYPES_FLAG, ...execArgv]
         }
+
         break
       }
       case TsRunner.TsNode: {
@@ -297,7 +321,6 @@ const setupTsRunner = (
 
   /* istanbul ignore if -- https://github.com/facebook/jest/issues/5274 */
   if (process.versions.pnp) {
-    const nodeOptions = NODE_OPTIONS?.split(/\s+/)
     let pnpApiPath: string | undefined
     try {
       /** @see https://github.com/facebook/jest/issues/9543 */
@@ -305,10 +328,10 @@ const setupTsRunner = (
     } catch {}
     if (
       pnpApiPath &&
-      !nodeOptions?.some(
+      !NODE_OPTIONS.some(
         (option, index) =>
           ['-r', '--require'].includes(option) &&
-          pnpApiPath === cjsRequire.resolve(nodeOptions[index + 1]),
+          pnpApiPath === cjsRequire.resolve(NODE_OPTIONS[index + 1]),
       ) &&
       !execArgv.includes(pnpApiPath)
     ) {

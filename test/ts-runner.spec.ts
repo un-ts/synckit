@@ -9,7 +9,9 @@ import type { AsyncWorkerFn } from './types.js'
 
 import {
   MTS_SUPPORTED_NODE_VERSION,
-  TYPESCRIPT_DEFAULT_NODE_VERSION,
+  NODE_VERSION,
+  STRIP_TYPES_NODE_VERSION,
+  DEFAULT_TYPES_NODE_VERSION,
   TsRunner,
 } from 'synckit'
 
@@ -137,8 +139,7 @@ test(TsRunner.TSX, async () => {
 test(TsRunner.Node, async () => {
   const { createSyncFn } = await import('synckit')
 
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- false positive for Node < 22.10
-  if (process.features.typescript == null) {
+  if (NODE_VERSION < STRIP_TYPES_NODE_VERSION) {
     // eslint-disable-next-line jest/no-conditional-expect
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
@@ -150,9 +151,7 @@ test(TsRunner.Node, async () => {
 
   let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
     tsRunner:
-      nodeVersion >= TYPESCRIPT_DEFAULT_NODE_VERSION
-        ? undefined
-        : TsRunner.Node,
+      nodeVersion >= DEFAULT_TYPES_NODE_VERSION ? undefined : TsRunner.Node,
   })
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
@@ -164,9 +163,7 @@ test(TsRunner.Node, async () => {
 
   syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
     tsRunner:
-      nodeVersion >= TYPESCRIPT_DEFAULT_NODE_VERSION
-        ? undefined
-        : TsRunner.Node,
+      nodeVersion >= DEFAULT_TYPES_NODE_VERSION ? undefined : TsRunner.Node,
   })
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
