@@ -161,9 +161,29 @@ Please view [`tsx`][] for its document
 
 ## Benchmark
 
-It is about 50x faster than [`sync-threads`](https://github.com/lambci/sync-threads) but 10x slower than native for reading the file content itself 1000 times during runtime, and 40x faster than `sync-threads` but 10x slower than native for total time on my personal MacBook Pro with 64G M1 Max.
+The following are the benchmark results of `synckit` against other libraries with Node.js v20.19.0 on my personal MacBook Pro with 64G M1 Max:
 
-And it's almost 5x faster than [`deasync`](https://github.com/abbr/deasync) but requires no native bindings or `node-gyp`.
+```sh
+# cjs
+┌───────────┬────────────┬──────────────┬───────────────────┬─────────────┬────────────────┬───────────────────┬────────────────────────┬───────────┬─────────────────┐
+│ (index)   │ synckit    │ sync-threads │ perf sync-threads │ deasync     │ perf deasync   │ make-synchronized │ perf make-synchronized │ native    │ perf native     │
+├───────────┼────────────┼──────────────┼───────────────────┼─────────────┼────────────────┼───────────────────┼────────────────────────┼───────────┼─────────────────┤
+│ loadTime  │ '17.26ms'  │ '1.49ms'     │ '11.57x slower'   │ '146.55ms'  │ '8.49x faster' │ '1025.77ms'       │ '59.42x faster'        │ '0.29ms'  │ '59.71x slower' │
+│ runTime   │ '143.12ms' │ '3689.15ms'  │ '25.78x faster'   │ '1221.11ms' │ '8.53x faster' │ '2842.50ms'       │ '19.86x faster'        │ '12.64ms' │ '11.33x slower' │
+│ totalTime │ '160.38ms' │ '3690.64ms'  │ '23.01x faster'   │ '1367.66ms' │ '8.53x faster' │ '3868.27ms'       │ '24.12x faster'        │ '12.93ms' │ '12.41x slower' │
+└───────────┴────────────┴──────────────┴───────────────────┴─────────────┴────────────────┴───────────────────┴────────────────────────┴───────────┴─────────────────┘
+```
+
+```sh
+# esm
+┌───────────┬────────────┬──────────────┬───────────────────┬─────────────┬────────────────┬───────────────────┬────────────────────────┬───────────┬─────────────────┐
+│ (index)   │ synckit    │ sync-threads │ perf sync-threads │ deasync     │ perf deasync   │ make-synchronized │ perf make-synchronized │ native    │ perf native     │
+├───────────┼────────────┼──────────────┼───────────────────┼─────────────┼────────────────┼───────────────────┼────────────────────────┼───────────┼─────────────────┤
+│ loadTime  │ '23.88ms'  │ '2.03ms'     │ '11.75x slower'   │ '70.95ms'   │ '2.97x faster' │ '400.24ms'        │ '16.76x faster'        │ '0.44ms'  │ '54.70x slower' │
+│ runTime   │ '139.56ms' │ '3570.12ms'  │ '25.58x faster'   │ '1150.99ms' │ '8.25x faster' │ '3484.04ms'       │ '24.96x faster'        │ '12.98ms' │ '10.75x slower' │
+│ totalTime │ '163.44ms' │ '3572.15ms'  │ '21.86x faster'   │ '1221.93ms' │ '7.48x faster' │ '3884.28ms'       │ '23.77x faster'        │ '13.42ms' │ '12.18x slower' │
+└───────────┴────────────┴──────────────┴───────────────────┴─────────────┴────────────────┴───────────────────┴────────────────────────┴───────────┴─────────────────┘
+```
 
 See [benchmark.cjs](./benchmarks/benchmark.cjs.txt) and [benchmark.esm](./benchmarks/benchmark.esm.txt) for more details.
 
