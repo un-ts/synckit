@@ -52,24 +52,70 @@ export const TsRunner = {
 export type TsRunner = ValueOf<typeof TsRunner>
 
 const {
-  NODE_OPTIONS,
-  SYNCKIT_EXEC_ARGV,
+  NODE_OPTIONS: NODE_OPTIONS_ = '',
+  SYNCKIT_EXEC_ARGV = '',
   SYNCKIT_GLOBAL_SHIMS,
   SYNCKIT_TIMEOUT,
   SYNCKIT_TS_RUNNER,
 } = process.env
 
-export const MTS_SUPPORTED_NODE_VERSION = 16
-export const LOADER_SUPPORTED_NODE_VERSION = 20
-export const TYPESCRIPT_DEFAULT_NODE_VERSION = 23.6
+export const MTS_SUPPORTED_NODE_VERSION = '16'
+export const LOADER_SUPPORTED_NODE_VERSION = '20'
 
-const NODE_TYPESCRIPT = process.features.typescript
-const NODE_VERSION = Number.parseFloat(process.versions.node)
+// https://nodejs.org/docs/latest-v22.x/api/typescript.html#type-stripping
+export const STRIP_TYPES_NODE_VERSION = '22.6'
+
+// https://nodejs.org/docs/latest-v23.x/api/typescript.html#modules-typescript
+export const TRANSFORM_TYPES_NODE_VERSION = '22.7'
+
+// https://nodejs.org/docs/latest-v22.x/api/process.html#processfeaturestypescript
+export const FEATURE_TYPESCRIPT_NODE_VERSION = '22.10'
+
+// https://nodejs.org/docs/latest-v23.x/api/typescript.html#type-stripping
+export const DEFAULT_TYPES_NODE_VERSION = '23.6'
+
+export const STRIP_TYPES_FLAG = '--experimental-strip-types'
+export const TRANSFORM_TYPES_FLAG = '--experimental-transform-types'
+export const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
+
+const NODE_OPTIONS = NODE_OPTIONS_.split(/\s+/)
+
+const hasFlag = (flag: string) =>
+  NODE_OPTIONS.includes(flag) || process.argv.includes(flag)
+
+const parseVersion = (version: string) =>
+  version.split('.').map(Number.parseFloat)
+
+// A naive implementation of semver comparison
+export const compareVersion = (version1: string, version2: string) => {
+  const versions1 = parseVersion(version1)
+  const versions2 = parseVersion(version2)
+  const length = Math.max(versions1.length, versions2.length)
+  for (let i = 0; i < length; i++) {
+    const v1 = versions1[i] || 0
+    const v2 = versions2[i] || 0
+    if (v1 > v2) {
+      return 1
+    }
+    if (v1 < v2) {
+      return -1
+    }
+  }
+  return 0
+}
+
+export const NODE_VERSION = process.versions.node
+
+const NO_STRIP_TYPES = // >=
+  compareVersion(NODE_VERSION, FEATURE_TYPESCRIPT_NODE_VERSION) >= 0
+    ? process.features.typescript === false
+    : hasFlag(NO_STRIP_TYPES_FLAG) &&
+      !hasFlag(STRIP_TYPES_FLAG) &&
+      !hasFlag(TRANSFORM_TYPES_FLAG)
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
-/* istanbul ignore next */
-export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARGV?.split(',') || []
+export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARGV.split(',')
 
 export const DEFAULT_TS_RUNNER = SYNCKIT_TS_RUNNER as TsRunner | undefined
 
@@ -209,10 +255,26 @@ const setupTsRunner = (
       }
     }
 
+    const stripTypesIndex = execArgv.indexOf(STRIP_TYPES_FLAG)
+    const transformTypesIndex = execArgv.indexOf(TRANSFORM_TYPES_FLAG)
+    const noStripTypesIndex = execArgv.indexOf(NO_STRIP_TYPES_FLAG)
+
+    const execArgvNoStripTypes =
+      noStripTypesIndex > stripTypesIndex ||
+      noStripTypesIndex > transformTypesIndex
+
+    const noStripTypes =
+      execArgvNoStripTypes ||
+      (stripTypesIndex === -1 && transformTypesIndex === -1 && NO_STRIP_TYPES)
+
     if (tsRunner == null) {
       if (process.versions.bun) {
         tsRunner = TsRunner.Bun
-      } else if (NODE_TYPESCRIPT) {
+      } else if (
+        !noStripTypes &&
+        // >=
+        compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) >= 0
+      ) {
         tsRunner = TsRunner.Node
       } else if (isPkgAvailable(TsRunner.TsNode)) {
         tsRunner = TsRunner.TsNode
@@ -224,17 +286,36 @@ const setupTsRunner = (
         break
       }
       case TsRunner.Node: {
-        if (!NODE_TYPESCRIPT) {
+        // <
+        if (compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) < 0) {
           throw new Error(
             'type stripping is not supported in this node version',
           )
         }
-        execArgv = [
-          '--experimental-transform-types',
-          ...(NODE_VERSION >= TYPESCRIPT_DEFAULT_NODE_VERSION
-            ? execArgv.filter(arg => arg !== '--no-experimental-strip-types')
-            : execArgv),
-        ]
+
+        if (noStripTypes) {
+          throw new Error('type stripping is disabled explicitly')
+        }
+
+        // >=
+        if (compareVersion(NODE_VERSION, DEFAULT_TYPES_NODE_VERSION) >= 0) {
+          break
+        }
+
+        if (
+          // >=
+          compareVersion(NODE_VERSION, TRANSFORM_TYPES_NODE_VERSION) >= 0 &&
+          !execArgv.includes(TRANSFORM_TYPES_FLAG)
+        ) {
+          execArgv = [TRANSFORM_TYPES_FLAG, ...execArgv]
+        } else if (
+          // >=
+          compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) >= 0 &&
+          !execArgv.includes(STRIP_TYPES_FLAG)
+        ) {
+          execArgv = [STRIP_TYPES_FLAG, ...execArgv]
+        }
+
         break
       }
       case TsRunner.TsNode: {
@@ -286,7 +367,6 @@ const setupTsRunner = (
 
   /* istanbul ignore if -- https://github.com/facebook/jest/issues/5274 */
   if (process.versions.pnp) {
-    const nodeOptions = NODE_OPTIONS?.split(/\s+/)
     let pnpApiPath: string | undefined
     try {
       /** @see https://github.com/facebook/jest/issues/9543 */
@@ -294,10 +374,10 @@ const setupTsRunner = (
     } catch {}
     if (
       pnpApiPath &&
-      !nodeOptions?.some(
+      !NODE_OPTIONS.some(
         (option, index) =>
           ['-r', '--require'].includes(option) &&
-          pnpApiPath === cjsRequire.resolve(nodeOptions[index + 1]),
+          pnpApiPath === cjsRequire.resolve(NODE_OPTIONS[index + 1]),
       ) &&
       !execArgv.includes(pnpApiPath)
     ) {
@@ -309,7 +389,8 @@ const setupTsRunner = (
         // https://github.com/un-ts/synckit/issues/123
         resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).toString()
 
-        if (NODE_VERSION < LOADER_SUPPORTED_NODE_VERSION) {
+        // <
+        if (compareVersion(NODE_VERSION, LOADER_SUPPORTED_NODE_VERSION) < 0) {
           execArgv = [
             '--experimental-loader',
             resolvedPnpLoaderPath,
@@ -482,7 +563,9 @@ function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
 
   if (/\.[cm]ts$/.test(finalWorkerPath)) {
     const isTsxSupported =
-      !tsUseEsm || NODE_VERSION >= MTS_SUPPORTED_NODE_VERSION
+      !tsUseEsm ||
+      // >=
+      compareVersion(NODE_VERSION, MTS_SUPPORTED_NODE_VERSION) >= 0
     /* istanbul ignore if */
     if (!finalTsRunner) {
       throw new Error('No ts runner specified, ts worker path is not supported')
@@ -632,7 +715,11 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
 
   const { workerPort, sharedBuffer, pnpLoaderPath } = workerData as WorkerData
 
-  if (pnpLoaderPath && NODE_VERSION >= LOADER_SUPPORTED_NODE_VERSION) {
+  if (
+    pnpLoaderPath &&
+    // >=
+    compareVersion(NODE_VERSION, LOADER_SUPPORTED_NODE_VERSION) >= 0
+  ) {
     module.register(pnpLoaderPath)
   }
 
@@ -657,7 +744,7 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
           msg = { id, error, properties: extractProperties(error) }
         }
         workerPort.off('message', handleAbortMessage)
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- false positive for `handleAbortMessage`
         if (isAborted) {
           return
         }

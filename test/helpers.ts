@@ -4,16 +4,20 @@ import WorkerThreads from 'node:worker_threads'
 
 import { jest } from '@jest/globals'
 
-import { MTS_SUPPORTED_NODE_VERSION } from 'synckit'
+import {
+  compareVersion,
+  MTS_SUPPORTED_NODE_VERSION,
+  NODE_VERSION,
+} from 'synckit'
 
 export const _dirname = path.dirname(fileURLToPath(import.meta.url))
 
-export const nodeVersion = Number.parseFloat(process.versions.node)
-
 export const tsUseEsmSupported =
   // https://github.com/privatenumber/tsx/issues/354
-  // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-  nodeVersion >= MTS_SUPPORTED_NODE_VERSION && nodeVersion <= 18.18
+  // >=
+  compareVersion(NODE_VERSION, MTS_SUPPORTED_NODE_VERSION) >= 0 &&
+  // <=
+  compareVersion(NODE_VERSION, '18.18') <= 0
 
 export const testIf = (condition: boolean) => (condition ? it : it.skip)
 
