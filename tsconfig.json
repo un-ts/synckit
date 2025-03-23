@@ -1,8 +1,10 @@
 {
-  "extends": "@1stg/tsconfig/lib",
+  "extends": "@1stg/tsconfig/nodenext",
   "compilerOptions": {
+    "rootDir": ".",
     "paths": {
-      "synckit": ["./src"]
-    }
+      "synckit": ["./src/index.ts"]
+    },
+    "target": "ES2015"
   }
 }
