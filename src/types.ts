@@ -31,8 +31,15 @@ export interface DataMessage<T> {
   properties?: unknown
 }
 
+export interface StdioChunk {
+  type: 'stderr' | 'stdout'
+  chunk: Uint8Array | string
+  encoding: BufferEncoding
+}
+
 export interface WorkerToMainMessage<T> extends DataMessage<T> {
   id: number
+  stdio: StdioChunk[]
 }
 
 export interface GlobalShim {
