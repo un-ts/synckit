@@ -22,7 +22,7 @@ Perform async work synchronously in Node.js using `worker_threads` with first-cl
   - [Options](#options)
   - [Envs](#envs)
   - [TypeScript](#typescript)
-    - [`node` (Default, Node 23+)](#node-default-node-23)
+    - [`node` (Default, Node 23.6+)](#node-default-node-236)
     - [`ts-node` (Default)](#ts-node-default)
     - [`esbuild-register`](#esbuild-register)
     - [`esbuild-runner`](#esbuild-runner)
