@@ -27,15 +27,27 @@ const RAW_RUNTIME_STATE =
       [null, {\
         "packageLocation": "./",\
         "packageDependencies": [\
+          ["synckit", "link:../../..::locator=yarn-pnp%40workspace%3A."]\
         ],\
         "linkType": "SOFT"\
+      }]\
+    ]],\
+    ["synckit", [\
+      ["link:../../..::locator=yarn-pnp%40workspace%3A.", {\
+        "packageLocation": "../../../",\
+        "packageDependencies": [\
+          ["synckit", "link:../../..::locator=yarn-pnp%40workspace%3A."]\
+        ],\
+        "linkType": "SOFT",\
+        "discardFromLookup": true\
       }]\
     ]],\
     ["yarn-pnp", [\
       ["workspace:.", {\
         "packageLocation": "./",\
         "packageDependencies": [\
-          ["yarn-pnp", "workspace:."]\
+          ["yarn-pnp", "workspace:."],\
+          ["synckit", "link:../../..::locator=yarn-pnp%40workspace%3A."]\
         ],\
         "linkType": "SOFT"\
       }]\

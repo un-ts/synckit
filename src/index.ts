@@ -35,6 +35,8 @@ export * from './types.js'
 export const TsRunner = {
   // https://nodejs.org/docs/latest/api/typescript.html#type-stripping
   Node: 'node',
+  // https://bun.sh/docs/typescript
+  Bun: 'bun',
   // https://github.com/TypeStrong/ts-node
   TsNode: 'ts-node',
   // https://github.com/egoist/esbuild-register
@@ -208,7 +210,9 @@ const setupTsRunner = (
     }
 
     if (tsRunner == null) {
-      if (NODE_TYPESCRIPT) {
+      if (process.versions.bun) {
+        tsRunner = TsRunner.Bun
+      } else if (NODE_TYPESCRIPT) {
         tsRunner = TsRunner.Node
       } else if (isPkgAvailable(TsRunner.TsNode)) {
         tsRunner = TsRunner.TsNode
@@ -216,6 +220,9 @@ const setupTsRunner = (
     }
 
     switch (tsRunner) {
+      case TsRunner.Bun: {
+        break
+      }
       case TsRunner.Node: {
         if (!NODE_TYPESCRIPT) {
           throw new Error(
@@ -408,6 +415,10 @@ export const generateGlobals = (
   globalShims: GlobalShim[],
   type: 'import' | 'require' = 'import',
 ) => {
+  if (globalShims.length === 0) {
+    return ''
+  }
+
   globalsCache ??= new Map()
 
   const cached = globalsCache.get(workerPath)

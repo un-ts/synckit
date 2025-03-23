@@ -1,0 +1,12 @@
+{
+  "name": "bun-test",
+  "type": "module",
+  "private": true,
+  "module": "index.ts",
+  "peerDependencies": {
+    "typescript": "^5.8.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.5"
+  }
+}
