@@ -68,6 +68,9 @@ export const STRIP_TYPES_NODE_VERSION = '22.6'
 // https://nodejs.org/docs/latest-v23.x/api/typescript.html#modules-typescript
 export const TRANSFORM_TYPES_NODE_VERSION = '22.7'
 
+// https://nodejs.org/docs/latest-v22.x/api/process.html#processfeaturestypescript
+export const FEATURE_TYPESCRIPT_NODE_VERSION = '22.10'
+
 // https://nodejs.org/docs/latest-v23.x/api/typescript.html#type-stripping
 export const DEFAULT_TYPES_NODE_VERSION = '23.6'
 
@@ -79,11 +82,6 @@ const NODE_OPTIONS = NODE_OPTIONS_.split(/\s+/)
 
 const hasFlag = (flag: string) =>
   NODE_OPTIONS.includes(flag) || process.argv.includes(flag)
-
-const NO_STRIP_TYPES =
-  hasFlag(NO_STRIP_TYPES_FLAG) &&
-  !hasFlag(STRIP_TYPES_FLAG) &&
-  !hasFlag(TRANSFORM_TYPES_FLAG)
 
 const parseVersion = (version: string) =>
   version.split('.').map(Number.parseFloat)
@@ -107,6 +105,13 @@ export const compareVersion = (version1: string, version2: string) => {
 }
 
 export const NODE_VERSION = process.versions.node
+
+const NO_STRIP_TYPES = // >=
+  compareVersion(NODE_VERSION, FEATURE_TYPESCRIPT_NODE_VERSION) >= 0
+    ? process.features.typescript === false
+    : hasFlag(NO_STRIP_TYPES_FLAG) &&
+      !hasFlag(STRIP_TYPES_FLAG) &&
+      !hasFlag(TRANSFORM_TYPES_FLAG)
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
@@ -250,10 +255,17 @@ const setupTsRunner = (
       }
     }
 
+    const stripTypesIndex = execArgv.indexOf(STRIP_TYPES_FLAG)
+    const transformTypesIndex = execArgv.indexOf(TRANSFORM_TYPES_FLAG)
+    const noStripTypesIndex = execArgv.indexOf(NO_STRIP_TYPES_FLAG)
+
+    const execArgvNoStripTypes =
+      noStripTypesIndex > stripTypesIndex ||
+      noStripTypesIndex > transformTypesIndex
+
     const noStripTypes =
-      !execArgv.includes(STRIP_TYPES_FLAG) &&
-      !execArgv.includes(TRANSFORM_TYPES_FLAG) &&
-      (NO_STRIP_TYPES || execArgv.includes(NO_STRIP_TYPES_FLAG))
+      execArgvNoStripTypes ||
+      (stripTypesIndex === -1 && transformTypesIndex === -1 && NO_STRIP_TYPES)
 
     if (tsRunner == null) {
       if (process.versions.bun) {
