@@ -6,13 +6,19 @@ const RUN_TIMES = +(process.env.RUN_TIMES || 1000)
 
 /**
  * @param {string} name
- * @typedef {{ loadTime:number,runTime:number, totalTime:number }} PerfResult
+ * @typedef {{ loadTime: number, runTime: number, totalTime: number } | undefined} PerfResult
  * @returns {PerfResult} Perf result
  */
 const perfCase = name => {
   const loadStartTime = performance.now()
 
-  const syncFn = require(`./${name}.cjs`)
+  let syncFn
+
+  try {
+    syncFn = require(`./${name}.cjs`)
+  } catch {
+    return
+  }
 
   const loadTime = performance.now() - loadStartTime
 
@@ -49,23 +55,27 @@ class Benchmark {
     const _baseKey = keys[0]
     const baseKey = kebabCase(_baseKey)
 
-    const perfTypes = /** @type {Array<keyof PerfResult>} */ ([
+    const perfTypes = /** @type {const} */ ([
       'loadTime',
       'runTime',
       'totalTime',
     ])
 
     for (const perfType of perfTypes) {
-      const basePerf = perfResults[_baseKey][perfType]
+      const basePerf = perfResults[_baseKey]?.[perfType]
       this[perfType] = keys.reduce((acc, key) => {
         const perfResult = perfResults[key]
+        const prefTime = perfResult?.[perfType]
         key = kebabCase(key)
         return Object.assign(acc, {
-          [key]: perfResult[perfType].toFixed(2) + 'ms',
+          [key]: prefTime == null ? 'N/A' : prefTime.toFixed(2) + 'ms',
           ...(key === baseKey
             ? null
             : {
-                [`perf ${key}`]: this.perf(basePerf, perfResult[perfType]),
+                [`perf ${key}`]:
+                  basePerf == null || prefTime == null
+                    ? 'N/A'
+                    : this.perf(basePerf, prefTime),
               }),
         })
       }, {})

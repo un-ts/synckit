@@ -9,17 +9,23 @@ const __filename = fileURLToPath(import.meta.url)
 
 /**
  * @param {string} name
- * @typedef {{ loadTime:number,runTime:number, totalTime:number }} PerfResult
+ * @typedef {{ loadTime: number, runTime: number, totalTime: number } | undefined} PerfResult
  * @returns {Promise<PerfResult>} Perf result
  */
 const perfCase = async name => {
   const loadStartTime = performance.now()
 
-  const { default: syncFn } = await import(
-    `./${name}.${
-      name === 'synckit' || name === 'make-synchronized' ? 'js' : 'cjs'
-    }`
-  )
+  let syncFn
+
+  try {
+    ;({ default: syncFn } = await import(
+      `./${name}.${
+        name === 'synckit' || name === 'make-synchronized' ? 'js' : 'cjs'
+      }`
+    ))
+  } catch {
+    return
+  }
 
   const loadTime = performance.now() - loadStartTime
 
@@ -56,23 +62,27 @@ class Benchmark {
     const _baseKey = keys[0]
     const baseKey = kebabCase(_baseKey)
 
-    const perfTypes = /** @type {Array<keyof PerfResult>} */ ([
+    const perfTypes = /** @type {const} */ ([
       'loadTime',
       'runTime',
       'totalTime',
     ])
 
     for (const perfType of perfTypes) {
-      const basePerf = perfResults[_baseKey][perfType]
+      const basePerf = perfResults[_baseKey]?.[perfType]
       this[perfType] = keys.reduce((acc, key) => {
         const perfResult = perfResults[key]
+        const perfTime = perfResult?.[perfType]
         key = kebabCase(key)
         return Object.assign(acc, {
-          [key]: perfResult[perfType].toFixed(2) + 'ms',
+          [key]: perfTime == null ? 'N/A' : perfTime.toFixed(2) + 'ms',
           ...(key === baseKey
             ? null
             : {
-                [`perf ${key}`]: this.perf(basePerf, perfResult[perfType]),
+                [`perf ${key}`]:
+                  basePerf == null || perfTime == null
+                    ? 'N/A'
+                    : this.perf(basePerf, perfTime),
               }),
         })
       }, {})
