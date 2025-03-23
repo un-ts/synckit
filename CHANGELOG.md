@@ -1,5 +1,23 @@
 # synckit
 
+## 0.10.2
+
+### Minor Changes
+
+- [#206](https://github.com/un-ts/synckit/pull/206) [`011e9c0`](https://github.com/un-ts/synckit/commit/011e9c0e3fa12493068a009f6359904aeb3dced8) Thanks [@JounQin](https://github.com/JounQin)! - refactor: simplify types, any function should be accepted
+
+- [#210](https://github.com/un-ts/synckit/pull/210) [`888302c`](https://github.com/un-ts/synckit/commit/888302c6f30d83c76a0f924e07e7867695a6ca3e) Thanks [@JounQin](https://github.com/JounQin)! - feat: add new `bun` ts runner
+
+- [#211](https://github.com/un-ts/synckit/pull/211) [`19f9a78`](https://github.com/un-ts/synckit/commit/19f9a78fcc3596eceb123b6b65bd3c32f01d0d34) Thanks [@JounQin](https://github.com/JounQin)! - feat: support `node` runner by default for Node 22.6+
+
+- [#213](https://github.com/un-ts/synckit/pull/213) [`0d168d7`](https://github.com/un-ts/synckit/commit/0d168d729d3f67c64b655718c24752e580559bec) Thanks [@JounQin](https://github.com/JounQin)! - feat: support `stdio` overriding in worker, what means `stdio` will be streamed in correct order now
+
+- [#208](https://github.com/un-ts/synckit/pull/208) [`d3da4c3`](https://github.com/un-ts/synckit/commit/d3da4c3542483022248ff191d43d4f1de3136a86) Thanks [@JounQin](https://github.com/JounQin)! - feat: support file url worker path
+
+### Patch Changes
+
+- [#209](https://github.com/un-ts/synckit/pull/209) [`61f2ff2`](https://github.com/un-ts/synckit/commit/61f2ff29186a12e624697fc5898cdee792f9361b) Thanks [@JounQin](https://github.com/JounQin)! - fix: incorrect commonjs types
+
 ## 0.10.1
 
 ### Patch Changes
