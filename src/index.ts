@@ -408,6 +408,10 @@ export const generateGlobals = (
   globalShims: GlobalShim[],
   type: 'import' | 'require' = 'import',
 ) => {
+  if (globalShims.length === 0) {
+    return ''
+  }
+
   globalsCache ??= new Map()
 
   const cached = globalsCache.get(workerPath)
