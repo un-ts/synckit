@@ -14,14 +14,14 @@ import {
   workerData,
 } from 'node:worker_threads'
 
-import { findUp, isPkgAvailable, tryExtensions } from '@pkgr/core'
+import { cjsRequire, findUp, isPkgAvailable, tryExtensions } from '@pkgr/core'
 
 import type {
-  AnyAsyncFn,
   AnyFn,
   GlobalShim,
   MainToWorkerCommandMessage,
   MainToWorkerMessage,
+  PackageJson,
   Syncify,
   ValueOf,
   WorkerData,
@@ -112,7 +112,7 @@ export function extractProperties<T>(object?: T) {
   }
 }
 
-export function createSyncFn<T extends AnyAsyncFn<R>, R = unknown>(
+export function createSyncFn<T extends AnyFn>(
   workerPath: string,
   timeoutOrOptions?: SynckitOptions | number,
 ): Syncify<T> {
@@ -121,14 +121,14 @@ export function createSyncFn<T extends AnyAsyncFn<R>, R = unknown>(
   const cachedSyncFn = syncFnCache.get(workerPath)
 
   if (cachedSyncFn) {
-    return cachedSyncFn as Syncify<T>
+    return cachedSyncFn
   }
 
   if (!path.isAbsolute(workerPath)) {
     throw new Error('`workerPath` must be absolute')
   }
 
-  const syncFn = startWorkerThread<R, T>(
+  const syncFn = startWorkerThread<T>(
     workerPath,
     /* istanbul ignore next */ typeof timeoutOrOptions === 'number'
       ? { timeout: timeoutOrOptions }
@@ -137,13 +137,8 @@ export function createSyncFn<T extends AnyAsyncFn<R>, R = unknown>(
 
   syncFnCache.set(workerPath, syncFn)
 
-  return syncFn as Syncify<T>
+  return syncFn
 }
-
-const cjsRequire =
-  typeof require === 'undefined'
-    ? module.createRequire(import.meta.url)
-    : /* istanbul ignore next */ require
 
 const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
@@ -204,9 +199,7 @@ const setupTsRunner = (
     if (!tsUseEsm) {
       const pkg = findUp(workerPath)
       if (pkg) {
-        tsUseEsm =
-          (cjsRequire(pkg) as { type?: 'commonjs' | 'module' }).type ===
-          'module'
+        tsUseEsm = cjsRequire<PackageJson>(pkg).type === 'module'
       }
     }
 
@@ -274,8 +267,7 @@ const setupTsRunner = (
   } else if (!jsUseEsm) {
     const pkg = findUp(workerPath)
     if (pkg) {
-      jsUseEsm =
-        (cjsRequire(pkg) as { type?: 'commonjs' | 'module' }).type === 'module'
+      jsUseEsm = cjsRequire<PackageJson>(pkg).type === 'module'
     }
   }
 
@@ -448,7 +440,7 @@ export const generateGlobals = (
 }
 
 // eslint-disable-next-line sonarjs/cognitive-complexity
-function startWorkerThread<R, T extends AnyAsyncFn<R>>(
+function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
   workerPath: string,
   {
     timeout = DEFAULT_TIMEOUT,
@@ -615,10 +607,9 @@ function startWorkerThread<R, T extends AnyAsyncFn<R>>(
 }
 
 /* istanbul ignore next */
-export function runAsWorker<
-  R = unknown,
-  T extends AnyAsyncFn<R> = AnyAsyncFn<R>,
->(fn: T) {
+export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
+  fn: T,
+) {
   // type-coverage:ignore-next-line -- we can't control
   if (!workerData) {
     return
@@ -644,7 +635,7 @@ export function runAsWorker<
           }
         }
         workerPort.on('message', handleAbortMessage)
-        let msg: WorkerToMainMessage<R>
+        let msg: WorkerToMainMessage<Awaited<R>>
         try {
           msg = { id, result: await fn(...args) }
         } catch (error: unknown) {
