@@ -4,9 +4,9 @@ import module from 'node:module'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
-  MessageChannel,
-  MessagePort,
+  type MessagePort,
   type TransferListItem,
+  MessageChannel,
   Worker,
   parentPort,
   receiveMessageOnPort,
@@ -60,7 +60,7 @@ const {
 export const MTS_SUPPORTED_NODE_VERSION = 16
 export const LOADER_SUPPORTED_NODE_VERSION = 20
 export const TYPESCRIPT_DEFAULT_NODE_VERSION = 23.6
-export const TYPESCRIPT_SUPPORTED_NODE_VERSION = 22.10
+export const TYPESCRIPT_SUPPORTED_NODE_VERSION = 22.1
 
 const NODE_TYPESCRIPT = process.features.typescript
 const NODE_VERSION = Number.parseFloat(process.versions.node)
@@ -221,13 +221,13 @@ const setupTsRunner = (
 
     switch (tsRunner) {
       case TsRunner.Node: {
-        if (typeof NODE_TYPESCRIPT === 'undefined') {
+        if (!NODE_TYPESCRIPT) {
           throw new Error(
             'type stripping is not supported in this node version',
           )
         }
         execArgv = [
-          '--experimental-transform-types', 
+          '--experimental-transform-types',
           ...(NODE_VERSION >= TYPESCRIPT_DEFAULT_NODE_VERSION
             ? execArgv.filter(arg => arg !== '--no-experimental-strip-types')
             : execArgv),
