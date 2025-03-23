@@ -113,10 +113,14 @@ export function extractProperties<T>(object?: T) {
 }
 
 export function createSyncFn<T extends AnyFn>(
-  workerPath: string,
+  workerPath: URL | string,
   timeoutOrOptions?: SynckitOptions | number,
 ): Syncify<T> {
   syncFnCache ??= new Map()
+
+  if (typeof workerPath !== 'string' || workerPath.startsWith('file://')) {
+    workerPath = fileURLToPath(workerPath)
+  }
 
   const cachedSyncFn = syncFnCache.get(workerPath)
 
@@ -159,7 +163,7 @@ const setupTsRunner = (
   let ext = path.extname(workerPath)
 
   if (
-    !/[/\\]node_modules[/\\]/.test(workerPath) &&
+    !/([/\\])node_modules\1/.test(workerPath) &&
     (!ext || /^\.[cm]?js$/.test(ext))
   ) {
     const workPathWithoutExt = ext
