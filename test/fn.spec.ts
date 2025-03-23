@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { jest } from '@jest/globals'
 
@@ -239,6 +240,33 @@ test('globalShims options', async () => {
       },
     ],
   })
+
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5, 0)).toBe(5)
+})
+
+test('support file url', async () => {
+  const { createSyncFn } = await import('synckit')
+
+  const syncFn = createSyncFn<AsyncWorkerFn>(pathToFileURL(workerCjsPath), {})
+
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5, 0)).toBe(5)
+
+  expect(() => createSyncFn(new URL('https://example.com'))).toThrow(
+    'The URL must be of scheme file',
+  )
+})
+
+test('support file url protocol', async () => {
+  const { createSyncFn } = await import('synckit')
+
+  const syncFn = createSyncFn<AsyncWorkerFn>(
+    pathToFileURL(workerCjsPath).href,
+    {},
+  )
 
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
