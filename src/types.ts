@@ -3,20 +3,9 @@ import type { MessagePort } from 'node:worker_threads'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyFn<R = any, T extends any[] = any[]> = (...args: T) => R
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyPromise<T = any> = Promise<T>
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyAsyncFn<T = any> = AnyFn<Promise<T>>
-
-export type Syncify<T extends AnyAsyncFn> = T extends (
-  ...args: infer Args
-) => Promise<infer R>
-  ? (...args: Args) => R
-  : never
-
-export type PromiseType<T extends AnyPromise> =
-  T extends Promise<infer R> ? R : never
+export type Syncify<T extends AnyFn> = (
+  ...args: Parameters<T>
+) => Awaited<ReturnType<T>>
 
 export type ValueOf<T> = T[keyof T]
 
@@ -42,7 +31,7 @@ export interface DataMessage<T> {
   properties?: unknown
 }
 
-export interface WorkerToMainMessage<T = unknown> extends DataMessage<T> {
+export interface WorkerToMainMessage<T> extends DataMessage<T> {
   id: number
 }
 
@@ -77,4 +66,8 @@ export interface GlobalShim {
    * ```
    */
   conditional?: boolean
+}
+
+export interface PackageJson {
+  type?: 'commonjs' | 'module'
 }
