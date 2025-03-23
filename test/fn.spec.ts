@@ -1,8 +1,8 @@
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { jest } from '@jest/globals'
+import { cjsRequire } from '@pkgr/core'
 
 import {
   _dirname,
@@ -12,7 +12,7 @@ import {
 } from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
-import { createSyncFn } from 'synckit'
+import { type StdioChunk, createSyncFn } from 'synckit'
 
 const { SYNCKIT_TIMEOUT } = process.env
 
@@ -28,8 +28,6 @@ beforeEach(() => {
     delete process.env.SYNCKIT_TIMEOUT
   }
 })
-
-const cjsRequire = createRequire(import.meta.url)
 
 const workerCjsTsPath = path.resolve(_dirname, 'cjs/worker-cjs.ts')
 const workerEsmTsPath = path.resolve(_dirname, 'esm/worker-esm.ts')
@@ -130,6 +128,8 @@ test('subsequent executions after timeout', async () => {
   expect(syncFn(3, 1)).toBe(3)
 })
 
+const stdio: StdioChunk[] = []
+
 test('handling of outdated message from worker', async () => {
   const executionTimeout = 60
   process.env.SYNCKIT_TIMEOUT = executionTimeout.toString()
@@ -138,8 +138,8 @@ test('handling of outdated message from worker', async () => {
   jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
 
   receiveMessageOnPortMock
-    .mockReturnValueOnce({ message: { id: -1 } })
-    .mockReturnValueOnce({ message: { id: 0, result: 1 } })
+    .mockReturnValueOnce({ message: { id: -1, stdio } })
+    .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
@@ -154,8 +154,8 @@ test('propagation of undefined timeout', async () => {
   const atomicsWaitSpy = jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
 
   receiveMessageOnPortMock
-    .mockReturnValueOnce({ message: { id: -1 } })
-    .mockReturnValueOnce({ message: { id: 0, result: 1 } })
+    .mockReturnValueOnce({ message: { id: -1, stdio } })
+    .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
@@ -187,8 +187,8 @@ test('reduction of waiting time', async () => {
   })
 
   receiveMessageOnPortMock
-    .mockReturnValueOnce({ message: { id: -1 } })
-    .mockReturnValueOnce({ message: { id: 0, result: 1 } })
+    .mockReturnValueOnce({ message: { id: -1, stdio } })
+    .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
@@ -210,7 +210,7 @@ test('unexpected message from worker', async () => {
   jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
 
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
-  receiveMessageOnPortMock.mockReturnValueOnce({ message: { id: 100 } })
+  receiveMessageOnPortMock.mockReturnValueOnce({ message: { id: 100, stdio } })
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
