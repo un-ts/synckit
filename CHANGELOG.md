@@ -1,5 +1,11 @@
 # synckit
 
+## 0.10.1
+
+### Patch Changes
+
+- [#204](https://github.com/un-ts/synckit/pull/204) [`e13a68a`](https://github.com/un-ts/synckit/commit/e13a68aed92b90099741bab712c695c3bccbfcff) Thanks [@nwidynski](https://github.com/nwidynski)! - fix: add support for type transformations to node runner, clarify correct Node versions support
+
 ## 0.10.0
 
 ### Minor Changes
