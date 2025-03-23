@@ -60,7 +60,6 @@ const {
 export const MTS_SUPPORTED_NODE_VERSION = 16
 export const LOADER_SUPPORTED_NODE_VERSION = 20
 export const TYPESCRIPT_DEFAULT_NODE_VERSION = 23.6
-export const TYPESCRIPT_SUPPORTED_NODE_VERSION = 22.1
 
 const NODE_TYPESCRIPT = process.features.typescript
 const NODE_VERSION = Number.parseFloat(process.versions.node)

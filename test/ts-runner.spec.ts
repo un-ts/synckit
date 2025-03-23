@@ -10,7 +10,6 @@ import type { AsyncWorkerFn } from './types.js'
 import {
   MTS_SUPPORTED_NODE_VERSION,
   TYPESCRIPT_DEFAULT_NODE_VERSION,
-  TYPESCRIPT_SUPPORTED_NODE_VERSION,
   TsRunner,
 } from 'synckit'
 
@@ -138,7 +137,7 @@ test(TsRunner.TSX, async () => {
 test(TsRunner.Node, async () => {
   const { createSyncFn } = await import('synckit')
 
-  if (nodeVersion < TYPESCRIPT_SUPPORTED_NODE_VERSION) {
+  if (!process.features.typescript) {
     // eslint-disable-next-line jest/no-conditional-expect
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
