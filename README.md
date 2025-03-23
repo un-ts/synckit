@@ -32,6 +32,8 @@ Perform async work synchronously in Node.js/Bun using `worker_threads` with firs
 - [Benchmark](#benchmark)
 - [Sponsors](#sponsors)
 - [Backers](#backers)
+- [Who are using `synckit`](#who-are-using-synckit)
+- [Acknowledgements](#acknowledgements)
 - [Changelog](#changelog)
 - [License](#license)
 
@@ -211,6 +213,20 @@ You can try it with running `yarn benchmark` by yourself. [Here](./benchmarks/be
 | 1stG                                                                                                                             | RxTS                                                                                                                             | UnTS                                                                                                                             |
 | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/individuals.svg)](https://opencollective.com/1stG) | [![RxTS Open Collective backers and sponsors](https://opencollective.com/rxts/individuals.svg)](https://opencollective.com/rxts) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/individuals.svg)](https://opencollective.com/unts) |
+
+## Who are using `synckit`
+
+- [`@cspell/eslint-plugin`](https://github.com/streetsidesoftware/cspell/blob/ec04bcee0c90ff4e2a9fb5ef4421714796fb58ba/packages/cspell-eslint-plugin/package.json#L80)
+- [`astrojs-compiler-sync`](https://github.com/ota-meshi/astrojs-compiler-sync/blob/da4e86fd601755e40599d7f5121bc83d08255c42/package.json#L52)
+- [`eslint-plugin-prettier`](https://github.com/prettier/eslint-plugin-prettier/blob/ca5eb3ec11c4ae511e1da22736c73b253210b73b/package.json#L67)
+- [`eslint-plugin-prettier-vue`](https://github.com/meteorlxy/eslint-plugin-prettier-vue/blob/d3f6722303d66a2b223df2f750982e33c1143d5d/package.json#L40)
+- [`eslint-mdx`](https://github.com/mdx-js/eslint-mdx/blob/4623359cc9784d3e38bd917ed001c5d7d826f990/packages/eslint-mdx/package.json#L40)
+- [`prettier-plugin-packagejson`](https://github.com/matzkoh/prettier-plugin-packagejson/blob/eb7ade2a048d6d163cf8ef37e098ee273f72c585/package.json#L31)
+- [`jest-snapshot`](https://github.com/jestjs/jest/blob/4e7d916ec6a16de5548273c17b5d2c5761b0aebb/packages/jest-snapshot/package.json#L42)
+
+## Acknowledgements
+
+This package is original inspired by [`esbuild`](https://github.com/evanw/esbuild) and [`sync-threads`](https://github.com/lambci/sync-threads).
 
 ## Changelog
 
