@@ -1,8 +1,10 @@
 {
   "name": "yarn-pnp",
-  "version": "1.0.0",
   "type": "module",
-  "license": "MIT",
+  "private": true,
   "packageManager": "yarn@4.7.0",
-  "main": "index.js"
+  "main": "index.js",
+  "dependencies": {
+    "synckit": "link:../../.."
+  }
 }

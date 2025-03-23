@@ -5,8 +5,16 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
+"synckit@link:../../..::locator=yarn-pnp%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "synckit@link:../../..::locator=yarn-pnp%40workspace%3A."
+  languageName: node
+  linkType: soft
+
 "yarn-pnp@workspace:.":
   version: 0.0.0-use.local
   resolution: "yarn-pnp@workspace:."
+  dependencies:
+    synckit: "link:../../.."
   languageName: unknown
   linkType: soft
