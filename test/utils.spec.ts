@@ -3,7 +3,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { findUp } from '@pkgr/utils'
 
-import { _dirname } from './helpers'
+import { _dirname } from './helpers.js'
 
 import {
   DEFAULT_GLOBAL_SHIMS_PRESET,

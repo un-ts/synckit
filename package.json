@@ -14,12 +14,18 @@
   "main": "./lib/index.cjs",
   "module": "./lib/index.js",
   "exports": {
-    "types": "./lib/index.d.ts",
-    "import": "./lib/index.js",
-    "require": "./lib/index.cjs"
+    "import": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "require": {
+      "types": "./index.d.cts",
+      "default": "./lib/index.cjs"
+    }
   },
   "types": "./lib/index.d.ts",
   "files": [
+    "index.d.cts",
     "lib",
     "!**/*.tsbuildinfo"
   ],
