@@ -77,9 +77,13 @@ export const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
 
 const NODE_OPTIONS = NODE_OPTIONS_.split(/\s+/)
 
+const hasFlag = (flag: string) =>
+  NODE_OPTIONS.includes(flag) || process.argv.includes(flag)
+
 const NO_STRIP_TYPES =
-  NODE_OPTIONS.includes(NO_STRIP_TYPES_FLAG) ||
-  process.argv.includes(NO_STRIP_TYPES_FLAG)
+  hasFlag(NO_STRIP_TYPES_FLAG) &&
+  !hasFlag(STRIP_TYPES_FLAG) &&
+  !hasFlag(TRANSFORM_TYPES_FLAG)
 
 const parseVersion = (version: string) =>
   version.split('.').map(Number.parseFloat)
@@ -246,12 +250,16 @@ const setupTsRunner = (
       }
     }
 
+    const noStripTypes =
+      !execArgv.includes(STRIP_TYPES_FLAG) &&
+      !execArgv.includes(TRANSFORM_TYPES_FLAG) &&
+      (NO_STRIP_TYPES || execArgv.includes(NO_STRIP_TYPES_FLAG))
+
     if (tsRunner == null) {
       if (process.versions.bun) {
         tsRunner = TsRunner.Bun
       } else if (
-        !NO_STRIP_TYPES &&
-        !execArgv.includes(NO_STRIP_TYPES_FLAG) &&
+        !noStripTypes &&
         // >=
         compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) >= 0
       ) {
@@ -273,7 +281,7 @@ const setupTsRunner = (
           )
         }
 
-        if (NO_STRIP_TYPES || execArgv.includes(NO_STRIP_TYPES_FLAG)) {
+        if (noStripTypes) {
           throw new Error('type stripping is disabled explicitly')
         }
 

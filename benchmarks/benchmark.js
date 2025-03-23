@@ -9,7 +9,7 @@ const __filename = fileURLToPath(import.meta.url)
 
 /**
  * @param {string} name
- * @typedef {{ loadTime: number, runTime: number, totalTime: number } | undefined} PerfResult
+ * @typedef {{ loadTime: number, runTime: number, totalTime: number } | void} PerfResult
  * @returns {Promise<PerfResult>} Perf result
  */
 const perfCase = async name => {
