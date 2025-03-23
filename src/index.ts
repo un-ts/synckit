@@ -59,21 +59,21 @@ const {
   SYNCKIT_TS_RUNNER,
 } = process.env
 
-export const MTS_SUPPORTED_NODE_VERSION = 16
-export const LOADER_SUPPORTED_NODE_VERSION = 20
+export const MTS_SUPPORTED_NODE_VERSION = '16'
+export const LOADER_SUPPORTED_NODE_VERSION = '20'
 
 // https://nodejs.org/docs/latest-v22.x/api/typescript.html#type-stripping
-export const STRIP_TYPES_NODE_VERSION = 22.6
+export const STRIP_TYPES_NODE_VERSION = '22.6'
 
 // https://nodejs.org/docs/latest-v23.x/api/typescript.html#modules-typescript
-export const TRANSFORM_TYPES_NODE_VERSION = 22.7
+export const TRANSFORM_TYPES_NODE_VERSION = '22.7'
 
 // https://nodejs.org/docs/latest-v23.x/api/typescript.html#type-stripping
-export const DEFAULT_TYPES_NODE_VERSION = 23.6
+export const DEFAULT_TYPES_NODE_VERSION = '23.6'
 
-const STRIP_TYPES_FLAG = '--experimental-strip-types'
-const TRANSFORM_TYPES_FLAG = '--experimental-transform-types'
-const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
+export const STRIP_TYPES_FLAG = '--experimental-strip-types'
+export const TRANSFORM_TYPES_FLAG = '--experimental-transform-types'
+export const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
 
 const NODE_OPTIONS = NODE_OPTIONS_.split(/\s+/)
 
@@ -81,7 +81,28 @@ const NO_STRIP_TYPES =
   NODE_OPTIONS.includes(NO_STRIP_TYPES_FLAG) ||
   process.argv.includes(NO_STRIP_TYPES_FLAG)
 
-export const NODE_VERSION = Number.parseFloat(process.versions.node)
+const parseVersion = (version: string) =>
+  version.split('.').map(Number.parseFloat)
+
+// A naive implementation of semver comparison
+export const compareVersion = (version1: string, version2: string) => {
+  const versions1 = parseVersion(version1)
+  const versions2 = parseVersion(version2)
+  const length = Math.max(versions1.length, versions2.length)
+  for (let i = 0; i < length; i++) {
+    const v1 = versions1[i] || 0
+    const v2 = versions2[i] || 0
+    if (v1 > v2) {
+      return 1
+    }
+    if (v1 < v2) {
+      return -1
+    }
+  }
+  return 0
+}
+
+export const NODE_VERSION = process.versions.node
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
@@ -231,7 +252,8 @@ const setupTsRunner = (
       } else if (
         !NO_STRIP_TYPES &&
         !execArgv.includes(NO_STRIP_TYPES_FLAG) &&
-        NODE_VERSION >= STRIP_TYPES_NODE_VERSION
+        // >=
+        compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) >= 0
       ) {
         tsRunner = TsRunner.Node
       } else if (isPkgAvailable(TsRunner.TsNode)) {
@@ -244,7 +266,8 @@ const setupTsRunner = (
         break
       }
       case TsRunner.Node: {
-        if (NODE_VERSION < STRIP_TYPES_NODE_VERSION) {
+        // <
+        if (compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) < 0) {
           throw new Error(
             'type stripping is not supported in this node version',
           )
@@ -254,17 +277,20 @@ const setupTsRunner = (
           throw new Error('type stripping is disabled explicitly')
         }
 
-        if (NODE_VERSION >= DEFAULT_TYPES_NODE_VERSION) {
+        // >=
+        if (compareVersion(NODE_VERSION, DEFAULT_TYPES_NODE_VERSION) >= 0) {
           break
         }
 
         if (
-          NODE_VERSION >= TRANSFORM_TYPES_NODE_VERSION &&
+          // >=
+          compareVersion(NODE_VERSION, TRANSFORM_TYPES_NODE_VERSION) >= 0 &&
           !execArgv.includes(TRANSFORM_TYPES_FLAG)
         ) {
           execArgv = [TRANSFORM_TYPES_FLAG, ...execArgv]
         } else if (
-          NODE_VERSION >= STRIP_TYPES_NODE_VERSION &&
+          // >=
+          compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) >= 0 &&
           !execArgv.includes(STRIP_TYPES_FLAG)
         ) {
           execArgv = [STRIP_TYPES_FLAG, ...execArgv]
@@ -343,7 +369,8 @@ const setupTsRunner = (
         // https://github.com/un-ts/synckit/issues/123
         resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).toString()
 
-        if (NODE_VERSION < LOADER_SUPPORTED_NODE_VERSION) {
+        // <
+        if (compareVersion(NODE_VERSION, LOADER_SUPPORTED_NODE_VERSION) < 0) {
           execArgv = [
             '--experimental-loader',
             resolvedPnpLoaderPath,
@@ -516,7 +543,9 @@ function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
 
   if (/\.[cm]ts$/.test(finalWorkerPath)) {
     const isTsxSupported =
-      !tsUseEsm || NODE_VERSION >= MTS_SUPPORTED_NODE_VERSION
+      !tsUseEsm ||
+      // >=
+      compareVersion(NODE_VERSION, MTS_SUPPORTED_NODE_VERSION) >= 0
     /* istanbul ignore if */
     if (!finalTsRunner) {
       throw new Error('No ts runner specified, ts worker path is not supported')
@@ -666,7 +695,11 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
 
   const { workerPort, sharedBuffer, pnpLoaderPath } = workerData as WorkerData
 
-  if (pnpLoaderPath && NODE_VERSION >= LOADER_SUPPORTED_NODE_VERSION) {
+  if (
+    pnpLoaderPath &&
+    // >=
+    compareVersion(NODE_VERSION, LOADER_SUPPORTED_NODE_VERSION) >= 0
+  ) {
     module.register(pnpLoaderPath)
   }
 
