@@ -20,7 +20,7 @@ export interface MainToWorkerCommandMessage {
 }
 
 export interface WorkerData {
-  sharedBuffer: SharedArrayBuffer
+  sharedBufferView: Int32Array
   workerPort: MessagePort
   pnpLoaderPath: string | undefined
 }

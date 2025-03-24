@@ -631,7 +631,7 @@ function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
         : workerPathUrl,
     {
       eval: useEval,
-      workerData: { sharedBuffer, workerPort, pnpLoaderPath },
+      workerData: { sharedBufferView, workerPort, pnpLoaderPath },
       transferList: [workerPort, ...transferList],
       execArgv: finalExecArgv,
     },
@@ -739,7 +739,8 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
     }
   }
 
-  const { workerPort, sharedBuffer, pnpLoaderPath } = workerData as WorkerData
+  const { workerPort, sharedBufferView, pnpLoaderPath } =
+    workerData as WorkerData
 
   if (
     pnpLoaderPath &&
@@ -748,8 +749,6 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
   ) {
     module.register(pnpLoaderPath)
   }
-
-  const sharedBufferView = new Int32Array(sharedBuffer, 0, 1)
 
   parentPort!.on(
     'message',
