@@ -1,5 +1,11 @@
 # synckit
 
+## 0.10.3
+
+### Patch Changes
+
+- [#214](https://github.com/un-ts/synckit/pull/214) [`386bfb9`](https://github.com/un-ts/synckit/commit/386bfb91434e4947785085720ab66b24f7679639) Thanks [@fisker](https://github.com/fisker)! - chore: improve performance on first run
+
 ## 0.10.2
 
 ### Minor Changes
