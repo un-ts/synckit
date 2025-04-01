@@ -77,6 +77,7 @@ export function createSyncFn<T extends AnyFn>(
   return syncFn
 }
 
+/* istanbul ignore next */
 /**
  * Sets up the worker thread to listen for messages from the parent process and execute the provided function with the received arguments.
  *

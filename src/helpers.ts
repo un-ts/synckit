@@ -387,6 +387,7 @@ export const generateGlobals = (
 // property copying manually.
 export function extractProperties<T extends object>(object: T): T
 export function extractProperties<T>(object?: T): T | undefined
+
 /**
  * Creates a shallow copy of the enumerable properties from the provided object.
  *
@@ -428,6 +429,7 @@ let sharedBufferView: Int32Array | undefined
  * @throws {Error} If a TypeScript worker is specified without a valid tsRunner, if the chosen tsRunner is not supported
  * for the file type, or if a synchronization error occurs during message communication.
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity
 export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
   workerPath: string,
   {
