@@ -10877,10 +10877,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"make-synchronized@npm:^0.3.1":
-  version: 0.3.1
-  resolution: "make-synchronized@npm:0.3.1"
-  checksum: 10c0/bdd1052e17f461599850f718c57e6ef27fa9c4a5525e0c3910852c5928bdd751b5731027ba92ff28bdf075c00f68fcdcf9d31571b8f44290a137a67a25bdc0ea
+"make-synchronized@npm:^0.7.0":
+  version: 0.7.2
+  resolution: "make-synchronized@npm:0.7.2"
+  checksum: 10c0/15384e1ad0bbff2632abb726d0928a20a06c5edb92e5b027cd50f83c265f3bc118e3f4b5e597f4e6c3cd9d0059fc4ab6d2dd36d6718e717168b989e716c36809
   languageName: node
   linkType: hard
 
@@ -15152,13 +15152,13 @@ __metadata:
     eslint: "npm:^9.23.0"
     jest: "npm:^29.7.0"
     lint-staged: "npm:^15.5.0"
-    make-synchronized: "npm:^0.3.1"
+    make-synchronized: "npm:^0.7.0"
     node-gyp: "npm:^11.1.0"
     prettier: "npm:^3.5.3"
     simple-git-hooks: "npm:^2.12.1"
     sync-threads: "npm:^1.0.1"
     synckit: "link:."
-    tinyexec: "npm:^0.3.2"
+    tinyexec: "npm:^1.0.0"
     ts-expect: "npm:^1.3.0"
     ts-jest: "npm:^29.2.6"
     ts-node: "npm:^10.9.2"
@@ -15247,10 +15247,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tinyexec@npm:^0.3.0, tinyexec@npm:^0.3.2":
+"tinyexec@npm:^0.3.0":
   version: 0.3.2
   resolution: "tinyexec@npm:0.3.2"
   checksum: 10c0/3efbf791a911be0bf0821eab37a3445c2ba07acc1522b1fa84ae1e55f10425076f1290f680286345ed919549ad67527d07281f1c19d584df3b74326909eb1f90
+  languageName: node
+  linkType: hard
+
+"tinyexec@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "tinyexec@npm:1.0.1"
+  checksum: 10c0/e1ec3c8194a0427ce001ba69fd933d0c957e2b8994808189ed8020d3e0c01299aea8ecf0083cc514ecbf90754695895f2b5c0eac07eb2d0c406f7d4fbb8feade
   languageName: node
   linkType: hard
 
