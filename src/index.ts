@@ -32,6 +32,19 @@ export * from './types.js'
 
 let syncFnCache: Map<string, AnyFn> | undefined
 
+/**
+ * Creates a synchronous worker function.
+ *
+ * Converts the provided worker path (URL or string) to an absolute file path, retrieves a cached synchronous
+ * function if one exists, or starts a new worker thread to handle task execution. The resulting function is
+ * cached to avoid redundant initialization.
+ *
+ * @param workerPath - The absolute file path or URL of the worker script. If given as a URL, it is converted to a file path.
+ * @param timeoutOrOptions - Optional timeout in milliseconds or an options object to configure the worker thread.
+ * @returns A synchronous function that executes tasks on the specified worker thread.
+ *
+ * @throws {Error} If the resulting worker path is not absolute.
+ */
 export function createSyncFn<T extends AnyFn>(
   workerPath: URL | string,
   timeoutOrOptions?: SynckitOptions | number,
@@ -64,7 +77,18 @@ export function createSyncFn<T extends AnyFn>(
   return syncFn
 }
 
-/* istanbul ignore next */
+/**
+ * Sets up the worker thread to listen for messages from the parent process and execute the provided function with the received arguments.
+ *
+ * When a message with an associated ID and arguments is received, this function invokes the given function asynchronously.
+ * It captures standard I/O during execution and conditionally registers a custom module loader if a valid loader path is provided
+ * and the Node.js version is supported. The function listens for an abort signal specific to the message; if aborted, it cancels
+ * sending a response. Upon completion, it posts a message back with the result or, in case of an error, with the error and its extracted properties.
+ *
+ * If the worker is not initialized with the necessary worker data, the function exits without performing any action.
+ *
+ * @param fn - The function to execute when a message is received from the parent.
+ */
 export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
   fn: T,
 ) {
