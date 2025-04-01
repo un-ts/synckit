@@ -387,6 +387,13 @@ export const generateGlobals = (
 // property copying manually.
 export function extractProperties<T extends object>(object: T): T
 export function extractProperties<T>(object?: T): T | undefined
+
+/**
+ * Creates a shallow copy of the enumerable properties from the provided object.
+ *
+ * @param object - An optional object whose properties are to be extracted.
+ * @returns A new object containing the enumerable properties of the input, or undefined if no valid object is provided.
+ */
 export function extractProperties<T>(object?: T) {
   if (object && typeof object === 'object') {
     const properties = {} as T
@@ -400,6 +407,28 @@ export function extractProperties<T>(object?: T) {
 let sharedBuffer: SharedArrayBuffer | undefined
 let sharedBufferView: Int32Array | undefined
 
+/**
+ * Spawns a worker thread and returns a synchronous function for dispatching tasks.
+ *
+ * This function sets up a worker thread using the specified worker script path and configuration
+ * options including timeout, execution arguments, TypeScript runner, transferable objects, and global shims.
+ * It creates a MessageChannel and leverages a shared memory buffer with Atomics for synchronization.
+ * The returned function sends a task message to the worker identified by a unique ID, awaits the
+ * corresponding response, and either returns the result or throws an error if an issue occurs.
+ *
+ * @param workerPath - The file path to the worker script.
+ * @param options - Configuration options including:
+ *   - timeout: Maximum duration (in milliseconds) to wait for the worker response.
+ *   - execArgv: Additional Node.js execution arguments for the worker process.
+ *   - tsRunner: The TypeScript runner to use (required for TypeScript worker files).
+ *   - transferList: An array of transferable objects to pass to the worker.
+ *   - globalShims: Global shim configuration for module imports; can be a preset flag or an array of shims.
+ *
+ * @returns A synchronous function that accepts arguments for the worker task and returns the computed result.
+ *
+ * @throws {Error} If a TypeScript worker is specified without a valid tsRunner, if the chosen tsRunner is not supported
+ * for the file type, or if a synchronization error occurs during message communication.
+ */
 // eslint-disable-next-line sonarjs/cognitive-complexity
 export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
   workerPath: string,
