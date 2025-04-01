@@ -1,4 +1,6 @@
-import type { MessagePort } from 'node:worker_threads'
+import type { MessagePort, TransferListItem } from 'node:worker_threads'
+
+import type { TsRunner } from './constants.ts'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyFn<R = any, T extends any[] = any[]> = (...args: T) => R
@@ -77,4 +79,12 @@ export interface GlobalShim {
 
 export interface PackageJson {
   type?: 'commonjs' | 'module'
+}
+
+export interface SynckitOptions {
+  execArgv?: string[]
+  globalShims?: GlobalShim[] | boolean
+  timeout?: number
+  transferList?: TransferListItem[]
+  tsRunner?: TsRunner
 }

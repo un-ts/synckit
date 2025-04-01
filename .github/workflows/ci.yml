@@ -37,7 +37,8 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: yarn
 
-      - uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2
+      - name: Setup Bun ${{ matrix.bun }}
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2
         with:
           bun-version: ${{ matrix.bun }}
 
