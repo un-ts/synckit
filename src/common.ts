@@ -23,3 +23,8 @@ export const compareVersion = (version1: string, version2: string) => {
   }
   return 0
 }
+
+export const NODE_VERSION = process.versions.node
+
+export const compareNodeVersion = (version: string) =>
+  compareVersion(NODE_VERSION, version)

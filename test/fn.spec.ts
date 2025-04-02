@@ -1,18 +1,27 @@
-import path from 'node:path'
+/* eslint-disable jest/no-standalone-expect */
 import { pathToFileURL } from 'node:url'
 
 import { jest } from '@jest/globals'
 import { cjsRequire } from '@pkgr/core'
 
 import {
-  _dirname,
   setupReceiveMessageOnPortMock,
   testIf,
-  tsUseEsmSupported,
+  workerCjsPath,
+  workerCjsTsPath,
+  workerErrorPath,
+  workerEsmTsPath,
+  workerJsAsTsPath,
+  workerMjsPath,
+  workerNoExtAsJsPath,
 } from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
-import { type StdioChunk, createSyncFn } from 'synckit'
+import {
+  type StdioChunk,
+  TS_ESM_PARTIAL_SUPPORTED,
+  createSyncFn,
+} from 'synckit'
 
 const { SYNCKIT_TIMEOUT } = process.env
 
@@ -29,14 +38,6 @@ beforeEach(() => {
   }
 })
 
-const workerCjsTsPath = path.resolve(_dirname, 'cjs/worker-cjs.ts')
-const workerEsmTsPath = path.resolve(_dirname, 'esm/worker-esm.ts')
-const workerNoExtAsJsPath = path.resolve(_dirname, 'worker-js')
-const workerJsAsTsPath = path.resolve(_dirname, 'worker.js')
-const workerCjsPath = path.resolve(_dirname, 'worker.cjs')
-const workerMjsPath = path.resolve(_dirname, 'worker.mjs')
-const workerErrorPath = path.resolve(_dirname, 'worker-error.cjs')
-
 test('ts as cjs', () => {
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsTsPath)
   expect(syncFn(1)).toBe(1)
@@ -44,13 +45,11 @@ test('ts as cjs', () => {
   expect(syncFn(5)).toBe(5)
 })
 
-testIf(tsUseEsmSupported)('ts as esm', () => {
+testIf(TS_ESM_PARTIAL_SUPPORTED)('ts as esm', () => {
   const syncFn = createSyncFn<AsyncWorkerFn>(workerEsmTsPath)
-  /* eslint-disable jest/no-standalone-expect */
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
-  /* eslint-enable jest/no-standalone-expect */
 })
 
 test('no ext as js (as esm)', () => {
@@ -60,13 +59,11 @@ test('no ext as js (as esm)', () => {
   expect(syncFn(5)).toBe(5)
 })
 
-testIf(tsUseEsmSupported)('js as ts (as esm)', () => {
+testIf(TS_ESM_PARTIAL_SUPPORTED)('js as ts (as esm)', () => {
   const syncFn = createSyncFn<AsyncWorkerFn>(workerJsAsTsPath)
-  /* eslint-disable jest/no-standalone-expect */
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
-  /* eslint-enable jest/no-standalone-expect */
 })
 
 test('createSyncFn', () => {

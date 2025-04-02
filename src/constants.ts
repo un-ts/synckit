@@ -1,4 +1,4 @@
-import { compareVersion, hasFlag } from './common.js'
+import { compareNodeVersion, hasFlag } from './common.js'
 import type { GlobalShim, ValueOf } from './types.js'
 
 export const TsRunner = {
@@ -12,6 +12,8 @@ export const TsRunner = {
   EsbuildRegister: 'esbuild-register',
   // https://github.com/folke/esbuild-runner
   EsbuildRunner: 'esbuild-runner',
+  // https://github.com/oxc-project/oxc-node
+  OXC: 'oxc',
   // https://github.com/swc-project/swc-node/tree/master/packages/register
   SWC: 'swc',
   // https://github.com/esbuild-kit/tsx
@@ -28,8 +30,21 @@ const {
   SYNCKIT_TS_RUNNER,
 } = process.env
 
-export const MTS_SUPPORTED_NODE_VERSION = '16'
-export const LOADER_SUPPORTED_NODE_VERSION = '20'
+// https://github.com/privatenumber/tsx/issues/354
+export const TS_ESM_PARTIAL_SUPPORTED =
+  // >=
+  compareNodeVersion('16') >= 0 &&
+  // <
+  compareNodeVersion('18.19') < 0
+
+// >=, `module.register` is required
+export const MTS_SUPPORTED = compareNodeVersion('20.8') >= 0
+
+// https://nodejs.org/api/module.html#moduleregisterspecifier-parenturl-options
+export const MODULE_REGISTER_SUPPORTED =
+  MTS_SUPPORTED ||
+  // >=
+  compareNodeVersion('18.19') >= 0
 
 // https://nodejs.org/docs/latest-v22.x/api/typescript.html#type-stripping
 export const STRIP_TYPES_NODE_VERSION = '22.6'
@@ -49,14 +64,12 @@ export const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
 
 export const NODE_OPTIONS = NODE_OPTIONS_.split(/\s+/)
 
-export const NODE_VERSION = process.versions.node
-
-export const NO_STRIP_TYPES = // >=
-  compareVersion(NODE_VERSION, FEATURE_TYPESCRIPT_NODE_VERSION) >= 0
+export const NO_STRIP_TYPES =
+  // only consider `process.features.typescript` when `--no-experimental-strip-types` flag enabled
+  hasFlag(NO_STRIP_TYPES_FLAG) && // >=
+  (compareNodeVersion(FEATURE_TYPESCRIPT_NODE_VERSION) >= 0
     ? process.features.typescript === false
-    : hasFlag(NO_STRIP_TYPES_FLAG) &&
-      !hasFlag(STRIP_TYPES_FLAG) &&
-      !hasFlag(TRANSFORM_TYPES_FLAG)
+    : !hasFlag(STRIP_TYPES_FLAG) && !hasFlag(TRANSFORM_TYPES_FLAG))
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
@@ -79,5 +92,22 @@ export const DEFAULT_GLOBAL_SHIMS_PRESET: GlobalShim[] = [
     named: 'performance',
   },
 ]
+
+export const IMPORT_FLAG = '--import'
+
+export const REQUIRE_FLAG = '--require'
+
+export const REQUIRE_ABBR_FLAG = '-r'
+
+export const REQUIRE_FLAGS = new Set([REQUIRE_FLAG, REQUIRE_ABBR_FLAG])
+
+export const LOADER_FLAG = '--loader'
+
+export const EXPERIMENTAL_LOADER_FLAG = '--experimental-loader'
+
+export const LOADER_FLAGS = new Set([LOADER_FLAG, EXPERIMENTAL_LOADER_FLAG])
+
+// >=
+export const IMPORT_FLAG_SUPPORTED = compareNodeVersion('20.6') >= 0
 
 export const INT32_BYTES = 4

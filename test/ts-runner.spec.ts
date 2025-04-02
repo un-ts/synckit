@@ -1,19 +1,19 @@
-/* eslint-disable jest/valid-title */
+/* eslint-disable jest/no-conditional-expect, jest/valid-title */
 
 import path from 'node:path'
 
 import { jest } from '@jest/globals'
 
-import { _dirname, tsUseEsmSupported } from './helpers.js'
+import { _dirname } from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
 import {
-  MTS_SUPPORTED_NODE_VERSION,
-  NODE_VERSION,
   STRIP_TYPES_NODE_VERSION,
   TsRunner,
   NO_STRIP_TYPES_FLAG,
-  compareVersion,
+  compareNodeVersion,
+  TS_ESM_PARTIAL_SUPPORTED,
+  MTS_SUPPORTED,
 } from 'synckit'
 
 beforeEach(() => {
@@ -41,8 +41,7 @@ test(TsRunner.EsbuildRegister, async () => {
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 
-  if (tsUseEsmSupported) {
-    // eslint-disable-next-line jest/no-conditional-expect
+  if (TS_ESM_PARTIAL_SUPPORTED) {
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
         tsRunner: TsRunner.EsbuildRegister,
@@ -68,13 +67,45 @@ test(TsRunner.EsbuildRunner, async () => {
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 
-  if (tsUseEsmSupported) {
-    // eslint-disable-next-line jest/no-conditional-expect
+  if (TS_ESM_PARTIAL_SUPPORTED) {
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
         tsRunner: TsRunner.EsbuildRunner,
       }),
     ).toThrow('esbuild-runner is not supported for .mts files yet')
+  }
+})
+
+test(TsRunner.OXC, async () => {
+  const { createSyncFn } = await import('synckit')
+
+  let syncFn = createSyncFn<AsyncWorkerFn>(workerJsPath, {
+    tsRunner: TsRunner.OXC,
+  })
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+
+  syncFn = createSyncFn<AsyncWorkerFn>(workerMjsPath, {
+    tsRunner: TsRunner.OXC,
+  })
+  expect(syncFn(1)).toBe(1)
+  expect(syncFn(2)).toBe(2)
+  expect(syncFn(5)).toBe(5)
+
+  if (TS_ESM_PARTIAL_SUPPORTED) {
+    expect(() =>
+      createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+        tsRunner: TsRunner.OXC,
+      }),
+    ).toThrow('oxc is not supported for .mts files yet')
+  } else if (MTS_SUPPORTED) {
+    syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+      tsRunner: TsRunner.OXC,
+    })
+    expect(syncFn(1)).toBe(1)
+    expect(syncFn(2)).toBe(2)
+    expect(syncFn(5)).toBe(5)
   }
 })
 
@@ -95,13 +126,19 @@ test(TsRunner.SWC, async () => {
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 
-  if (tsUseEsmSupported) {
-    // eslint-disable-next-line jest/no-conditional-expect
+  if (TS_ESM_PARTIAL_SUPPORTED) {
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
         tsRunner: TsRunner.SWC,
       }),
     ).toThrow('swc is not supported for .mts files yet')
+  } else if (MTS_SUPPORTED) {
+    syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+      tsRunner: TsRunner.SWC,
+    })
+    expect(syncFn(1)).toBe(1)
+    expect(syncFn(2)).toBe(2)
+    expect(syncFn(5)).toBe(5)
   }
 })
 
@@ -115,35 +152,27 @@ test(TsRunner.TSX, async () => {
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
 
-  // <
-  if (compareVersion(NODE_VERSION, MTS_SUPPORTED_NODE_VERSION) < 0) {
-    // eslint-disable-next-line jest/no-conditional-expect
+  if (TS_ESM_PARTIAL_SUPPORTED) {
+    syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
+      tsRunner: TsRunner.TSX,
+    })
+    expect(syncFn(1)).toBe(1)
+    expect(syncFn(2)).toBe(2)
+    expect(syncFn(5)).toBe(5)
+  } else {
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
         tsRunner: TsRunner.TSX,
       }),
     ).toThrow('tsx is not supported for .mts files yet')
-    return
   }
-
-  if (!tsUseEsmSupported) {
-    return
-  }
-
-  syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath, {
-    tsRunner: TsRunner.TSX,
-  })
-  expect(syncFn(1)).toBe(1)
-  expect(syncFn(2)).toBe(2)
-  expect(syncFn(5)).toBe(5)
 })
 
 test(TsRunner.Node, async () => {
   const { createSyncFn } = await import('synckit')
 
   // <
-  if (compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) < 0) {
-    // eslint-disable-next-line jest/no-conditional-expect
+  if (compareNodeVersion(STRIP_TYPES_NODE_VERSION) < 0) {
     expect(() =>
       createSyncFn<AsyncWorkerFn>(workerMtsPath, {
         tsRunner: TsRunner.Node,
@@ -164,10 +193,6 @@ test(TsRunner.Node, async () => {
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
-
-  if (!tsUseEsmSupported) {
-    return
-  }
 
   syncFn = createSyncFn<AsyncWorkerFn>(workerMtsPath)
   expect(syncFn(1)).toBe(1)

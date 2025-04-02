@@ -10,7 +10,7 @@ import {
 
 import { tryExtensions, findUp, cjsRequire, isPkgAvailable } from '@pkgr/core'
 
-import { compareVersion } from './common.js'
+import { compareNodeVersion } from './common.js'
 import {
   DEFAULT_EXEC_ARGV,
   DEFAULT_GLOBAL_SHIMS,
@@ -18,17 +18,23 @@ import {
   DEFAULT_TIMEOUT,
   DEFAULT_TS_RUNNER,
   DEFAULT_TYPES_NODE_VERSION,
+  IMPORT_FLAG,
+  IMPORT_FLAG_SUPPORTED,
   INT32_BYTES,
-  LOADER_SUPPORTED_NODE_VERSION,
-  MTS_SUPPORTED_NODE_VERSION,
+  LOADER_FLAG,
+  LOADER_FLAGS,
+  MODULE_REGISTER_SUPPORTED,
+  MTS_SUPPORTED,
   NO_STRIP_TYPES,
   NO_STRIP_TYPES_FLAG,
   NODE_OPTIONS,
-  NODE_VERSION,
+  REQUIRE_ABBR_FLAG,
+  REQUIRE_FLAGS,
   STRIP_TYPES_FLAG,
   STRIP_TYPES_NODE_VERSION,
   TRANSFORM_TYPES_FLAG,
   TRANSFORM_TYPES_NODE_VERSION,
+  TS_ESM_PARTIAL_SUPPORTED,
   TsRunner,
 } from './constants.js'
 import type {
@@ -54,9 +60,21 @@ export const isFile = (path: string) => {
 export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
+export const hasRequireFlag = (execArgv: string[]) =>
+  execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
+
+export const hasImportFlag = (execArgv: string[]) =>
+  execArgv.includes(IMPORT_FLAG)
+
+export const hasLoaderFlag = (execArgv: string[]) =>
+  execArgv.some(execArg => LOADER_FLAGS.has(execArg))
+
 export const setupTsRunner = (
   workerPath: string,
-  { execArgv, tsRunner }: { execArgv: string[]; tsRunner?: TsRunner }, // eslint-disable-next-line sonarjs/cognitive-complexity
+  {
+    execArgv = DEFAULT_EXEC_ARGV,
+    tsRunner,
+  }: { execArgv?: string[]; tsRunner?: TsRunner } = {}, // eslint-disable-next-line sonarjs/cognitive-complexity
 ) => {
   let ext = path.extname(workerPath)
 
@@ -123,7 +141,7 @@ export const setupTsRunner = (
       } else if (
         !noStripTypes &&
         // >=
-        compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) >= 0
+        compareNodeVersion(STRIP_TYPES_NODE_VERSION) >= 0
       ) {
         tsRunner = TsRunner.Node
       } else if (isPkgAvailable(TsRunner.TsNode)) {
@@ -137,7 +155,7 @@ export const setupTsRunner = (
       }
       case TsRunner.Node: {
         // <
-        if (compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) < 0) {
+        if (compareNodeVersion(STRIP_TYPES_NODE_VERSION) < 0) {
           throw new Error(
             'type stripping is not supported in this node version',
           )
@@ -148,19 +166,19 @@ export const setupTsRunner = (
         }
 
         // >=
-        if (compareVersion(NODE_VERSION, DEFAULT_TYPES_NODE_VERSION) >= 0) {
+        if (compareNodeVersion(DEFAULT_TYPES_NODE_VERSION) >= 0) {
           break
         }
 
         if (
           // >=
-          compareVersion(NODE_VERSION, TRANSFORM_TYPES_NODE_VERSION) >= 0 &&
+          compareNodeVersion(TRANSFORM_TYPES_NODE_VERSION) >= 0 &&
           !execArgv.includes(TRANSFORM_TYPES_FLAG)
         ) {
           execArgv = [TRANSFORM_TYPES_FLAG, ...execArgv]
         } else if (
           // >=
-          compareVersion(NODE_VERSION, STRIP_TYPES_NODE_VERSION) >= 0 &&
+          compareNodeVersion(STRIP_TYPES_NODE_VERSION) >= 0 &&
           !execArgv.includes(STRIP_TYPES_FLAG)
         ) {
           execArgv = [STRIP_TYPES_FLAG, ...execArgv]
@@ -168,37 +186,93 @@ export const setupTsRunner = (
 
         break
       }
+      // https://github.com/TypeStrong/ts-node#node-flags-and-other-tools
       case TsRunner.TsNode: {
         if (tsUseEsm) {
-          if (!execArgv.includes('--loader')) {
-            execArgv = ['--loader', `${TsRunner.TsNode}/esm`, ...execArgv]
+          if (!execArgv.includes(LOADER_FLAG)) {
+            execArgv = [LOADER_FLAG, `${TsRunner.TsNode}/esm`, ...execArgv]
           }
-        } else if (!execArgv.includes('-r')) {
-          execArgv = ['-r', `${TsRunner.TsNode}/register`, ...execArgv]
+        } else if (!hasRequireFlag(execArgv)) {
+          execArgv = [
+            REQUIRE_ABBR_FLAG,
+            `${TsRunner.TsNode}/register`,
+            ...execArgv,
+          ]
         }
         break
       }
+      // https://github.com/egoist/esbuild-register#usage
       case TsRunner.EsbuildRegister: {
-        if (!execArgv.includes('-r')) {
-          execArgv = ['-r', TsRunner.EsbuildRegister, ...execArgv]
+        if (tsUseEsm) {
+          if (!hasLoaderFlag(execArgv)) {
+            execArgv = [
+              LOADER_FLAG,
+              `${TsRunner.EsbuildRegister}/loader`,
+              ...execArgv,
+            ]
+          }
+        } else if (!hasRequireFlag(execArgv)) {
+          execArgv = [REQUIRE_ABBR_FLAG, TsRunner.EsbuildRegister, ...execArgv]
         }
         break
       }
+      // https://github.com/folke/esbuild-runner#-usage
       case TsRunner.EsbuildRunner: {
-        if (!execArgv.includes('-r')) {
-          execArgv = ['-r', `${TsRunner.EsbuildRunner}/register`, ...execArgv]
+        if (!hasRequireFlag(execArgv)) {
+          execArgv = [
+            REQUIRE_ABBR_FLAG,
+            `${TsRunner.EsbuildRunner}/register`,
+            ...execArgv,
+          ]
         }
         break
       }
+      // https://github.com/oxc-project/oxc-node#usage
+      case TsRunner.OXC: {
+        if (!execArgv.includes(IMPORT_FLAG)) {
+          execArgv = [
+            IMPORT_FLAG,
+            `@${TsRunner.OXC}-node/core/register`,
+            ...execArgv,
+          ]
+        }
+        break
+      }
+      // https://github.com/swc-project/swc-node#usage
       case TsRunner.SWC: {
-        if (!execArgv.includes('-r')) {
-          execArgv = ['-r', `@${TsRunner.SWC}-node/register`, ...execArgv]
+        if (tsUseEsm) {
+          if (IMPORT_FLAG_SUPPORTED) {
+            if (!hasImportFlag(execArgv)) {
+              execArgv = [
+                IMPORT_FLAG,
+                `@${TsRunner.SWC}-node/register/esm-register`,
+                ...execArgv,
+              ]
+            }
+          } else if (!hasLoaderFlag(execArgv)) {
+            execArgv = [
+              LOADER_FLAG,
+              `@${TsRunner.SWC}-node/register/esm`,
+              ...execArgv,
+            ]
+          }
+        } else if (!hasRequireFlag(execArgv)) {
+          execArgv = [
+            REQUIRE_ABBR_FLAG,
+            `@${TsRunner.SWC}-node/register`,
+            ...execArgv,
+          ]
         }
         break
       }
+      // https://tsx.is/dev-api/node-cli#node-js-cli
       case TsRunner.TSX: {
-        if (!execArgv.includes('--loader')) {
-          execArgv = ['--loader', TsRunner.TSX, ...execArgv]
+        if (IMPORT_FLAG_SUPPORTED) {
+          if (!execArgv.includes(IMPORT_FLAG)) {
+            execArgv = [IMPORT_FLAG, TsRunner.TSX, ...execArgv]
+          }
+        } else if (!execArgv.includes(LOADER_FLAG)) {
+          execArgv = [LOADER_FLAG, TsRunner.TSX, ...execArgv]
         }
         break
       }
@@ -206,7 +280,7 @@ export const setupTsRunner = (
         throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
       }
     }
-  } else if (!jsUseEsm) {
+  } else if (!jsUseEsm && !workerPath.endsWith('.cjs')) {
     const pkg = findUp(workerPath)
     if (pkg) {
       jsUseEsm = cjsRequire<PackageJson>(pkg).type === 'module'
@@ -226,26 +300,20 @@ export const setupTsRunner = (
       pnpApiPath &&
       !NODE_OPTIONS.some(
         (option, index) =>
-          ['-r', '--require'].includes(option) &&
+          REQUIRE_FLAGS.has(option) &&
           pnpApiPath === cjsRequire.resolve(NODE_OPTIONS[index + 1]),
       ) &&
       !execArgv.includes(pnpApiPath)
     ) {
-      execArgv = ['-r', pnpApiPath, ...execArgv]
+      execArgv = [REQUIRE_ABBR_FLAG, pnpApiPath, ...execArgv]
       const pnpLoaderPath = path.resolve(pnpApiPath, '../.pnp.loader.mjs')
       if (isFile(pnpLoaderPath)) {
         // Transform path to file URL because nodejs does not accept
         // absolute Windows paths in the --experimental-loader option.
         // https://github.com/un-ts/synckit/issues/123
-        resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).toString()
-
-        // <
-        if (compareVersion(NODE_VERSION, LOADER_SUPPORTED_NODE_VERSION) < 0) {
-          execArgv = [
-            '--experimental-loader',
-            resolvedPnpLoaderPath,
-            ...execArgv,
-          ]
+        resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).href
+        if (!MODULE_REGISTER_SUPPORTED) {
+          execArgv = [LOADER_FLAG, resolvedPnpLoaderPath, ...execArgv]
         }
       }
     }
@@ -408,29 +476,28 @@ let sharedBuffer: SharedArrayBuffer | undefined
 let sharedBufferView: Int32Array | undefined
 
 /**
- * Spawns a worker thread and returns a synchronous function for dispatching tasks.
+ * Spawns a worker thread and returns a synchronous function to dispatch tasks.
  *
- * This function sets up a worker thread using the specified worker script path and configuration
- * options including timeout, execution arguments, TypeScript runner, transferable objects, and global shims.
- * It creates a MessageChannel and leverages a shared memory buffer with Atomics for synchronization.
- * The returned function sends a task message to the worker identified by a unique ID, awaits the
- * corresponding response, and either returns the result or throws an error if an issue occurs.
+ * The function initializes a worker thread with the specified script and configuration,
+ * setting up a dedicated message channel for bidirectional communication. It applies TypeScript
+ * runner settings, execution arguments, and global shims as needed. The returned function sends
+ * tasks to the worker, waits synchronously for a response using shared memory synchronization, and
+ * then returns the computed result.
  *
- * @param workerPath - The file path to the worker script.
- * @param options - Configuration options including:
- *   - timeout: Maximum duration (in milliseconds) to wait for the worker response.
- *   - execArgv: Additional Node.js execution arguments for the worker process.
- *   - tsRunner: The TypeScript runner to use (required for TypeScript worker files).
- *   - transferList: An array of transferable objects to pass to the worker.
- *   - globalShims: Global shim configuration for module imports; can be a preset flag or an array of shims.
+ * @param workerPath - The file path of the worker script to execute.
+ * @param options - An object containing configuration parameters:
+ *   - timeout: Maximum time in milliseconds to wait for the worker's response.
+ *   - execArgv: Array of Node.js execution arguments for the worker.
+ *   - tsRunner: Specifies the TypeScript runner to use if the worker script is TypeScript.
+ *   - transferList: List of additional transferable objects to pass to the worker.
+ *   - globalShims: Modules to import as global shims; if true, a default preset is used.
  *
- * @returns A synchronous function that accepts arguments for the worker task and returns the computed result.
+ * @returns A synchronous function that accepts task arguments intended for the worker thread and returns its result.
  *
- * @throws {Error} If a TypeScript worker is specified without a valid tsRunner, if the chosen tsRunner is not supported
- * for the file type, or if a synchronization error occurs during message communication.
+ * @throws {Error} If a TypeScript runner is required but not specified, or if an unsupported TypeScript runner is used for the file type.
+ * @throws {Error} If internal synchronization fails or if the message identifier does not match the expected value.
  */
-// eslint-disable-next-line sonarjs/cognitive-complexity
-export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
+export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( // eslint-disable-line sonarjs/cognitive-complexity
   workerPath: string,
   {
     timeout = DEFAULT_TIMEOUT,
@@ -456,22 +523,24 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
   const workerPathUrl = pathToFileURL(finalWorkerPath)
 
   if (/\.[cm]ts$/.test(finalWorkerPath)) {
-    const isTsxSupported =
-      !tsUseEsm ||
-      // >=
-      compareVersion(NODE_VERSION, MTS_SUPPORTED_NODE_VERSION) >= 0
+    const isTsxSupported = !tsUseEsm || TS_ESM_PARTIAL_SUPPORTED
     /* istanbul ignore if */
     if (!finalTsRunner) {
       throw new Error('No ts runner specified, ts worker path is not supported')
     } /* istanbul ignore if */ else if (
       (
         [
-          // https://github.com/egoist/esbuild-register/issues/79
+          // https://github.com/egoist/esbuild-register/issues/96
           TsRunner.EsbuildRegister,
           // https://github.com/folke/esbuild-runner/issues/67
           TsRunner.EsbuildRunner,
-          // https://github.com/swc-project/swc-node/issues/667
-          TsRunner.SWC,
+          ...(TS_ESM_PARTIAL_SUPPORTED
+            ? [
+                TsRunner.OXC,
+                // https://github.com/swc-project/swc-node/issues/667
+                TsRunner.SWC,
+              ]
+            : []),
           .../* istanbul ignore next */ (isTsxSupported ? [] : [TsRunner.TSX]),
         ] as TsRunner[]
       ).includes(finalTsRunner)
@@ -480,7 +549,9 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
         `${finalTsRunner} is not supported for ${ext} files yet` +
           /* istanbul ignore next */ (isTsxSupported
             ? ', you can try [tsx](https://github.com/esbuild-kit/tsx) instead'
-            : ''),
+            : MTS_SUPPORTED
+              ? ', you can try [oxc](https://github.com/oxc-project/oxc-node) or [swc](https://github.com/swc-project/swc-node/tree/master/packages/register) instead'
+              : ''),
       )
     }
   }
