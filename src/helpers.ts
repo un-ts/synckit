@@ -4,6 +4,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
   type MessagePort,
+  MessageChannel,
   Worker,
   receiveMessageOnPort,
 } from 'node:worker_threads'
