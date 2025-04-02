@@ -64,12 +64,12 @@ export const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
 
 export const NODE_OPTIONS = NODE_OPTIONS_.split(/\s+/)
 
-export const NO_STRIP_TYPES = // >=
-  compareNodeVersion(FEATURE_TYPESCRIPT_NODE_VERSION) >= 0
+export const NO_STRIP_TYPES =
+  // only consider `process.features.typescript` when `--no-experimental-strip-types` flag enabled
+  hasFlag(NO_STRIP_TYPES_FLAG) && // >=
+  (compareNodeVersion(FEATURE_TYPESCRIPT_NODE_VERSION) >= 0
     ? process.features.typescript === false
-    : hasFlag(NO_STRIP_TYPES_FLAG) &&
-      !hasFlag(STRIP_TYPES_FLAG) &&
-      !hasFlag(TRANSFORM_TYPES_FLAG)
+    : !hasFlag(STRIP_TYPES_FLAG) && !hasFlag(TRANSFORM_TYPES_FLAG))
 
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 

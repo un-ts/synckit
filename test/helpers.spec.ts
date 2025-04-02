@@ -1,4 +1,5 @@
-/* eslint-disable @typescript-eslint/unbound-method */
+/* eslint-disable @typescript-eslint/unbound-method, jest/no-standalone-expect */
+
 import { jest } from '@jest/globals'
 
 import {
@@ -11,12 +12,13 @@ import {
 } from './helpers.ts'
 
 import {
+  DEFAULT_TYPES_NODE_VERSION,
   IMPORT_FLAG,
   LOADER_FLAG,
   REQUIRE_ABBR_FLAG,
   REQUIRE_FLAG,
-  STRIP_TYPES_FLAG,
-  STRIP_TYPES_NODE_VERSION,
+  TRANSFORM_TYPES_FLAG,
+  TRANSFORM_TYPES_NODE_VERSION,
   TsRunner,
   compareNodeVersion,
   dataUrl,
@@ -206,15 +208,18 @@ describe('helpers', () => {
     })
 
     // can not be mocked correctly for now
-    testIf(compareNodeVersion(STRIP_TYPES_NODE_VERSION) >= 0)(
-      'should add `STRIP_TYPES_FLAG` for Node TS runner',
+    testIf(compareNodeVersion(TRANSFORM_TYPES_NODE_VERSION) >= 0)(
+      'should add `TRANSFORM_TYPES_FLAG` for Node TS runner',
       () => {
         const { execArgv } = setupTsRunner(workerTsPath, {
           tsRunner: TsRunner.Node,
         })
 
-        // eslint-disable-next-line jest/no-standalone-expect
-        expect(execArgv).toContain(STRIP_TYPES_FLAG)
+        if (compareNodeVersion(DEFAULT_TYPES_NODE_VERSION) >= 0) {
+          expect(execArgv).not.toContain(TRANSFORM_TYPES_FLAG)
+        } else {
+          expect(execArgv).toContain(TRANSFORM_TYPES_FLAG)
+        }
       },
     )
 
