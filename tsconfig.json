@@ -1,6 +1,7 @@
 {
   "extends": "@1stg/tsconfig/nodenext",
   "compilerOptions": {
+    "isolatedModules": true,
     "rootDir": ".",
     "paths": {
       "synckit": ["./src/index.ts"]

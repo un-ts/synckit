@@ -1,16 +1,19 @@
-name: Publish Any Commit
+name: autofix.ci # For security reasons, the workflow in which the autofix.ci action is used must be named "autofix.ci".
+
 on:
-  - push
-  - pull_request
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  publish:
+  autofix:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -24,7 +27,10 @@ jobs:
       - name: Install dependencies
         run: yarn --immutable
 
-      - name: Build
-        run: yarn build
+      - name: Format Codes
+        run: yarn format
 
-      - run: yarn dlx pkg-pr-new publish --compact
+      - name: Apply autofix.ci
+        uses: autofix-ci/action@2891949f3779a1cafafae1523058501de3d4e944 # v1
+        with:
+          fail-fast: false
