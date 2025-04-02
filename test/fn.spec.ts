@@ -1,11 +1,20 @@
 /* eslint-disable jest/no-standalone-expect */
-import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { jest } from '@jest/globals'
 import { cjsRequire } from '@pkgr/core'
 
-import { _dirname, setupReceiveMessageOnPortMock, testIf } from './helpers.js'
+import {
+  setupReceiveMessageOnPortMock,
+  testIf,
+  workerCjsPath,
+  workerCjsTsPath,
+  workerErrorPath,
+  workerEsmTsPath,
+  workerJsAsTsPath,
+  workerMjsPath,
+  workerNoExtAsJsPath,
+} from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
 import {
@@ -28,14 +37,6 @@ beforeEach(() => {
     delete process.env.SYNCKIT_TIMEOUT
   }
 })
-
-const workerCjsTsPath = path.resolve(_dirname, 'cjs/worker-cjs.ts')
-const workerEsmTsPath = path.resolve(_dirname, 'esm/worker-esm.ts')
-const workerNoExtAsJsPath = path.resolve(_dirname, 'worker-js')
-const workerJsAsTsPath = path.resolve(_dirname, 'worker.js')
-const workerCjsPath = path.resolve(_dirname, 'worker.cjs')
-const workerMjsPath = path.resolve(_dirname, 'worker.mjs')
-const workerErrorPath = path.resolve(_dirname, 'worker-error.cjs')
 
 test('ts as cjs', () => {
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsTsPath)

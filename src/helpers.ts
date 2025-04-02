@@ -71,7 +71,10 @@ export const hasLoaderFlag = (execArgv: string[]) =>
 
 export const setupTsRunner = (
   workerPath: string,
-  { execArgv, tsRunner }: { execArgv: string[]; tsRunner?: TsRunner }, // eslint-disable-next-line sonarjs/cognitive-complexity
+  {
+    execArgv = DEFAULT_EXEC_ARGV,
+    tsRunner,
+  }: { execArgv?: string[]; tsRunner?: TsRunner } = {}, // eslint-disable-next-line sonarjs/cognitive-complexity
 ) => {
   let ext = path.extname(workerPath)
 
@@ -277,7 +280,7 @@ export const setupTsRunner = (
         throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
       }
     }
-  } else if (!jsUseEsm) {
+  } else if (!jsUseEsm && !workerPath.endsWith('.cjs')) {
     const pkg = findUp(workerPath)
     if (pkg) {
       jsUseEsm = cjsRequire<PackageJson>(pkg).type === 'module'
