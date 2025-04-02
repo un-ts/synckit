@@ -1,5 +1,11 @@
 # synckit
 
+## 0.11.1
+
+### Patch Changes
+
+- [#224](https://github.com/un-ts/synckit/pull/224) [`0966d2a`](https://github.com/un-ts/synckit/commit/0966d2aa2f9a8d4b2c8692edf6b2e2d150f8b9ed) Thanks [@JounQin](https://github.com/JounQin)! - fix: add missing `MessageChannel` from `node:worker_threads` for Node 14 compatibility
+
 ## 0.11.0
 
 ### Minor Changes
