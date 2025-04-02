@@ -473,29 +473,28 @@ let sharedBuffer: SharedArrayBuffer | undefined
 let sharedBufferView: Int32Array | undefined
 
 /**
- * Spawns a worker thread and returns a synchronous function for dispatching tasks.
+ * Spawns a worker thread and returns a synchronous function to dispatch tasks.
  *
- * This function sets up a worker thread using the specified worker script path and configuration
- * options including timeout, execution arguments, TypeScript runner, transferable objects, and global shims.
- * It creates a MessageChannel and leverages a shared memory buffer with Atomics for synchronization.
- * The returned function sends a task message to the worker identified by a unique ID, awaits the
- * corresponding response, and either returns the result or throws an error if an issue occurs.
+ * The function initializes a worker thread with the specified script and configuration,
+ * setting up a dedicated message channel for bidirectional communication. It applies TypeScript
+ * runner settings, execution arguments, and global shims as needed. The returned function sends
+ * tasks to the worker, waits synchronously for a response using shared memory synchronization, and
+ * then returns the computed result.
  *
- * @param workerPath - The file path to the worker script.
- * @param options - Configuration options including:
- *   - timeout: Maximum duration (in milliseconds) to wait for the worker response.
- *   - execArgv: Additional Node.js execution arguments for the worker process.
- *   - tsRunner: The TypeScript runner to use (required for TypeScript worker files).
- *   - transferList: An array of transferable objects to pass to the worker.
- *   - globalShims: Global shim configuration for module imports; can be a preset flag or an array of shims.
+ * @param workerPath - The file path of the worker script to execute.
+ * @param options - An object containing configuration parameters:
+ *   - timeout: Maximum time in milliseconds to wait for the worker's response.
+ *   - execArgv: Array of Node.js execution arguments for the worker.
+ *   - tsRunner: Specifies the TypeScript runner to use if the worker script is TypeScript.
+ *   - transferList: List of additional transferable objects to pass to the worker.
+ *   - globalShims: Modules to import as global shims; if true, a default preset is used.
  *
- * @returns A synchronous function that accepts arguments for the worker task and returns the computed result.
+ * @returns A synchronous function that accepts task arguments intended for the worker thread and returns its result.
  *
- * @throws {Error} If a TypeScript worker is specified without a valid tsRunner, if the chosen tsRunner is not supported
- * for the file type, or if a synchronization error occurs during message communication.
+ * @throws {Error} If a TypeScript runner is required but not specified, or if an unsupported TypeScript runner is used for the file type.
+ * @throws {Error} If internal synchronization fails or if the message identifier does not match the expected value.
  */
-// eslint-disable-next-line sonarjs/cognitive-complexity
-export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
+export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( // eslint-disable-line sonarjs/cognitive-complexity
   workerPath: string,
   {
     timeout = DEFAULT_TIMEOUT,

@@ -78,16 +78,16 @@ export function createSyncFn<T extends AnyFn>(
 
 /* istanbul ignore next */
 /**
- * Sets up the worker thread to listen for messages from the parent process and execute the provided function with the received arguments.
+ * Configures the worker thread to listen for messages from the parent process and execute a provided function.
  *
- * When a message with an associated ID and arguments is received, this function invokes the given function asynchronously.
- * It captures standard I/O during execution and conditionally registers a custom module loader if a valid loader path is provided
- * and the Node.js version is supported. The function listens for an abort signal specific to the message; if aborted, it cancels
- * sending a response. Upon completion, it posts a message back with the result or, in case of an error, with the error and its extracted properties.
+ * If the worker is not initialized with the required data, the function exits without further action.
+ * Otherwise, it optionally registers a custom module loader when a valid loader path is provided and captures
+ * output generated during execution. It listens for messages containing an identifier and arguments, then invokes
+ * the supplied function asynchronously with those arguments. If an abort command is received for the same message,
+ * the response is suppressed. Upon completing execution, it posts a message back with either the result or error
+ * details, including extracted error properties.
  *
- * If the worker is not initialized with the necessary worker data, the function exits without performing any action.
- *
- * @param fn - The function to execute when a message is received from the parent.
+ * @param fn - The function to execute when a message is received.
  */
 export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
   fn: T,
