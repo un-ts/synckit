@@ -75,7 +75,7 @@
     "@commitlint/cli": "^19.8.0",
     "@pkgr/rollup": "^6.0.1",
     "@types/jest": "^29.5.14",
-    "@types/node": "^22.13.16",
+    "@types/node": "^22.13.17",
     "@unts/patch-package": "^8.1.1",
     "clean-pkg-json": "^1.2.1",
     "concurrently": "^9.1.2",
