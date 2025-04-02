@@ -57,6 +57,7 @@ export const NO_STRIP_TYPES = // >=
     : hasFlag(NO_STRIP_TYPES_FLAG) &&
       !hasFlag(STRIP_TYPES_FLAG) &&
       !hasFlag(TRANSFORM_TYPES_FLAG)
+
 export const DEFAULT_TIMEOUT = SYNCKIT_TIMEOUT ? +SYNCKIT_TIMEOUT : undefined
 
 export const DEFAULT_EXEC_ARGV = SYNCKIT_EXEC_ARGV.split(',')
