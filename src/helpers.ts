@@ -19,10 +19,11 @@ import {
   DEFAULT_TS_RUNNER,
   DEFAULT_TYPES_NODE_VERSION,
   IMPORT_FLAG,
-  IMPORT_FLAG_SUPPORTED_NODE_VERSION,
+  IMPORT_FLAG_SUPPORTED,
   INT32_BYTES,
   LOADER_FLAG,
-  LOADER_SUPPORTED_NODE_VERSION,
+  LOADER_FLAGS,
+  MODULE_REGISTER_SUPPORTED,
   MTS_SUPPORTED,
   NO_STRIP_TYPES,
   NO_STRIP_TYPES_FLAG,
@@ -66,7 +67,7 @@ export const hasImportFlag = (execArgv: string[]) =>
   execArgv.includes(IMPORT_FLAG)
 
 export const hasLoaderFlag = (execArgv: string[]) =>
-  execArgv.includes(LOADER_FLAG)
+  execArgv.some(execArg => LOADER_FLAGS.has(execArg))
 
 export const setupTsRunner = (
   workerPath: string,
@@ -237,8 +238,7 @@ export const setupTsRunner = (
       // https://github.com/swc-project/swc-node#usage
       case TsRunner.SWC: {
         if (tsUseEsm) {
-          // >=
-          if (compareNodeVersion(IMPORT_FLAG_SUPPORTED_NODE_VERSION) >= 0) {
+          if (IMPORT_FLAG_SUPPORTED) {
             if (!hasImportFlag(execArgv)) {
               execArgv = [
                 IMPORT_FLAG,
@@ -264,8 +264,7 @@ export const setupTsRunner = (
       }
       // https://tsx.is/dev-api/node-cli#node-js-cli
       case TsRunner.TSX: {
-        // >=
-        if (compareNodeVersion(IMPORT_FLAG_SUPPORTED_NODE_VERSION) >= 0) {
+        if (IMPORT_FLAG_SUPPORTED) {
           if (!execArgv.includes(IMPORT_FLAG)) {
             execArgv = [IMPORT_FLAG, TsRunner.TSX, ...execArgv]
           }
@@ -310,14 +309,8 @@ export const setupTsRunner = (
         // absolute Windows paths in the --experimental-loader option.
         // https://github.com/un-ts/synckit/issues/123
         resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).href
-
-        // <
-        if (compareNodeVersion(LOADER_SUPPORTED_NODE_VERSION) < 0) {
-          execArgv = [
-            '--experimental-loader',
-            resolvedPnpLoaderPath,
-            ...execArgv,
-          ]
+        if (!MODULE_REGISTER_SUPPORTED) {
+          execArgv = [LOADER_FLAG, resolvedPnpLoaderPath, ...execArgv]
         }
       }
     }

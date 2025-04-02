@@ -37,10 +37,14 @@ export const TS_ESM_PARTIAL_SUPPORTED =
   // <
   compareNodeVersion('18.19') < 0
 
-// >=, `module.register` is required, https://nodejs.org/api/module.html#moduleregisterspecifier-parenturl-options
+// >=, `module.register` is required
 export const MTS_SUPPORTED = compareNodeVersion('20.8') >= 0
 
-export const LOADER_SUPPORTED_NODE_VERSION = '20'
+// https://nodejs.org/api/module.html#moduleregisterspecifier-parenturl-options
+export const MODULE_REGISTER_SUPPORTED =
+  MTS_SUPPORTED ||
+  // >=
+  compareNodeVersion('18.19') >= 0
 
 // https://nodejs.org/docs/latest-v22.x/api/typescript.html#type-stripping
 export const STRIP_TYPES_NODE_VERSION = '22.6'
@@ -99,6 +103,11 @@ export const REQUIRE_FLAGS = new Set([REQUIRE_FLAG, REQUIRE_ABBR_FLAG])
 
 export const LOADER_FLAG = '--loader'
 
-export const IMPORT_FLAG_SUPPORTED_NODE_VERSION = '20.6'
+export const EXPERIMENTAL_LOADER_FLAG = '--experimental-loader'
+
+export const LOADER_FLAGS = new Set([LOADER_FLAG, EXPERIMENTAL_LOADER_FLAG])
+
+// >=
+export const IMPORT_FLAG_SUPPORTED = compareNodeVersion('20.6') >= 0
 
 export const INT32_BYTES = 4
