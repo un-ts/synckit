@@ -7,8 +7,8 @@ import {
   workerData,
 } from 'node:worker_threads'
 
-import { compareVersion } from './common.js'
-import { NODE_VERSION, LOADER_SUPPORTED_NODE_VERSION } from './constants.js'
+import { compareNodeVersion } from './common.js'
+import { LOADER_SUPPORTED_NODE_VERSION } from './constants.js'
 import {
   extractProperties,
   overrideStdio,
@@ -108,7 +108,7 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
   if (
     pnpLoaderPath &&
     // >=
-    compareVersion(NODE_VERSION, LOADER_SUPPORTED_NODE_VERSION) >= 0
+    compareNodeVersion(LOADER_SUPPORTED_NODE_VERSION) >= 0
   ) {
     module.register(pnpLoaderPath)
   }

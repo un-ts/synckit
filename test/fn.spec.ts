@@ -1,18 +1,18 @@
+/* eslint-disable jest/no-standalone-expect */
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { jest } from '@jest/globals'
 import { cjsRequire } from '@pkgr/core'
 
-import {
-  _dirname,
-  setupReceiveMessageOnPortMock,
-  testIf,
-  tsUseEsmSupported,
-} from './helpers.js'
+import { _dirname, setupReceiveMessageOnPortMock, testIf } from './helpers.js'
 import type { AsyncWorkerFn } from './types.js'
 
-import { type StdioChunk, createSyncFn } from 'synckit'
+import {
+  type StdioChunk,
+  TS_ESM_PARTIAL_SUPPORTED,
+  createSyncFn,
+} from 'synckit'
 
 const { SYNCKIT_TIMEOUT } = process.env
 
@@ -44,13 +44,11 @@ test('ts as cjs', () => {
   expect(syncFn(5)).toBe(5)
 })
 
-testIf(tsUseEsmSupported)('ts as esm', () => {
+testIf(TS_ESM_PARTIAL_SUPPORTED)('ts as esm', () => {
   const syncFn = createSyncFn<AsyncWorkerFn>(workerEsmTsPath)
-  /* eslint-disable jest/no-standalone-expect */
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
-  /* eslint-enable jest/no-standalone-expect */
 })
 
 test('no ext as js (as esm)', () => {
@@ -60,13 +58,11 @@ test('no ext as js (as esm)', () => {
   expect(syncFn(5)).toBe(5)
 })
 
-testIf(tsUseEsmSupported)('js as ts (as esm)', () => {
+testIf(TS_ESM_PARTIAL_SUPPORTED)('js as ts (as esm)', () => {
   const syncFn = createSyncFn<AsyncWorkerFn>(workerJsAsTsPath)
-  /* eslint-disable jest/no-standalone-expect */
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5)).toBe(5)
-  /* eslint-enable jest/no-standalone-expect */
 })
 
 test('createSyncFn', () => {
