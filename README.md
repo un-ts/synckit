@@ -28,6 +28,7 @@ Perform async work synchronously in Node.js/Bun using `worker_threads` with firs
     - [`ts-node` (Default)](#ts-node-default)
     - [`esbuild-register`](#esbuild-register)
     - [`esbuild-runner`](#esbuild-runner)
+    - [`oxc`](#oxc)
     - [`swc`](#swc)
     - [`tsx`](#tsx)
 - [Benchmark](#benchmark)
@@ -127,7 +128,7 @@ export interface GlobalShim {
 1. `SYNCKIT_EXEC_ARGV`: List of node CLI options passed to the worker, split with comma `,`. (default as `[]`), see also [`node` docs](https://nodejs.org/api/worker_threads.html)
 2. `SYNCKIT_GLOBAL_SHIMS`: Whether to enable the default `DEFAULT_GLOBAL_SHIMS_PRESET` as `globalShims`
 3. `SYNCKIT_TIMEOUT`: `timeout` for performing the async job (no default)
-4. `SYNCKIT_TS_RUNNER`: Which TypeScript runner to be used, it could be very useful for development, could be `'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'swc' | 'tsx'`, `'ts-node'` is used by default, make sure you have installed them already
+4. `SYNCKIT_TS_RUNNER`: Which TypeScript runner to be used, it could be very useful for development, could be `'node' | 'ts-node' | 'esbuild-register' | 'esbuild-runner' | 'oxc' | 'swc' | 'tsx'`, `node` or `ts-node` will be used by default accordingly, make sure you have installed them already
 
 ### TypeScript
 
@@ -162,6 +163,10 @@ Please view [`esbuild-register`][] for its document
 #### `esbuild-runner`
 
 Please view [`esbuild-runner`][] for its document
+
+#### `oxc`
+
+Please view [`@oxc-node/core`][] for its document
 
 #### `swc`
 
@@ -239,6 +244,7 @@ Detailed changes for each release are documented in [CHANGELOG.md](./CHANGELOG.m
 
 [`esbuild-register`]: https://github.com/egoist/esbuild-register
 [`esbuild-runner`]: https://github.com/folke/esbuild-runner
+[`@oxc-node/core`]: https://github.com/oxc-project/oxc-node
 [`@swc-node/register`]: https://github.com/swc-project/swc-node/tree/master/packages/register
 [`tsx`]: https://github.com/esbuild-kit/tsx
 [1stg.me]: https://www.1stg.me
