@@ -1,5 +1,19 @@
 # synckit
 
+## 0.11.0
+
+### Minor Changes
+
+- [#222](https://github.com/un-ts/synckit/pull/222) [`59f7432`](https://github.com/un-ts/synckit/commit/59f743294c1843b1c4946fa08df42fa785975ffc) Thanks [@JounQin](https://github.com/JounQin)! - feat: add `oxc` ts runner support, correct `swc` ts runner with `--import` flag support
+
+### Patch Changes
+
+- [#222](https://github.com/un-ts/synckit/pull/222) [`59f7432`](https://github.com/un-ts/synckit/commit/59f743294c1843b1c4946fa08df42fa785975ffc) Thanks [@JounQin](https://github.com/JounQin)! - fix: `.cjs` should never be treated as ESM
+
+- [#219](https://github.com/un-ts/synckit/pull/219) [`79fa3a2`](https://github.com/un-ts/synckit/commit/79fa3a2386666be6379244414066888fbebeefac) Thanks [@JounQin](https://github.com/JounQin)! - refactor: split into chunk files, add `module-sync` entry
+
+- [#222](https://github.com/un-ts/synckit/pull/222) [`59f7432`](https://github.com/un-ts/synckit/commit/59f743294c1843b1c4946fa08df42fa785975ffc) Thanks [@JounQin](https://github.com/JounQin)! - fix: only consider `process.features.typescript` when `--no-experimental-strip-types` flag enabled
+
 ## 0.10.3
 
 ### Patch Changes
