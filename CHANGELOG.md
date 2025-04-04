@@ -1,5 +1,11 @@
 # synckit
 
+## 0.11.2
+
+### Patch Changes
+
+- [#226](https://github.com/un-ts/synckit/pull/226) [`133408d`](https://github.com/un-ts/synckit/commit/133408db2d42ddd4e6c9b1c902700949c27117a2) Thanks [@JounQin](https://github.com/JounQin)! - fix: `.cts` should never be treated as esm
+
 ## 0.11.1
 
 ### Patch Changes
