@@ -247,6 +247,6 @@ Detailed changes for each release are documented in [CHANGELOG.md](./CHANGELOG.m
 [`@oxc-node/core`]: https://github.com/oxc-project/oxc-node
 [`@swc-node/register`]: https://github.com/swc-project/swc-node/tree/master/packages/register
 [`tsx`]: https://github.com/esbuild-kit/tsx
-[1stg.me]: https://www.1stg.me
-[jounqin]: https://GitHub.com/JounQin
-[mit]: http://opensource.org/licenses/MIT
+[1stG.me]: https://www.1stG.me
+[JounQin]: https://github.com/JounQin
+[MIT]: http://opensource.org/licenses/MIT
