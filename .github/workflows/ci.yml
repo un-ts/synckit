@@ -62,7 +62,6 @@ jobs:
         # eslint-plugin-unicorn using `with` syntax is not supported
         if: ${{ matrix.node != 18 && matrix.node != 18.18 }}
         env:
-          EFF_NO_LINK_RULES: true
           PARSER_NO_WATCH: true
 
       - name: Benchmark

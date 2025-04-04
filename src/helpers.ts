@@ -113,11 +113,11 @@ export const setupTsRunner = (
 
   const isTs = /\.[cm]?ts$/.test(workerPath)
 
-  let jsUseEsm = workerPath.endsWith('.mjs')
-  let tsUseEsm = workerPath.endsWith('.mts')
+  let jsUseEsm = ext === '.mjs'
+  let tsUseEsm = ext === '.mts'
 
   if (isTs) {
-    if (!tsUseEsm) {
+    if (!tsUseEsm && ext !== '.cts') {
       const pkg = findUp(workerPath)
       if (pkg) {
         tsUseEsm = cjsRequire<PackageJson>(pkg).type === 'module'
@@ -281,7 +281,7 @@ export const setupTsRunner = (
         throw new Error(`Unknown ts runner: ${String(tsRunner)}`)
       }
     }
-  } else if (!jsUseEsm && !workerPath.endsWith('.cjs')) {
+  } else if (!jsUseEsm && ext !== '.cjs') {
     const pkg = findUp(workerPath)
     if (pkg) {
       jsUseEsm = cjsRequire<PackageJson>(pkg).type === 'module'
