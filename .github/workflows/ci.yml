@@ -60,7 +60,7 @@ jobs:
       - name: Lint
         run: yarn lint
         # eslint-plugin-unicorn using `with` syntax is not supported
-        if: ${{ matrix.node != 18 && matrix.node != 18.18 }}
+        if: ${{ matrix.node != 18.18 }}
         env:
           PARSER_NO_WATCH: true
 
@@ -71,3 +71,10 @@ jobs:
         uses: codecov/codecov-action@0565863a31f2c772f9f0395002a31e3f06189574 # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Run codacy-coverage-reporter
+        # bad Windows -- https://github.com/codacy/codacy-coverage-reporter-action/issues/91
+        if: ${{ matrix.os != 'windows-latest' }}
+        uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699 # v1.3.0
+        with:
+          api-token: ${{ secrets.CODACY_API_TOKEN }}
