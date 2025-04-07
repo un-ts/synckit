@@ -1,5 +1,11 @@
 # synckit
 
+## 0.11.3
+
+### Patch Changes
+
+- [#228](https://github.com/un-ts/synckit/pull/228) [`cc7c724`](https://github.com/un-ts/synckit/commit/cc7c724e0a3ef1fe6fa425767f50f7206f130ec4) Thanks [@JounQin](https://github.com/JounQin)! - fix: legacy top level `types` entry should prefer `.d.cts`
+
 ## 0.11.2
 
 ### Patch Changes
