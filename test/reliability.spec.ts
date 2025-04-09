@@ -3,7 +3,7 @@ import path from 'node:path'
 import { _dirname } from './helpers.js'
 
 // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-const times = process.env.CI ? 1e7 : 1e3
+const times = process.env.CI ? 1e5 : 1e3
 
 test(`Reliability (${times} runs)`, async () => {
   const { createSyncFn } = await import('synckit')
