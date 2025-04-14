@@ -34,14 +34,17 @@ let syncFnCache: Map<string, AnyFn> | undefined
 /**
  * Creates a synchronous worker function.
  *
- * Converts the provided worker path (URL or string) to an absolute file path, retrieves a cached synchronous
- * function if one exists, or starts a new worker thread to handle task execution. The resulting function is
- * cached to avoid redundant initialization.
+ * Converts the provided worker path (URL or string) to an absolute file path,
+ * retrieves a cached synchronous function if one exists, or starts a new worker
+ * thread to handle task execution. The resulting function is cached to avoid
+ * redundant initialization.
  *
- * @param workerPath - The absolute file path or URL of the worker script. If given as a URL, it is converted to a file path.
- * @param timeoutOrOptions - Optional timeout in milliseconds or an options object to configure the worker thread.
- * @returns A synchronous function that executes tasks on the specified worker thread.
- *
+ * @param workerPath - The absolute file path or URL of the worker script. If
+ *   given as a URL, it is converted to a file path.
+ * @param timeoutOrOptions - Optional timeout in milliseconds or an options
+ *   object to configure the worker thread.
+ * @returns A synchronous function that executes tasks on the specified worker
+ *   thread.
  * @throws {Error} If the resulting worker path is not absolute.
  */
 export function createSyncFn<T extends AnyFn>(
@@ -78,14 +81,17 @@ export function createSyncFn<T extends AnyFn>(
 
 /* istanbul ignore next */
 /**
- * Configures the worker thread to listen for messages from the parent process and execute a provided function.
+ * Configures the worker thread to listen for messages from the parent process
+ * and execute a provided function.
  *
- * If the worker is not initialized with the required data, the function exits without further action.
- * Otherwise, it optionally registers a custom module loader when a valid loader path is provided and captures
- * output generated during execution. It listens for messages containing an identifier and arguments, then invokes
- * the supplied function asynchronously with those arguments. If an abort command is received for the same message,
- * the response is suppressed. Upon completing execution, it posts a message back with either the result or error
- * details, including extracted error properties.
+ * If the worker is not initialized with the required data, the function exits
+ * without further action. Otherwise, it optionally registers a custom module
+ * loader when a valid loader path is provided and captures output generated
+ * during execution. It listens for messages containing an identifier and
+ * arguments, then invokes the supplied function asynchronously with those
+ * arguments. If an abort command is received for the same message, the response
+ * is suppressed. Upon completing execution, it posts a message back with either
+ * the result or error details, including extracted error properties.
  *
  * @param fn - The function to execute when a message is received.
  */

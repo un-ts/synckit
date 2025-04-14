@@ -386,9 +386,7 @@ export const encodeImportModule = (
   )
 }
 
-/**
- * @internal
- */
+/** @internal */
 export const _generateGlobals = (
   globalShims: GlobalShim[],
   type: 'import' | 'require',
@@ -461,7 +459,8 @@ export function extractProperties<T>(object?: T): T | undefined
  * Creates a shallow copy of the enumerable properties from the provided object.
  *
  * @param object - An optional object whose properties are to be extracted.
- * @returns A new object containing the enumerable properties of the input, or undefined if no valid object is provided.
+ * @returns A new object containing the enumerable properties of the input, or
+ *   undefined if no valid object is provided.
  */
 export function extractProperties<T>(object?: T) {
   if (object && typeof object === 'object') {
@@ -479,24 +478,30 @@ let sharedBufferView: Int32Array | undefined
 /**
  * Spawns a worker thread and returns a synchronous function to dispatch tasks.
  *
- * The function initializes a worker thread with the specified script and configuration,
- * setting up a dedicated message channel for bidirectional communication. It applies TypeScript
- * runner settings, execution arguments, and global shims as needed. The returned function sends
- * tasks to the worker, waits synchronously for a response using shared memory synchronization, and
+ * The function initializes a worker thread with the specified script and
+ * configuration, setting up a dedicated message channel for bidirectional
+ * communication. It applies TypeScript runner settings, execution arguments,
+ * and global shims as needed. The returned function sends tasks to the worker,
+ * waits synchronously for a response using shared memory synchronization, and
  * then returns the computed result.
  *
  * @param workerPath - The file path of the worker script to execute.
  * @param options - An object containing configuration parameters:
- *   - timeout: Maximum time in milliseconds to wait for the worker's response.
- *   - execArgv: Array of Node.js execution arguments for the worker.
- *   - tsRunner: Specifies the TypeScript runner to use if the worker script is TypeScript.
- *   - transferList: List of additional transferable objects to pass to the worker.
- *   - globalShims: Modules to import as global shims; if true, a default preset is used.
  *
- * @returns A synchronous function that accepts task arguments intended for the worker thread and returns its result.
+ *   - Timeout: Maximum time in milliseconds to wait for the worker's response.
+ *   - ExecArgv: Array of Node.js execution arguments for the worker.
+ *   - TsRunner: Specifies the TypeScript runner to use if the worker script is
+ *       TypeScript.
+ *   - TransferList: List of additional transferable objects to pass to the worker.
+ *   - GlobalShims: Modules to import as global shims; if true, a default preset is
+ *       used.
  *
- * @throws {Error} If a TypeScript runner is required but not specified, or if an unsupported TypeScript runner is used for the file type.
- * @throws {Error} If internal synchronization fails or if the message identifier does not match the expected value.
+ * @returns A synchronous function that accepts task arguments intended for the
+ *   worker thread and returns its result.
+ * @throws {Error} If a TypeScript runner is required but not specified, or if
+ *   an unsupported TypeScript runner is used for the file type.
+ * @throws {Error} If internal synchronization fails or if the message
+ *   identifier does not match the expected value.
  */
 export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( // eslint-disable-line sonarjs/cognitive-complexity
   workerPath: string,

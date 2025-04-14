@@ -117,26 +117,27 @@
   ````ts
   export interface GlobalShim {
     moduleName: string
-    /**
-     * `undefined` means side effect only
-     */
+    /** `undefined` means side effect only */
     globalName?: string
     /**
      * 1. `undefined` or empty string means `default`, for example:
+     *
      * ```js
      * import globalName from 'module-name'
      * ```
      *
      * 2. `null` means namespaced, for example:
+     *
      * ```js
      * import * as globalName from 'module-name'
      * ```
-     *
      */
     named?: string | null
     /**
-     * If not `false`, the shim will only be applied when the original `globalName` unavailable,
-     * for example you may only want polyfill `globalThis.fetch` when it's unavailable natively:
+     * If not `false`, the shim will only be applied when the original
+     * `globalName` unavailable, for example you may only want polyfill
+     * `globalThis.fetch` when it's unavailable natively:
+     *
      * ```js
      * import fetch from 'node-fetch'
      *
