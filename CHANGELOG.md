@@ -1,5 +1,11 @@
 # synckit
 
+## 0.11.4
+
+### Patch Changes
+
+- [#232](https://github.com/un-ts/synckit/pull/232) [`18e6cd4`](https://github.com/un-ts/synckit/commit/18e6cd477919310d5f230bc0c3b5e9cb89183405) Thanks [@JounQin](https://github.com/JounQin)! - fix: remove buggy `module-sync` entry
+
 ## 0.11.3
 
 ### Patch Changes
