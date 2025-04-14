@@ -84,26 +84,27 @@ You must make sure, the `result` is serializable by [`Structured Clone Algorithm
 ````ts
 export interface GlobalShim {
   moduleName: string
-  /**
-   * `undefined` means side effect only
-   */
+  /** `undefined` means side effect only */
   globalName?: string
   /**
    * 1. `undefined` or empty string means `default`, for example:
+   *
    * ```js
    * import globalName from 'module-name'
    * ```
    *
    * 2. `null` means namespaced, for example:
+   *
    * ```js
    * import * as globalName from 'module-name'
    * ```
-   *
    */
   named?: string | null
   /**
-   * If not `false`, the shim will only be applied when the original `globalName` unavailable,
-   * for example you may only want polyfill `globalThis.fetch` when it's unavailable natively:
+   * If not `false`, the shim will only be applied when the original
+   * `globalName` unavailable, for example you may only want polyfill
+   * `globalThis.fetch` when it's unavailable natively:
+   *
    * ```js
    * import fetch from 'node-fetch'
    *
@@ -207,15 +208,17 @@ See [benchmark.cjs](./benchmarks/benchmark.cjs.txt) and [benchmark.esm](./benchm
 
 You can try it with running `yarn benchmark` by yourself. [Here](./benchmarks/benchmark.js) is the benchmark source code.
 
-[![Sponsors](https://raw.githubusercontent.com/1stG/static/master/sponsors.svg)](https://github.com/sponsors/JounQin)
+## Sponsors and Backers
 
-## Sponsors
+[![Sponsors and Backers](https://raw.githubusercontent.com/1stG/static/master/sponsors.svg)](https://github.com/sponsors/JounQin)
+
+### Sponsors
 
 | 1stG                                                                                                                   | RxTS                                                                                                                   | UnTS                                                                                                                   |
 | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | [![1stG Open Collective sponsors](https://opencollective.com/1stG/organizations.svg)](https://opencollective.com/1stG) | [![RxTS Open Collective sponsors](https://opencollective.com/rxts/organizations.svg)](https://opencollective.com/rxts) | [![UnTS Open Collective sponsors](https://opencollective.com/unts/organizations.svg)](https://opencollective.com/unts) |
 
-## Backers
+### Backers
 
 | 1stG                                                                                                                | RxTS                                                                                                                | UnTS                                                                                                                |
 | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |

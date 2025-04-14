@@ -6,7 +6,8 @@ const RUN_TIMES = +(process.env.RUN_TIMES || 1000)
 
 /**
  * @param {string} name
- * @typedef {{ loadTime: number, runTime: number, totalTime: number } | void} PerfResult
+ *
+ * @typedef {{ loadTime: number; runTime: number; totalTime: number } | void} PerfResult
  * @returns {PerfResult | void} Perf result
  */
 const perfCase = name => {
@@ -47,9 +48,7 @@ const kebabCase = text =>
   text.replace(/([A-Z]+)/, (_, $1) => '-' + $1.toLowerCase())
 
 class Benchmark {
-  /**
-   * @param { Record<string, PerfResult> } perfResults
-   */
+  /** @param {Record<string, PerfResult>} perfResults */
   constructor(perfResults) {
     const keys = Object.keys(perfResults)
     const _baseKey = keys[0]
@@ -85,7 +84,7 @@ class Benchmark {
   /**
    * @param {number} a
    * @param {number} b
-   * @returns {string} perf description
+   * @returns {string} Perf description
    */
   perf(a, b) {
     return a === b
