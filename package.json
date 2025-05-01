@@ -69,7 +69,7 @@
     "@changesets/changelog-github": "^0.5.1",
     "@changesets/cli": "^2.29.0",
     "@commitlint/cli": "^19.8.0",
-    "@oxc-node/core": "^0.0.23",
+    "@oxc-node/core": "^0.0.24",
     "@pkgr/rollup": "^6.0.3",
     "@swc-node/register": "^1.10.10",
     "@swc/core": "^1.11.21",
