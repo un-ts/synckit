@@ -1,5 +1,11 @@
 # synckit
 
+## 0.11.5
+
+### Patch Changes
+
+- [#235](https://github.com/un-ts/synckit/pull/235) [`abdb67a`](https://github.com/un-ts/synckit/commit/abdb67a11f67151fd39ac646b4ea11b325e079ac) Thanks [@JounQin](https://github.com/JounQin)! - fix: use `tsdown` to bundle `cjs` outputs
+
 ## 0.11.4
 
 ### Patch Changes
