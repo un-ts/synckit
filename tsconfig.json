@@ -6,6 +6,6 @@
     "paths": {
       "synckit": ["./src/index.ts"]
     },
-    "target": "ES2015"
+    "target": "ES2020"
   }
 }
