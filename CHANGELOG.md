@@ -1,5 +1,11 @@
 # synckit
 
+## 0.11.6
+
+### Patch Changes
+
+- [#240](https://github.com/un-ts/synckit/pull/240) [`e0caff5`](https://github.com/un-ts/synckit/commit/e0caff54a9865ee49e53e610ee1a1bc80ca1279c) Thanks [@JounQin](https://github.com/JounQin)! - refactor: target ES2020 to drop `tslib` dependency
+
 ## 0.11.5
 
 ### Patch Changes
