@@ -1,5 +1,11 @@
 # synckit
 
+## 0.10.4
+
+### Patch Changes
+
+- [#245](https://github.com/un-ts/synckit/pull/245) [`bc77666`](https://github.com/un-ts/synckit/commit/bc776665e053e57fa2ae376b32afdca471ed794c) Thanks [@JounQin](https://github.com/JounQin)! - fix: unexpected null pointer exception due to race condition
+
 ## 0.10.3
 
 ### Patch Changes
