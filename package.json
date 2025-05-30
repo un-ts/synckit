@@ -144,7 +144,7 @@
     "detail": true,
     "ignoreAsAssertion": true,
     "ignoreFiles": [
-      "**/*.d.ts"
+      "lib"
     ],
     "ignoreNonNullAssertion": true,
     "showRelativePath": true,
