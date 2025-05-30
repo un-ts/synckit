@@ -48,7 +48,7 @@
     "lint:es": "eslint . --cache -f friendly --max-warnings 10",
     "lint:tsc": "tsc --noEmit",
     "prepare": "patch-package && simple-git-hooks",
-    "release": "clean-pkg-json && changeset publish",
+    "release": "clean-pkg-json && changeset publish --tag release-0.9",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "typecov": "type-coverage",
     "version": "changeset version && yarn --no-immutable"
