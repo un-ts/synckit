@@ -7,7 +7,7 @@ const RUN_TIMES = +(process.env.RUN_TIMES || 1000)
 /**
  * @param {string} name
  * @typedef {{ loadTime: number, runTime: number, totalTime: number } | void} PerfResult
- * @returns {PerfResult} Perf result
+ * @returns {PerfResult | void} Perf result
  */
 const perfCase = name => {
   const loadStartTime = performance.now()
