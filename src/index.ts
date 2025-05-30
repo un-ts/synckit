@@ -657,11 +657,13 @@ function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
     }
 
-    const { id, ...message } = (
-      receiveMessageOnPort(mainPort) as { message: WorkerToMainMessage<R> }
-    ).message
+    const result = receiveMessageOnPort(mainPort) as
+      | { message: WorkerToMainMessage<R> }
+      | undefined
 
-    if (id < expectedId) {
+    const msg = result?.message
+
+    if (msg?.id == null || msg.id < expectedId) {
       const waitingTime = Date.now() - start
       return receiveMessageWithId(
         port,
@@ -669,6 +671,8 @@ function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>(
         waitingTimeout ? waitingTimeout - waitingTime : undefined,
       )
     }
+
+    const { id, ...message } = msg
 
     if (expectedId !== id) {
       throw new Error(
