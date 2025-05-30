@@ -30,6 +30,11 @@ jobs:
       - name: Format Codes
         run: yarn format
 
+      - name: Lint Fix
+        run: |
+          yarn build
+          yarn lint:es --fix
+
       - name: Apply autofix.ci
         uses: autofix-ci/action@2891949f3779a1cafafae1523058501de3d4e944 # v1
         with:
