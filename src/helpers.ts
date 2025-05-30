@@ -367,7 +367,7 @@ export const encodeImportModule = (
             ? 'const ' + (named?.trim() ? `{${named}}` : globalName) + '='
             : ''
         }require('${moduleName
-          // eslint-disable-next-line unicorn/prefer-string-replace-all -- compatibility
+          // eslint-disable-next-line unicorn-x/prefer-string-replace-all -- compatibility
           .replace(/\\/g, '\\\\')}')`
 
   if (!globalName) {

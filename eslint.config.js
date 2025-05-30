@@ -8,13 +8,14 @@ export default [
   {
     files: ['benchmarks/*'],
     rules: {
-      'unicorn/no-anonymous-default-export': 'off',
+      'unicorn-x/no-anonymous-default-export': 'off',
     },
   },
   {
     rules: {
       'sonarjs/no-nested-conditional': 'off',
       'sonarjs/no-nested-assignment': 'off',
+      'unicorn-x/no-nested-ternary': 'off',
     },
   },
 ]
