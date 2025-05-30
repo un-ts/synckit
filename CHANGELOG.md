@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- [#217](https://github.com/un-ts/synckit/pull/217) [`2a3f936`](https://github.com/un-ts/synckit/commit/2a3f9361c37110f7f096a2f2ffb690dd3432a755) Thanks [@fisker](https://github.com/fisker)! - fix: unexpected null pointer exception due to race condition
+- [#217](https://github.com/un-ts/synckit/pull/217) [`2a3f936`](https://github.com/un-ts/synckit/commit/2a3f9361c37110f7f096a2f2ffb690dd3432a755) Thanks [@fisker](https://github.com/fisker) and [@JounQin](https://github.com/JounQin)! - fix: unexpected null pointer exception due to race condition
 
 ## 0.11.6
 
