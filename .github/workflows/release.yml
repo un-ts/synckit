@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - main
+      - 0.9.x
 
 jobs:
   release:
