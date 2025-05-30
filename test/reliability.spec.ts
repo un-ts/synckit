@@ -1,9 +1,10 @@
 import path from 'node:path'
 
-import { _dirname } from './helpers.js'
+import { _dirname, testIf } from './helpers.js'
 
-// eslint-disable-next-line @typescript-eslint/no-magic-numbers
-const times = process.env.CI ? 1e6 : 1e3
+const times = 1e6
+
+const test = testIf(!!process.env.CI)
 
 test(`Reliability (${times} runs)`, async () => {
   const { createSyncFn } = await import('synckit')
@@ -11,9 +12,10 @@ test(`Reliability (${times} runs)`, async () => {
 
   for (let index = 0; index < times; index++) {
     try {
+      // eslint-disable-next-line jest/no-standalone-expect
       expect(identity(index)).toBe(index)
     } catch (error) {
-      console.log(`Failed on ${index + 1} run.`)
+      console.error(`Failed on ${index + 1}/${times} run.`)
       throw error
     }
   }
