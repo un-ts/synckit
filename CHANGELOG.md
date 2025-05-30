@@ -1,5 +1,11 @@
 # synckit
 
+## 0.11.8
+
+### Patch Changes
+
+- [#246](https://github.com/un-ts/synckit/pull/246) [`a5cf309`](https://github.com/un-ts/synckit/commit/a5cf3099292d60f8a5e4fb426f4c3fc7bee84d66) Thanks [@JounQin](https://github.com/JounQin)! - fix: republish as npm `latest` tag version
+
 ## 0.11.7
 
 ### Patch Changes
