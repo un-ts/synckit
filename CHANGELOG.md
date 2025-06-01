@@ -1,5 +1,11 @@
 # synckit
 
+## 0.11.9
+
+### Patch Changes
+
+- [#249](https://github.com/un-ts/synckit/pull/249) [`173ef5e`](https://github.com/un-ts/synckit/commit/173ef5e17bea2eec072074f7610fab38d04e1476) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @pkgr/core to ^0.3.0
+
 ## 0.11.8
 
 ### Patch Changes
