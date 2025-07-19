@@ -3723,10 +3723,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@pkgr/core@npm:^0.2.3, @pkgr/core@npm:^0.2.4":
-  version: 0.2.4
-  resolution: "@pkgr/core@npm:0.2.4"
-  checksum: 10c0/2528a443bbbef5d4686614e1d73f834f19ccbc975f62b2a64974a6b97bcdf677b9c5e8948e04808ac4f0d853e2f422adfaae2a06e9e9f4f5cf8af76f1adf8dc1
+"@pkgr/core@npm:^0.2.3, @pkgr/core@npm:^0.2.4, @pkgr/core@npm:^0.2.9":
+  version: 0.2.9
+  resolution: "@pkgr/core@npm:0.2.9"
+  checksum: 10c0/ac8e4e8138b1a7a4ac6282873aef7389c352f1f8b577b4850778f5182e4a39a5241facbe48361fec817f56d02b51691b383010843fb08b34a8e8ea3614688fd5
   languageName: node
   linkType: hard
 
@@ -14227,7 +14227,7 @@ __metadata:
     "@changesets/cli": "npm:^2.29.4"
     "@commitlint/cli": "npm:^19.8.1"
     "@oxc-node/core": "npm:^0.0.27"
-    "@pkgr/core": "npm:^0.2.4"
+    "@pkgr/core": "npm:^0.2.9"
     "@swc-node/register": "npm:^1.10.10"
     "@swc/core": "npm:^1.11.29"
     "@swc/helpers": "npm:^0.5.17"
