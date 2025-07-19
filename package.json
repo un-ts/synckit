@@ -61,7 +61,7 @@
     "version": "changeset version && yarn --no-immutable"
   },
   "dependencies": {
-    "@pkgr/core": "^0.3.0"
+    "@pkgr/core": "^0.2.4"
   },
   "devDependencies": {
     "@1stg/common-config": "^14.0.0",
