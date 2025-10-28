@@ -24,7 +24,6 @@ import {
   INT32_BYTES,
   LOADER_FLAG,
   LOADER_FLAGS,
-  MODULE_REGISTER_SUPPORTED,
   MTS_SUPPORTED,
   NO_STRIP_TYPES,
   NO_STRIP_TYPES_FLAG,
@@ -313,9 +312,7 @@ export const setupTsRunner = (
         // absolute Windows paths in the --experimental-loader option.
         // https://github.com/un-ts/synckit/issues/123
         resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).href
-        if (!MODULE_REGISTER_SUPPORTED) {
-          execArgv = [LOADER_FLAG, resolvedPnpLoaderPath, ...execArgv]
-        }
+        execArgv = [LOADER_FLAG, resolvedPnpLoaderPath, ...execArgv]
       }
     }
   }
