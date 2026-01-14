@@ -1,5 +1,11 @@
 # synckit
 
+## 0.11.12
+
+### Patch Changes
+
+- [#255](https://github.com/un-ts/synckit/pull/255) [`4fb10bd`](https://github.com/un-ts/synckit/commit/4fb10bd12d5e145377f44402fc87a0434930be3e) Thanks [@clemyan](https://github.com/clemyan)! - Fix PnP ESM support
+
 ## 0.11.9
 
 ### Patch Changes
