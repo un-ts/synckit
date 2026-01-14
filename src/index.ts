@@ -1,4 +1,3 @@
-import module from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -7,7 +6,6 @@ import {
   workerData,
 } from 'node:worker_threads'
 
-import { MODULE_REGISTER_SUPPORTED } from './constants.js'
 import {
   extractProperties,
   overrideStdio,
@@ -107,12 +105,7 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
 
   overrideStdio(stdio)
 
-  const { workerPort, sharedBufferView, pnpLoaderPath } =
-    workerData as WorkerData
-
-  if (pnpLoaderPath && MODULE_REGISTER_SUPPORTED) {
-    module.register(pnpLoaderPath)
-  }
+  const { workerPort, sharedBufferView } = workerData as WorkerData
 
   parentPort!.on(
     'message',
