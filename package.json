@@ -7,7 +7,7 @@
   "author": "JounQin <admin@1stg.me> (https://www.1stG.me)",
   "funding": "https://opencollective.com/synckit",
   "license": "MIT",
-  "packageManager": "yarn@4.9.1",
+  "packageManager": "yarn@4.15.0",
   "engines": {
     "node": "^14.18.0 || >=16.0.0"
   },
@@ -61,7 +61,7 @@
     "version": "changeset version && yarn --no-immutable"
   },
   "dependencies": {
-    "@pkgr/core": "^0.2.9"
+    "@pkgr/core": "^0.3.6"
   },
   "devDependencies": {
     "@1stg/common-config": "^14.0.0",
