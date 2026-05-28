@@ -1,5 +1,11 @@
 # synckit
 
+## 0.11.13
+
+### Patch Changes
+
+- [#258](https://github.com/un-ts/synckit/pull/258) [`e752c6a`](https://github.com/un-ts/synckit/commit/e752c6a26f96c4df5c3c48c61c73065beb6de636) Thanks [@JounQin](https://github.com/JounQin)! - fix(deps): update dependency @pkgr/core
+
 ## 0.11.12
 
 ### Patch Changes
