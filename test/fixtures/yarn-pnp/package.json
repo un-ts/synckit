@@ -2,7 +2,7 @@
   "name": "yarn-pnp",
   "type": "module",
   "private": true,
-  "packageManager": "yarn@4.7.0",
+  "packageManager": "yarn@4.15.0",
   "main": "index.js",
   "dependencies": {
     "synckit": "link:../../.."

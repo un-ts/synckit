@@ -117,7 +117,6 @@
 - [#199](https://github.com/un-ts/synckit/pull/199) [`7a5f1bd`](https://github.com/un-ts/synckit/commit/7a5f1bd22d5535a896457b4bcc8028f0d15e3cde) Thanks [@nwidynski](https://github.com/nwidynski)! - feat: add support for `--experimental-strip-types`
 
   Introducing the `node` runner, which will replace `ts-node` as the new default:
-
   - when running on Node 22 with the `--experimental-strip-types`
     flag enabled via `NODE_OPTIONS` env or cli args
   - or when running on Node 23+ without `--no-experimental-strip-types`
@@ -262,7 +261,6 @@
 - [#90](https://github.com/un-ts/synckit/pull/90) [`ffcf174`](https://github.com/un-ts/synckit/commit/ffcf174aae7f735f3706c11673cf40d79c6cdc16) Thanks [@JounQin](https://github.com/JounQin)! - build!: drop Node 12 support, remove testing on Node 14
 
 - [#90](https://github.com/un-ts/synckit/pull/90) [`ffcf174`](https://github.com/un-ts/synckit/commit/ffcf174aae7f735f3706c11673cf40d79c6cdc16) Thanks [@JounQin](https://github.com/JounQin)! - feat: support more ts runners for TypeScript files
-
   - https://github.com/TypeStrong/ts-node
   - https://github.com/egoist/esbuild-register
   - https://github.com/folke/esbuild-runner

@@ -4,7 +4,7 @@
   "private": true,
   "module": "index.ts",
   "peerDependencies": {
-    "typescript": "^5.8.2"
+    "typescript": "^6.0.3"
   },
   "devDependencies": {
     "@types/bun": "^1.2.5"

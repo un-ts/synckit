@@ -1,4 +1,4 @@
-import type { MessagePort, TransferListItem } from 'node:worker_threads'
+import type { MessagePort, Transferable } from 'node:worker_threads'
 
 import type { TsRunner } from './constants.ts'
 
@@ -86,6 +86,6 @@ export interface SynckitOptions {
   execArgv?: string[]
   globalShims?: GlobalShim[] | boolean
   timeout?: number
-  transferList?: TransferListItem[]
+  transferList?: Transferable[]
   tsRunner?: TsRunner
 }
