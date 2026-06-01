@@ -624,6 +624,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const result = receiveMessageOnPort(mainPort) as
       | { message: WorkerToMainMessage<R> }
       | undefined
@@ -669,7 +670,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
     if (error) {
       // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw Object.assign(error as object, properties)
+      throw Object.assign(error, properties)
     }
 
     return result!
