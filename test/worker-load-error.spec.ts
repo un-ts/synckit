@@ -210,3 +210,30 @@ test('a worker load failure does not consume another worker notification', () =>
   expect(healthy(500)).toBe(500)
   expect(expectThrows(() => failing()).code).toBe('MODULE_NOT_FOUND')
 })
+
+test('a worker that registers and then throws is still reported', () => {
+  // registering is not the end of the module: a top-level throw after it would otherwise
+  // leave the caller waiting in `Atomics.wait()`
+  const workerPath = writeWorker(
+    'registers-then-throws.cjs',
+    cjsWorker(`${identityWorker}\nthrow new Error('boom after registering')`),
+  )
+  const syncFn = createSyncFn<() => unknown>(workerPath, { timeout: TIMEOUT })
+
+  expect(expectThrows(() => syncFn()).message).toContain(
+    'boom after registering',
+  )
+})
+
+test('a primitive load failure is surfaced as an Error', () => {
+  const workerPath = writeWorker(
+    'throws-a-primitive.cjs',
+    `throw 'primitive boom'\n`,
+  )
+  const syncFn = createSyncFn<() => unknown>(workerPath, { timeout: TIMEOUT })
+
+  const error = expectThrows(() => syncFn())
+  // a boxed primitive would carry no message at all
+  expect(error.constructor.name).toBe('Error')
+  expect(error.message).toContain('primitive boom')
+})

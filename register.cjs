@@ -123,11 +123,20 @@ const installWorkerLoadGuard = data => {
       throw error
     }
 
+    // The main thread merges the copied properties back in with `Object.assign`, which would
+    // box a primitive reason, and it expects to throw an object.
+    const reason =
+      error && typeof error === 'object'
+        ? error
+        : new Error(
+            error == null ? 'Worker module failed to load' : String(error),
+          )
+
     try {
       workerPort.postMessage({
         loadError: true,
-        error: error ?? new Error('Worker module failed to load'),
-        properties: extractProperties(error),
+        error: reason,
+        properties: extractProperties(reason),
       })
     } catch {
       // the error is not cloneable; report something that always is
@@ -154,6 +163,21 @@ const markWorkerLoaded = sharedBufferView => {
   Atomics.store(sharedBufferView, STATE_INDEX, STATE_LOADED)
 }
 
+/**
+ * Marks the worker module as loaded once this turn of the event loop ends.
+ *
+ * The entry can still throw after registering — or reject a top-level `await` — so the module
+ * only counts as loaded once it finished evaluating; until then the guard keeps reporting a
+ * failure instead of letting the worker die unnoticed.
+ *
+ * @param {Int32Array} sharedBufferView
+ */
+const markWorkerLoadedSoon = sharedBufferView => {
+  setImmediate(() => {
+    markWorkerLoaded(sharedBufferView)
+  })
+}
+
 if (!isMainThread) {
   installWorkerLoadGuard(workerData)
 }
@@ -164,4 +188,5 @@ module.exports = {
   extractProperties,
   installWorkerLoadGuard,
   markWorkerLoaded,
+  markWorkerLoadedSoon,
 }

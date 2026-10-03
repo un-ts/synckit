@@ -32,3 +32,11 @@ export declare const installWorkerLoadGuard: (data?: {
  * @internal
  */
 export declare const markWorkerLoaded: (sharedBufferView: Int32Array) => void
+
+/** Marks the worker module as loaded once this turn of the event loop ends.
+ *
+ * @internal
+ */
+export declare const markWorkerLoadedSoon: (
+  sharedBufferView: Int32Array,
+) => void
