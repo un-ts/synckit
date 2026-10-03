@@ -16,8 +16,6 @@
     "test/**/*.ts",
     "test/**/*.mts",
     "test/**/*.cts",
-    "lib/**/*.d.ts",
-    "lib/**/*.d.cts",
     "register.d.cts"
   ]
 }
