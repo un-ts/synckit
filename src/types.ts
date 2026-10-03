@@ -53,7 +53,10 @@ export interface WorkerToMainMessage<T> extends DataMessage<T> {
  * outdated response.
  */
 export interface WorkerLoadErrorMessage {
+  /** Set by the guard rather than by a request. */
   loadError: true
+  /** Whether the worker never registered a handler, and so cannot serve later calls. */
+  fatal: boolean
   error: unknown
   properties?: object
 }

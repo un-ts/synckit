@@ -71,6 +71,7 @@ export {
   createSharedBufferView,
   extractProperties,
   installWorkerLoadGuard,
+  markWorkerRegistered,
   NOTIFY_INDEX,
 } from '../register.cjs'
 
@@ -601,9 +602,8 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
   let nextID = 0
 
-  // Cached so that later calls keep throwing the original load error instead of
-  // posting to a worker which never managed to register a handler.
-  // the guard reports its own message, so it doubles as the cache entry
+  // Cached so that later calls keep throwing the original load error instead of posting to a
+  // worker which never managed to register a handler
   let loadError: WorkerLoadErrorMessage | undefined
 
   const receiveMessageWithId = (
@@ -637,7 +637,11 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     const msg = result?.message
 
     if (msg && 'loadError' in msg) {
-      loadError = msg
+      // a worker that never registered a handler cannot serve later calls, so its failure is
+      // cached; one that did is only reporting a failure, and may well serve again
+      if (msg.fatal) {
+        loadError = msg
+      }
 
       throw withProperties(msg.error, msg.properties)
     }

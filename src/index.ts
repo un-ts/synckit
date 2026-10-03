@@ -8,6 +8,7 @@ import {
 
 import {
   extractProperties,
+  markWorkerRegistered,
   overrideStdio,
   startWorkerThread,
 } from './helpers.js'
@@ -106,6 +107,9 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
   overrideStdio(stdio)
 
   const { workerPort, sharedBufferView } = workerData as WorkerData
+
+  // the module reached its registration: a failure from here on is not a failure to load
+  markWorkerRegistered(sharedBufferView)
 
   parentPort!.on(
     'message',

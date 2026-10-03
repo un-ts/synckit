@@ -30,6 +30,7 @@ import {
   hasLoaderFlag,
   hasRequireFlag,
   installWorkerLoadGuard,
+  markWorkerRegistered,
   md5Hash,
   overrideStdio,
   createSharedBufferView,
@@ -382,6 +383,20 @@ describe('helpers', () => {
       const [message] = messages as [{ error: Error }]
       expect(message.error.message).toBe('Worker module failed to load')
       expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('marks a failure fatal only when the worker never registered', () => {
+      const first = createPort()
+      const firstView = createSharedBufferView()
+      install(first.port, firstView)(new Error('before registering'))
+      expect((first.messages[0] as { fatal: boolean }).fatal).toBe(true)
+
+      const second = createPort()
+      const secondView = createSharedBufferView()
+      const guard = install(second.port, secondView)
+      markWorkerRegistered(secondView)
+      guard(new Error('after registering'))
+      expect((second.messages[0] as { fatal: boolean }).fatal).toBe(false)
     })
 
     test('arms once', () => {

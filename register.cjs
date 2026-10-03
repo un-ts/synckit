@@ -28,6 +28,8 @@ const NOTIFY_INDEX = 0
 const STATE_INDEX = 1
 const SLICE_INTS = 2
 const STATE_ARMED = 1
+// armed and the worker module has reached `runAsWorker`
+const STATE_REGISTERED = 2
 
 // one SharedArrayBuffer per process, sliced per worker: a single buffer keeps the allocation
 // off the per-worker cost, while a slice per worker stops an unsolicited failure notification
@@ -119,9 +121,16 @@ const installWorkerLoadGuard = data => {
     process.off('uncaughtException', guard)
     process.off('unhandledRejection', guard)
 
+    // A worker that never reached `runAsWorker` cannot answer a later call, so the failure is
+    // fatal for it. One that did may have recovered through its own handlers and can still
+    // serve, so the caller is told about the failure without the worker being written off.
+    const fatal =
+      Atomics.load(sharedBufferView, STATE_INDEX) !== STATE_REGISTERED
+
     try {
       workerPort.postMessage({
         loadError: true,
+        fatal,
         error: error ?? new Error('Worker module failed to load'),
         properties: extractProperties(error),
       })
@@ -129,6 +138,7 @@ const installWorkerLoadGuard = data => {
       // the error is not cloneable; report something that always is
       workerPort.postMessage({
         loadError: true,
+        fatal,
         error: new Error('Worker module failed to load'),
       })
     } finally {
@@ -142,6 +152,21 @@ const installWorkerLoadGuard = data => {
   process.on('unhandledRejection', guard)
 }
 
+/**
+ * Marks the worker module as having reached `runAsWorker`, so that a failure after it is not
+ * treated as a failure to load.
+ *
+ * @param {Int32Array} sharedBufferView
+ */
+const markWorkerRegistered = sharedBufferView => {
+  Atomics.compareExchange(
+    sharedBufferView,
+    STATE_INDEX,
+    STATE_ARMED,
+    STATE_REGISTERED,
+  )
+}
+
 if (!isMainThread) {
   installWorkerLoadGuard(workerData)
 }
@@ -151,4 +176,5 @@ module.exports = {
   createSharedBufferView,
   extractProperties,
   installWorkerLoadGuard,
+  markWorkerRegistered,
 }

@@ -1,3 +1,6 @@
+// The declaration of `register.cjs`, which is JSDoc-typed and checked (`// @ts-check`). Keep
+// the two in sync: the build compiles `src` with `allowJs` disabled, so this file — not the
+// JavaScript — is what `src/helpers.ts` and consumers resolve.
 import type { MessagePort } from 'node:worker_threads'
 
 /** Index of the notification byte in the worker's shared state.
@@ -17,6 +20,14 @@ export declare const createSharedBufferView: () => Int32Array
 // property copying manually.
 export function extractProperties<T extends object>(object: T): T
 export function extractProperties(object?: unknown): object | undefined
+
+/** Marks the worker module as having reached `runAsWorker`.
+ *
+ * @internal
+ */
+export declare const markWorkerRegistered: (
+  sharedBufferView: Int32Array,
+) => void
 
 /** Reports a failure to load the worker module, and wakes the main thread.
  *

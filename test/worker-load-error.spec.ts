@@ -277,3 +277,34 @@ setTimeout(() => {
     'boom while a call is in flight',
   )
 })
+
+test('a worker that recovers through its own handler keeps serving', () => {
+  const workerPath = writeWorker(
+    'recovers.cjs',
+    cjsWorker(
+      `process.on('uncaughtException', () => {})
+
+runAsWorker(
+  value =>
+    new Promise(resolve => {
+      if (value === 1) {
+        setTimeout(() => {
+          throw new Error('recovered by the worker')
+        }, 20)
+      }
+      setTimeout(() => resolve(value), 100)
+    }),
+)`,
+    ),
+  )
+  const syncFn = createSyncFn<(value: number) => number>(workerPath, {
+    timeout: TIMEOUT,
+  })
+
+  // the failure reaches the caller of the call that was in flight ...
+  expect(expectThrows(() => syncFn(1)).message).toContain(
+    'recovered by the worker',
+  )
+  // ... but the worker recovered, so the next call still reaches it
+  expect(syncFn(2)).toBe(2)
+})
