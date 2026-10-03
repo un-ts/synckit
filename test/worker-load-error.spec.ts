@@ -225,15 +225,20 @@ test('a worker that registers and then throws is still reported', () => {
   )
 })
 
-test('a primitive load failure is surfaced as an Error', () => {
+test('a primitive load failure is thrown as it is, not boxed', () => {
   const workerPath = writeWorker(
     'throws-a-primitive.cjs',
     `throw 'primitive boom'\n`,
   )
   const syncFn = createSyncFn<() => unknown>(workerPath, { timeout: TIMEOUT })
 
-  const error = expectThrows(() => syncFn())
-  // a boxed primitive would carry no message at all
-  expect(error.constructor.name).toBe('Error')
-  expect(error.message).toContain('primitive boom')
+  let caught: unknown
+  try {
+    syncFn()
+  } catch (error) {
+    caught = error
+  }
+
+  // merging the copied properties used to box it into a `String` with no `message`
+  expect(caught).toBe('primitive boom')
 })

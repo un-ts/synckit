@@ -10,6 +10,7 @@ import {
   workerCjsPath,
   workerCjsTsPath,
   workerErrorPath,
+  workerErrorPrimitivePath,
   workerEsmTsPath,
   workerJsAsTsPath,
   workerMjsPath,
@@ -87,6 +88,18 @@ test('createSyncFn', () => {
   expect(syncFn3(5, 0)).toBe(5)
 
   expect(() => errSyncFn()).toThrowErrorMatchingInlineSnapshot(`"Worker Error"`)
+
+  // a reason that is not an object is thrown as it came, not boxed by the property merge
+  const primitiveErrSyncFn = createSyncFn<() => Promise<void>>(
+    workerErrorPrimitivePath,
+  )
+  let caught: unknown
+  try {
+    primitiveErrSyncFn()
+  } catch (error) {
+    caught = error
+  }
+  expect(caught).toBe('Worker primitive rejection')
 
   const syncFn4 = createSyncFn<AsyncWorkerFn>(workerCjsPath)
 

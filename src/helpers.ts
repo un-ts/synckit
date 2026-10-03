@@ -76,6 +76,12 @@ export {
   NOTIFY_INDEX,
 } from '../register.cjs'
 
+// MessagePort does not copy an error's own properties, so they are merged back in on this
+// side. A reason that is not an object is thrown as it came: `Object.assign` would box a
+// primitive into a `String`/`Number` object with no `message`.
+const withProperties = (error: unknown, properties?: unknown) =>
+  error && typeof error === 'object' ? Object.assign(error, properties) : error
+
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
 
@@ -599,7 +605,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
   // Cached so that later calls keep throwing the original load error instead of
   // posting to a worker which never managed to register a handler.
-  let loadError: { error: object; properties?: unknown } | undefined
+  let loadError: { error: unknown; properties?: unknown } | undefined
 
   const receiveMessageWithId = (
     port: MessagePort,
@@ -632,11 +638,10 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     const msg = result?.message
 
     if (msg && 'loadError' in msg) {
-      // the guard always reports a normalized `Error`
-      const error = msg.error as object
+      const error = msg.error
       loadError = { error, properties: msg.properties }
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw Object.assign(error, msg.properties)
+
+      throw withProperties(error, msg.properties)
     }
 
     if (msg?.id == null || msg.id < expectedId) {
@@ -661,8 +666,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
   const syncFn = (...args: Parameters<T>): R => {
     if (loadError) {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw Object.assign(loadError.error, loadError.properties)
+      throw withProperties(loadError.error, loadError.properties)
     }
 
     const id = nextID++
@@ -682,8 +686,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     }
 
     if (error) {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw Object.assign(error, properties)
+      throw withProperties(error, properties)
     }
 
     return result!

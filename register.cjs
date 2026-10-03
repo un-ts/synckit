@@ -123,20 +123,11 @@ const installWorkerLoadGuard = data => {
       throw error
     }
 
-    // The main thread merges the copied properties back in with `Object.assign`, which would
-    // box a primitive reason, and it expects to throw an object.
-    const reason =
-      error && typeof error === 'object'
-        ? error
-        : new Error(
-            error == null ? 'Worker module failed to load' : String(error),
-          )
-
     try {
       workerPort.postMessage({
         loadError: true,
-        error: reason,
-        properties: extractProperties(reason),
+        error: error ?? new Error('Worker module failed to load'),
+        properties: extractProperties(error),
       })
     } catch {
       // the error is not cloneable; report something that always is
