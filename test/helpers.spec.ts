@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/unbound-method, jest/no-standalone-expect */
 
+import type { MessagePort } from 'node:worker_threads'
+
 import { jest } from '@jest/globals'
 
 import {
@@ -14,6 +16,7 @@ import {
 import {
   DEFAULT_TYPES_NODE_VERSION,
   IMPORT_FLAG,
+  INT32_BYTES,
   LOADER_FLAG,
   REQUIRE_ABBR_FLAG,
   REQUIRE_FLAG,
@@ -21,13 +24,18 @@ import {
   TRANSFORM_TYPES_NODE_VERSION,
   TsRunner,
   compareNodeVersion,
+  createWorkerLoadGuard,
   dataUrl,
   extractProperties,
+  generateGlobals,
   hasImportFlag,
   hasLoaderFlag,
   hasRequireFlag,
+  installWorkerLoadGuard,
   md5Hash,
   overrideStdio,
+  removeWorkerLoadGuard,
+  reportWorkerLoadError,
   setupTsRunner,
   type StdioChunk,
 } from 'synckit'
@@ -291,6 +299,116 @@ describe('helpers', () => {
         encoding: 'utf8',
       })
       expect(callback).toHaveBeenCalled()
+    })
+  })
+
+  describe('worker load guard', () => {
+    const createPort = () => {
+      const messages: unknown[] = []
+      const port = {
+        postMessage: (message: unknown) => {
+          messages.push(message)
+        },
+      } as unknown as MessagePort
+      return { messages, port }
+    }
+
+    test('reports the error with its properties and notifies the buffer', () => {
+      const { messages, port } = createPort()
+      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+      const error = Object.assign(new Error('boom'), { code: 'E_BOOM' })
+
+      reportWorkerLoadError(port, view, error)
+
+      expect(messages).toHaveLength(1)
+      const [message] = messages as [
+        { error: Error; loadError: boolean; properties: unknown },
+      ]
+      expect(message.loadError).toBe(true)
+      expect(message.error.message).toBe('boom')
+      expect(message.properties).toEqual({ code: 'E_BOOM' })
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('reports without properties when reading them throws', () => {
+      const { messages, port } = createPort()
+      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+      const error = new Error('boom')
+      Object.defineProperty(error, 'trap', {
+        enumerable: true,
+        get() {
+          throw new Error('nope')
+        },
+      })
+
+      reportWorkerLoadError(port, view, error)
+
+      expect(messages).toHaveLength(1)
+      const [message] = messages as [{ properties: unknown }]
+      expect(message.properties).toBeUndefined()
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('still notifies when the error cannot be serialized', () => {
+      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+      const messages: unknown[] = []
+      let calls = 0
+      const port = {
+        postMessage: (message: unknown) => {
+          calls += 1
+          if (calls === 1) {
+            throw new Error('not cloneable')
+          }
+          messages.push(message)
+        },
+      } as unknown as MessagePort
+
+      reportWorkerLoadError(port, view, new Error('boom'))
+
+      expect(messages).toHaveLength(1)
+      const [message] = messages as [{ error: Error }]
+      expect(message.error.message).toBe('Worker module failed to load')
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('the guard callback reports the uncaught error', () => {
+      const { messages, port } = createPort()
+      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+
+      createWorkerLoadGuard(port, view)(new Error('uncaught'))
+
+      expect(messages).toHaveLength(1)
+      const [message] = messages as [{ error: Error; loadError: boolean }]
+      expect(message.loadError).toBe(true)
+      expect(message.error.message).toBe('uncaught')
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('installs once and removes', () => {
+      const { port } = createPort()
+      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+      const before = process.listenerCount('uncaughtException')
+
+      try {
+        installWorkerLoadGuard(port, view)
+        expect(process.listenerCount('uncaughtException')).toBe(before + 1)
+
+        // installing again is a no-op
+        installWorkerLoadGuard(port, view)
+        expect(process.listenerCount('uncaughtException')).toBe(before + 1)
+      } finally {
+        removeWorkerLoadGuard()
+      }
+
+      expect(process.listenerCount('uncaughtException')).toBe(before)
+
+      // removing again is a no-op
+      removeWorkerLoadGuard()
+      expect(process.listenerCount('uncaughtException')).toBe(before)
+    })
+
+    test('generateGlobals returns nothing without shims', () => {
+      expect(generateGlobals(workerCjsPath, [])).toBe('')
     })
   })
 })

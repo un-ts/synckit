@@ -61,65 +61,32 @@ export const isFile = (path: string) => {
 export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
-// Reported back to the main thread when the worker module itself fails to load. The
-// error's own properties are copied because MessagePort does not clone them, so `code`
-// and friends survive the trip.
-const WORKER_LOAD_ERROR_REPORT = `const cause = error ?? new Error('Worker module failed to load')
-const properties = {}
-for (const key in cause) properties[key] = cause[key]
-workerPort.postMessage({ loadError: true, error: cause, properties })
-Atomics.add(sharedBufferView, 0, 1)
-Atomics.notify(sharedBufferView, 0)`
+/**
+ * Global key under which the worker load guard publishes its remover.
+ *
+ * The guard is installed by synckit's CommonJS build — preloaded into the worker with
+ * `-r` — while the worker module usually imports the ESM build, so the two module
+ * instances have to agree through a well-known global rather than a module-level variable.
+ */
+const WORKER_LOAD_GUARD = Symbol.for('synckit.workerLoadGuard')
+
+type WorkerLoadGuardStore = Record<symbol, (() => void) | undefined>
+
+const workerLoadGuardStore = globalThis as WorkerLoadGuardStore
+
+let atomicWriteCount = 0
 
 /**
- * Source of the bootstrap used to load CommonJS workers.
- *
- * The main thread blocks in `Atomics.wait()` until the worker reports back, so a worker
- * module which fails to load — a missing top-level import, a syntax error, ... — has to
- * report that failure itself, otherwise the main thread waits forever.
- *
- * The source deliberately avoids `require`, `module`, `exports`, `import.meta`, static
- * `import` and top-level `await`: Node then parses it identically whether a custom
- * `--input-type` makes the eval'd input CommonJS or ESM. `require` is bound locally from
- * `createRequire(workerPath)` so that CommonJS global shims and the worker module itself
- * still go through the CommonJS loader, and therefore through any `--require` hook such as
- * `ts-node/register`.
- *
- * @param loadStatement - The statement which loads the user's worker module.
+ * Writes a file atomically: a reader either sees the previous contents or the complete new
+ * ones, never a half-written file. Generated files are shared between processes in
+ * `node_modules/.synckit`, and a truncated worker entry would be a parse error the load
+ * guard cannot always report.
  */
-const cjsWorkerBootstrap = (loadStatement: string) => `;(async () => {
-const { sharedBufferView, workerPort, workerPath, globalsUrl } = (await import('node:worker_threads')).workerData
-const require = (await import('node:module')).createRequire(workerPath)
-try {
-if (globalsUrl) await import(globalsUrl)
-${loadStatement}
-} catch (error) {
-${WORKER_LOAD_ERROR_REPORT}
+const writeFileAtomic = (filepath: string, content: string) => {
+  const temp = `${filepath}.${process.pid}.${(atomicWriteCount += 1)}.tmp`
+  fs.writeFileSync(temp, content)
+  fs.renameSync(temp, filepath)
 }
-})()`
-
-/**
- * Bootstrap module used to load ESM workers.
- *
- * Unlike CommonJS workers it has to be a real module file rather than an `eval`'d script or
- * a `data:` URL: on Node 18.18 and 20 the ESM loader hooks registered by `--loader` /
- * `--import` are not consulted for a dynamic `import()` issued from a CommonJS entry, and
- * `@oxc-node/core` rejects a `data:` URL entry outright. Both leave the worker module
- * untransformed (`ERR_UNKNOWN_FILE_EXTENSION`).
- *
- * Its content is constant — the target travels in `workerData` — so it is written once per
- * process and shared by every ESM worker.
- */
-const ESM_WORKER_BOOTSTRAP = `import { workerData } from 'node:worker_threads'
-
-const { sharedBufferView, workerPort, workerUrl, globalsUrl } = workerData
-
-try {
-if (globalsUrl) await import(globalsUrl)
-await import(workerUrl)
-} catch (error) {
-${WORKER_LOAD_ERROR_REPORT}
-}`
 
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
@@ -480,31 +447,26 @@ const getTmpDir = () => {
 const globalsFilepath = (workerPath: string) =>
   path.resolve(getTmpDir(), md5Hash(workerPath) + '.mjs')
 
-let esmBootstrapUrl: URL | undefined
-
 /**
- * Writes the ESM worker bootstrap (once per process) and returns its `file:` URL.
+ * Writes the ESM global shims module for `workerPath` and returns its `file:` URL.
  *
- * The name is derived from the content, so an upgraded synckit never reuses a stale
- * bootstrap, and concurrent processes writing the same bytes stay idempotent.
+ * It is written next to the other generated files so that bare specifiers in the shims
+ * resolve from the project's `node_modules`, exactly as they would from the worker itself,
+ * and it loads the worker module itself once the shims are in place. That is the only case
+ * where ESM workers need a wrapper at all: global shims have to be evaluated before the
+ * worker module, which a preload cannot sequence without a file.
  */
-const getEsmBootstrapUrl = () => {
-  if (esmBootstrapUrl) {
-    return esmBootstrapUrl
-  }
-
-  const filepath = path.resolve(
-    getTmpDir(),
-    `${md5Hash(ESM_WORKER_BOOTSTRAP)}.bootstrap.mjs`,
+const writeEsmGlobalsWrapper = (
+  workerPath: string,
+  globalShims: GlobalShim[],
+) => {
+  const filepath = globalsFilepath(workerPath)
+  writeFileAtomic(
+    filepath,
+    `${_generateGlobals(globalShims, 'import')}
+await import((await import('node:worker_threads')).workerData.workerUrl)`,
   )
-
-  if (!isFile(filepath)) {
-    fs.writeFileSync(filepath, ESM_WORKER_BOOTSTRAP)
-  }
-
-  esmBootstrapUrl = pathToFileURL(filepath)
-
-  return esmBootstrapUrl
+  return pathToFileURL(filepath)
 }
 
 export const generateGlobals = (
@@ -539,7 +501,7 @@ export const generateGlobals = (
   if (type === 'import') {
     filepath = globalsFilepath(workerPath)
     content = encodeImportModule(filepath)
-    fs.writeFileSync(filepath, globals)
+    writeFileAtomic(filepath, globals)
   }
 
   globalsCache.set(workerPath, [content, filepath])
@@ -568,6 +530,112 @@ export function extractProperties<T>(object?: T) {
     }
     return properties
   }
+}
+
+/**
+ * Reports a failure to load the worker module back to the main thread.
+ *
+ * The main thread is blocked in `Atomics.wait()` and cannot observe the worker's `error`
+ * event, so this notification is the only way out. The error's own properties are copied
+ * because MessagePort does not clone them, and the shared buffer is notified even when the
+ * error cannot be serialized at all — otherwise the main thread would wait forever.
+ *
+ * @internal
+ */
+export const reportWorkerLoadError = (
+  workerPort: MessagePort,
+  sharedBufferView: Int32Array,
+  error: unknown,
+) => {
+  try {
+    const cause = error ?? new Error('Worker module failed to load')
+    let properties: unknown
+    try {
+      properties = extractProperties(cause)
+    } catch {
+      // an enumerable getter threw; report the error without its properties
+    }
+    workerPort.postMessage({ loadError: true, error: cause, properties })
+  } catch {
+    // the error is not cloneable; report something that always is
+    workerPort.postMessage({
+      loadError: true,
+      error: new Error('Worker module failed to load'),
+    })
+  } finally {
+    Atomics.add(sharedBufferView, 0, 1)
+    Atomics.notify(sharedBufferView, 0)
+  }
+}
+
+/**
+ * Creates the callback the load guard installs for `uncaughtException` and
+ * `unhandledRejection`.
+ *
+ * @internal
+ */
+export const createWorkerLoadGuard =
+  (workerPort: MessagePort, sharedBufferView: Int32Array) =>
+  (error: unknown) => {
+    reportWorkerLoadError(workerPort, sharedBufferView, error)
+  }
+
+/**
+ * Installs the guard which reports a failure to load the worker module.
+ *
+ * It is installed from synckit's CommonJS build, which `startWorkerThread` preloads into
+ * the worker with `-r`, so that it is in place before the worker module — and before any
+ * `--require` / `--import` hook it depends on — is loaded. `runAsWorker` removes it again,
+ * so it never changes the semantics of errors raised after the worker registered.
+ *
+ * @internal
+ */
+export const installWorkerLoadGuard = (
+  workerPort: MessagePort,
+  sharedBufferView: Int32Array,
+) => {
+  if (workerLoadGuardStore[WORKER_LOAD_GUARD]) {
+    return
+  }
+
+  const guard = createWorkerLoadGuard(workerPort, sharedBufferView)
+
+  process.on('uncaughtException', guard)
+  process.on('unhandledRejection', guard)
+
+  workerLoadGuardStore[WORKER_LOAD_GUARD] = () => {
+    process.off('uncaughtException', guard)
+    process.off('unhandledRejection', guard)
+    delete workerLoadGuardStore[WORKER_LOAD_GUARD]
+  }
+}
+
+/** Removes the load guard once the worker module has registered its handler.
+ *
+ * @internal
+ */
+export const removeWorkerLoadGuard = () => {
+  workerLoadGuardStore[WORKER_LOAD_GUARD]?.()
+}
+
+let workerPreload: string | null | undefined
+
+/**
+ * Absolute path of the module preloaded into every worker to install the load guard.
+ *
+ * It is synckit's own CommonJS entry, which already ships with the package, so no extra
+ * file is needed. The path is derived from this module's own location rather than from
+ * `require.resolve('synckit')`: under a test runner the latter resolves through the
+ * runner's module map and can point at source instead of the built bundle. When the file
+ * is not there — a bundler inlined synckit, or an unexpected layout — the guard is simply
+ * not installed and a failing worker behaves as it did before.
+ */
+const getWorkerPreload = () => {
+  if (workerPreload === undefined) {
+    const filepath = path.resolve(_dirname, '../lib/index.cjs')
+    workerPreload = isFile(filepath) ? filepath : null
+  }
+  return workerPreload ?? undefined
 }
 
 /**
@@ -673,38 +741,44 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   const isEsm = isTs ? tsUseEsm : jsUseEsm
   const useGlobals = finalGlobalShims.length > 0
 
-  let globalsUrl: string | undefined
-  let entry: URL | string
+  // The worker module itself is the entry unless global shims have to be evaluated first.
+  // Keeping it as the entry is what lets every custom ESM loader see it on Node 18.18 and
+  // 20 (an `eval`'d or `data:` entry does not go through their hooks), and it means no
+  // bootstrap file is generated. Load failures are reported by the preloaded guard instead.
+  let entry: URL | string = workerPathUrl
+  let useEval = false
 
-  if (isEsm) {
-    if (useGlobals) {
-      // Generated as a module file so that bare specifiers resolve from the project's
-      // `node_modules`, exactly as they would from the worker itself.
-      generateGlobals(finalWorkerPath, finalGlobalShims)
-      globalsUrl = String(pathToFileURL(globalsFilepath(finalWorkerPath)))
+  if (useGlobals) {
+    if (isEsm) {
+      entry = writeEsmGlobalsWrapper(finalWorkerPath, finalGlobalShims)
+    } else {
+      const globals = generateGlobals(
+        finalWorkerPath,
+        finalGlobalShims,
+        'require',
+      )
+      entry = `const { workerPath } = require('node:worker_threads').workerData;${globals}${
+        globals ? ';' : ''
+      }require(workerPath)`
+      useEval = true
     }
-    entry = getEsmBootstrapUrl()
-  } else {
-    const globals = useGlobals
-      ? generateGlobals(finalWorkerPath, finalGlobalShims, 'require')
-      : ''
-    entry = cjsWorkerBootstrap(
-      `${globals}${globals ? '\n' : ''}require(workerPath)`,
-    )
   }
 
+  const preload = getWorkerPreload()
+
   const worker = new Worker(entry, {
-    eval: !isEsm,
+    eval: useEval,
     workerData: {
       sharedBufferView,
       workerPort,
       pnpLoaderPath,
       workerUrl: String(workerPathUrl),
       workerPath: finalWorkerPath,
-      globalsUrl,
     },
     transferList: [workerPort, ...transferList],
-    execArgv: finalExecArgv,
+    execArgv: preload
+      ? [REQUIRE_ABBR_FLAG, preload, ...finalExecArgv]
+      : finalExecArgv,
   })
 
   let nextID = 0
@@ -739,9 +813,9 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     const msg = result?.message
 
     if (msg && 'loadError' in msg) {
-      // The bootstrap always reports an `Error`, but a falsy thrown value must still
-      // surface here rather than fall through to the "not our id yet" branch below,
-      // which would wait again and hang forever.
+      // The guard always reports an `Error`, but a falsy thrown value must still surface
+      // here rather than fall through to the "not our id yet" branch below, which would
+      // wait again and hang forever.
       const error: object =
         msg.error && typeof msg.error === 'object'
           ? msg.error

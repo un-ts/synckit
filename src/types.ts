@@ -25,12 +25,10 @@ export interface WorkerData {
   sharedBufferView: Int32Array
   workerPort: MessagePort
   pnpLoaderPath: string | undefined
-  /** `file:` URL of the worker module, used to load ESM workers. */
+  /** `file:` URL of the worker module, used by the ESM global shims wrapper. */
   workerUrl: string
-  /** Absolute path of the worker module, used to load CommonJS workers. */
+  /** Absolute path of the worker module, used by the CommonJS global shims wrapper. */
   workerPath: string
-  /** `file:` URL of the generated ESM global shims module, when there is one. */
-  globalsUrl: string | undefined
 }
 
 export interface DataMessage<T> {

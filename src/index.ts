@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  isMainThread,
   parentPort,
   // type-coverage:ignore-next-line -- we can't control
   workerData,
@@ -8,7 +9,9 @@ import {
 
 import {
   extractProperties,
+  installWorkerLoadGuard,
   overrideStdio,
+  removeWorkerLoadGuard,
   startWorkerThread,
 } from './helpers.js'
 import type {
@@ -26,6 +29,19 @@ export * from './common.js'
 export * from './constants.js'
 export * from './helpers.js'
 export * from './types.js'
+
+// When synckit is preloaded into a worker (`startWorkerThread` passes `-r <synckit>`), this
+// runs before the worker module — and before any `--require` / `--import` hook it needs — so
+// that a failure to load that module is reported rather than leaving the main thread
+// blocked in `Atomics.wait()`. In the main thread it does nothing.
+/* istanbul ignore next -- only reached inside a worker, whose copy is not instrumented */
+// type-coverage:ignore-next-line -- we can't control
+if (!isMainThread && workerData) {
+  const { sharedBufferView, workerPort } = workerData as Partial<WorkerData>
+  if (sharedBufferView && workerPort) {
+    installWorkerLoadGuard(workerPort, sharedBufferView)
+  }
+}
 
 let syncFnCache: Map<string, AnyFn> | undefined
 
@@ -104,6 +120,9 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
   const stdio: StdioChunk[] = []
 
   overrideStdio(stdio)
+
+  // the module loaded and is about to register, so a load failure is no longer possible
+  removeWorkerLoadGuard()
 
   const { workerPort, sharedBufferView } = workerData as WorkerData
 
