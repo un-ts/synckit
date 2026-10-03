@@ -50,10 +50,10 @@ import type {
   WorkerToMainMessage,
 } from './types.js'
 
-// The load guard, its shared state and `extractProperties` live in `register.cjs`, a plain
-// CommonJS file at the package root, so that the very same file is preloaded into every worker
-// with `-r` — in development, where a test runner maps the package to its source, and in the
-// published package alike. It is re-exported here to keep the public surface.
+// The load guard and its shared state live in `register.cjs`, a plain CommonJS file at the
+// package root, so that the very same file is preloaded into every worker with `-r` — in
+// development, where a test runner maps the package to its source, and in the published package
+// alike.
 
 export const isFile = (path: string) => {
   try {
@@ -67,13 +67,9 @@ export const isFile = (path: string) => {
 export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
-export {
-  createSharedBufferView,
-  extractProperties,
-  installWorkerLoadGuard,
-  markWorkerRegistered,
-  NOTIFY_INDEX,
-} from '../register.cjs'
+// only `extractProperties` was part of the public surface before it moved into the preload;
+// the guard's other internals stay internal
+export { extractProperties } from '../register.cjs'
 
 // MessagePort does not copy an error's own properties, so they are merged back in on this
 // side. A reason that is not an object is thrown as it came: `Object.assign` would box a

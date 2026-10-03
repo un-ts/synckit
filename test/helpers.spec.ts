@@ -5,6 +5,12 @@ import type { MessagePort } from 'node:worker_threads'
 import { jest } from '@jest/globals'
 
 import {
+  createSharedBufferView,
+  installWorkerLoadGuard,
+  markWorkerRegistered,
+} from '../register.cjs'
+
+import {
   testIf,
   workerCjsPath,
   workerCjsTsPath,
@@ -29,11 +35,8 @@ import {
   hasImportFlag,
   hasLoaderFlag,
   hasRequireFlag,
-  installWorkerLoadGuard,
-  markWorkerRegistered,
   md5Hash,
   overrideStdio,
-  createSharedBufferView,
   setupTsRunner,
   type StdioChunk,
 } from 'synckit'

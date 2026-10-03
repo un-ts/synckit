@@ -6,9 +6,10 @@ import {
   workerData,
 } from 'node:worker_threads'
 
+import { markWorkerRegistered } from '../register.cjs'
+
 import {
   extractProperties,
-  markWorkerRegistered,
   overrideStdio,
   startWorkerThread,
 } from './helpers.js'
