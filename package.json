@@ -15,17 +15,14 @@
   "types": "./lib/index.d.cts",
   "module": "./lib/index.js",
   "exports": {
-    ".": {
-      "import": {
-        "types": "./lib/index.d.ts",
-        "default": "./lib/index.js"
-      },
-      "require": {
-        "types": "./lib/index.d.cts",
-        "default": "./lib/index.cjs"
-      }
+    "import": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
     },
-    "./register.cjs": "./register.cjs"
+    "require": {
+      "types": "./lib/index.d.cts",
+      "default": "./lib/index.cjs"
+    }
   },
   "files": [
     "index.d.cts",

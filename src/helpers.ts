@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
-import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
@@ -418,14 +417,6 @@ const _dirname =
     ? path.dirname(fileURLToPath(import.meta.url))
     : /* istanbul ignore next */ __dirname
 
-// A `require` bound to this module, so it resolves like a consumer of synckit would, wherever
-// the package was installed.
-const synckitRequire = createRequire(
-  typeof __filename === 'undefined'
-    ? import.meta.url
-    : /* istanbul ignore next */ __filename,
-)
-
 export const generateGlobals = (
   workerPath: string,
   globalShims: GlobalShim[],
@@ -475,20 +466,16 @@ let workerPreload: string | null | undefined
 /**
  * Absolute path of the module preloaded into every worker to arm the load guard.
  *
- * `require.resolve('synckit/register.cjs')` keeps the path independent of where the file
- * sits in the package, so a build layout change cannot break it. It resolves to the
- * checked-in CommonJS file itself — in this repository and in the published package alike —
- * so no build step and no loader is involved. When it cannot be resolved (a bundler inlined
- * synckit) the guard is simply not armed and a failing worker behaves as it did before.
+ * `register.cjs` sits next to the package root — next to this module in the built package,
+ * next to `src` in this repository — so a plain relative path needs no build step and no
+ * loader, in a test run and in the published package alike. `isFile` is false when a bundler
+ * inlined synckit and the file is not there; the guard is then simply not armed and a failing
+ * worker behaves as it did before.
  */
 const getWorkerPreload = () => {
   if (workerPreload === undefined) {
-    try {
-      const resolved = synckitRequire.resolve('synckit/register.cjs')
-      workerPreload = isFile(resolved) ? resolved : null
-    } catch {
-      workerPreload = null
-    }
+    const filepath = path.resolve(_dirname, '../register.cjs')
+    workerPreload = isFile(filepath) ? filepath : null
   }
 
   return workerPreload ?? undefined
