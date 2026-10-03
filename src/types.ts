@@ -25,10 +25,6 @@ export interface WorkerData {
   sharedBufferView: Int32Array
   workerPort: MessagePort
   pnpLoaderPath: string | undefined
-  /** `file:` URL of the worker module, used by the ESM global shims wrapper. */
-  workerUrl: string
-  /** Absolute path of the worker module, used by the CommonJS global shims wrapper. */
-  workerPath: string
 }
 
 export interface DataMessage<T> {
@@ -49,7 +45,7 @@ export interface WorkerToMainMessage<T> extends DataMessage<T> {
 }
 
 /**
- * Reported by the worker bootstrap when the worker module itself fails to load.
+ * Reported by the worker load guard when the worker module itself fails to load.
  *
  * It carries a marker instead of a request id: a load failure happens before any request
  * exists, and a magic id would be indistinguishable from an outdated response.

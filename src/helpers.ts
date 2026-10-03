@@ -78,18 +78,6 @@ type WorkerLoadGuardStore = Record<symbol, (() => void) | undefined>
 
 const workerLoadGuardStore = globalThis as WorkerLoadGuardStore
 
-/**
- * Writes a file atomically: a reader either sees the previous contents or the complete new
- * ones, never a half-written file. Generated files are shared between processes in
- * `node_modules/.synckit`, and a truncated worker entry would be a parse error the load
- * guard cannot always report.
- */
-const writeFileAtomic = (filepath: string, content: string) => {
-  const temp = `${filepath}.${process.pid}.tmp`
-  fs.writeFileSync(temp, content)
-  fs.renameSync(temp, filepath)
-}
-
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
 
@@ -432,45 +420,6 @@ const _dirname =
     ? path.dirname(fileURLToPath(import.meta.url))
     : /* istanbul ignore next */ __dirname
 
-const getTmpDir = () => {
-  if (!tmpdir) {
-    tmpdir = path.resolve(findUp(_dirname), '../node_modules/.synckit')
-  }
-  fs.mkdirSync(tmpdir, { recursive: true })
-  return tmpdir
-}
-
-/**
- * Absolute path of the generated ESM global shims module for `workerPath`.
- *
- * It is written next to the other generated files so that bare specifiers in the shims
- * resolve from the project's `node_modules`, exactly as they would from the worker itself.
- */
-const globalsFilepath = (workerPath: string) =>
-  path.resolve(getTmpDir(), md5Hash(workerPath) + '.mjs')
-
-/**
- * Writes the ESM global shims module for `workerPath` and returns its `file:` URL.
- *
- * It is written next to the other generated files so that bare specifiers in the shims
- * resolve from the project's `node_modules`, exactly as they would from the worker itself,
- * and it loads the worker module itself once the shims are in place. That is the only case
- * where ESM workers need a wrapper at all: global shims have to be evaluated before the
- * worker module, which a preload cannot sequence without a file.
- */
-const writeEsmGlobalsWrapper = (
-  workerPath: string,
-  globalShims: GlobalShim[],
-) => {
-  const filepath = globalsFilepath(workerPath)
-  writeFileAtomic(
-    filepath,
-    `${_generateGlobals(globalShims, 'import')}
-await import((await import('node:worker_threads')).workerData.workerUrl)`,
-  )
-  return pathToFileURL(filepath)
-}
-
 export const generateGlobals = (
   workerPath: string,
   globalShims: GlobalShim[],
@@ -501,9 +450,13 @@ export const generateGlobals = (
   let filepath: string | undefined
 
   if (type === 'import') {
-    filepath = globalsFilepath(workerPath)
+    if (!tmpdir) {
+      tmpdir = path.resolve(findUp(_dirname), '../node_modules/.synckit')
+    }
+    fs.mkdirSync(tmpdir, { recursive: true })
+    filepath = path.resolve(tmpdir, md5Hash(workerPath) + '.mjs')
     content = encodeImportModule(filepath)
-    writeFileAtomic(filepath, globals)
+    fs.writeFileSync(filepath, globals)
   }
 
   globalsCache.set(workerPath, [content, filepath])
@@ -727,48 +680,36 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   // unrelated `syncFn` call consume that notification and then hang forever.
   const sharedBufferView = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
 
-  const isEsm = isTs ? tsUseEsm : jsUseEsm
   const useGlobals = finalGlobalShims.length > 0
 
-  // The worker module itself is the entry unless global shims have to be evaluated first.
-  // Keeping it as the entry is what lets every custom ESM loader see it on Node 18.18 and
-  // 20 (an `eval`'d or `data:` entry does not go through their hooks), and it means no
-  // bootstrap file is generated. Load failures are reported by the preloaded guard instead.
-  let entry: URL | string = workerPathUrl
-  let useEval = false
-
-  if (useGlobals) {
-    if (isEsm) {
-      entry = writeEsmGlobalsWrapper(finalWorkerPath, finalGlobalShims)
-    } else {
-      const globals = generateGlobals(
-        finalWorkerPath,
-        finalGlobalShims,
-        'require',
-      )
-      entry = `const { workerPath } = require('node:worker_threads').workerData;${globals}${
-        globals ? ';' : ''
-      }require(workerPath)`
-      useEval = true
-    }
-  }
+  const useEval = isTs ? !tsUseEsm : !jsUseEsm && useGlobals
 
   const preload = getWorkerPreload()
 
-  const worker = new Worker(entry, {
-    eval: useEval,
-    workerData: {
-      sharedBufferView,
-      workerPort,
-      pnpLoaderPath,
-      workerUrl: String(workerPathUrl),
-      workerPath: finalWorkerPath,
+  const worker = new Worker(
+    (jsUseEsm && useGlobals) || (tsUseEsm && finalTsRunner === TsRunner.TsNode)
+      ? dataUrl(
+          `${generateGlobals(
+            finalWorkerPath,
+            finalGlobalShims,
+          )};import '${String(workerPathUrl)}'`,
+        )
+      : useEval
+        ? `${generateGlobals(
+            finalWorkerPath,
+            finalGlobalShims,
+            'require',
+          )};${encodeImportModule(finalWorkerPath, 'require')}`
+        : workerPathUrl,
+    {
+      eval: useEval,
+      workerData: { sharedBufferView, workerPort, pnpLoaderPath },
+      transferList: [workerPort, ...transferList],
+      execArgv: preload
+        ? [REQUIRE_ABBR_FLAG, preload, ...finalExecArgv]
+        : finalExecArgv,
     },
-    transferList: [workerPort, ...transferList],
-    execArgv: preload
-      ? [REQUIRE_ABBR_FLAG, preload, ...finalExecArgv]
-      : finalExecArgv,
-  })
+  )
 
   let nextID = 0
 
