@@ -66,28 +66,51 @@ export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
 /**
- * Slots the main thread and the worker share: the notification byte, a flag saying the load
- * guard is armed, and a flag saying the worker module finished loading. The last two are how
- * the guard is kept idempotent and disarmed without any module-level or global state — the
- * preload (synckit's CommonJS build) and the worker module's own import of synckit are two
- * different module instances that only share what travels in `workerData`.
+ * The shared state the main thread and a worker agree on: a notification byte and the load
+ * guard's state (idle, armed, or the module finished loading). Keeping the guard state here
+ * is what makes it idempotent and lets it disarm itself without any module-level or global
+ * state — the preload (synckit's CommonJS build) and the worker module's own import of
+ * synckit are two module instances that only share what travels in `workerData`.
  */
 const NOTIFY_INDEX = 0
-const GUARD_INDEX = 1
-const LOADED_INDEX = 2
-const SHARED_STATE_INTS = 3
+const STATE_INDEX = 1
+const SLICE_INTS = 2
+const STATE_ARMED = 1
+const STATE_LOADED = 2
+const INITIAL_SLICES = 64
+
+let sharedBuffer: SharedArrayBuffer | undefined
+let sharedSlices = 0
+let nextSlice = 0
 
 /**
- * Allocates the shared state a worker and the main thread agree on.
+ * Reserves this worker's slice of the process-wide shared buffer and returns a view of it.
  *
- * One per worker: a worker reports its own load failure before any request exists, so a
- * buffer shared between workers would let an unrelated `syncFn` call consume that
- * notification and then hang forever.
+ * One buffer per process, as in #154, so the allocation stays off the per-worker cost; one
+ * slice per worker because a worker reports its own load failure before any request exists,
+ * and a single shared word would let an unrelated `syncFn` call consume that notification
+ * and then hang forever.
+ *
+ * Growing allocates a new, larger buffer; workers already running keep their views on the old
+ * one.
  *
  * @internal
  */
-export const createSharedBufferView = () =>
-  new Int32Array(new SharedArrayBuffer(INT32_BYTES * SHARED_STATE_INTS))
+export const createSharedBufferView = () => {
+  const slice = nextSlice++
+  const needed = (slice + 1) * SLICE_INTS
+
+  if (needed > sharedSlices || !sharedBuffer) {
+    sharedSlices = Math.max(needed, sharedSlices * 2, INITIAL_SLICES)
+    sharedBuffer = new SharedArrayBuffer(sharedSlices * INT32_BYTES)
+  }
+
+  return new Int32Array(
+    sharedBuffer,
+    slice * SLICE_INTS * INT32_BYTES,
+    SLICE_INTS,
+  )
+}
 
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
@@ -523,7 +546,9 @@ export const installWorkerLoadGuard = (data?: Partial<WorkerData>) => {
 
   // the preload and the worker module's own import of synckit both get here, and only one
   // guard must be armed
-  if (Atomics.compareExchange(sharedBufferView, GUARD_INDEX, 0, 1) !== 0) {
+  if (
+    Atomics.compareExchange(sharedBufferView, STATE_INDEX, 0, STATE_ARMED) !== 0
+  ) {
     return
   }
 
@@ -532,7 +557,7 @@ export const installWorkerLoadGuard = (data?: Partial<WorkerData>) => {
     process.off('uncaughtException', guard)
     process.off('unhandledRejection', guard)
 
-    if (Atomics.load(sharedBufferView, LOADED_INDEX)) {
+    if (Atomics.load(sharedBufferView, STATE_INDEX) === STATE_LOADED) {
       // the module loaded, so this is a runtime failure, not a load failure
       throw error
     }
@@ -564,7 +589,7 @@ export const installWorkerLoadGuard = (data?: Partial<WorkerData>) => {
  * @internal
  */
 export const markWorkerLoaded = (sharedBufferView: Int32Array) => {
-  Atomics.store(sharedBufferView, LOADED_INDEX, 1)
+  Atomics.store(sharedBufferView, STATE_INDEX, STATE_LOADED)
 }
 
 // A worker preloads this module with `-r <synckit>`, before the worker module and before any
