@@ -388,18 +388,34 @@ describe('helpers', () => {
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
-    test('marks a failure fatal only when the worker never registered', () => {
+    test('marks a failure fatal unless the worker is left handled', () => {
+      // never registered: nothing can serve a later call
       const first = createPort()
       const firstView = createSharedBufferView()
       install(first.port, firstView)(new Error('before registering'))
       expect((first.messages[0] as { fatal: boolean }).fatal).toBe(true)
 
-      const second = createPort()
-      const secondView = createSharedBufferView()
-      const guard = install(second.port, secondView)
-      markWorkerRegistered(secondView)
-      guard(new Error('after registering'))
-      expect((second.messages[0] as { fatal: boolean }).fatal).toBe(false)
+      // registered, and another listener is left to handle the event
+      const handler = jest.fn()
+      process.on('uncaughtException', handler)
+      try {
+        const second = createPort()
+        const secondView = createSharedBufferView()
+        const guard = install(second.port, secondView)
+        markWorkerRegistered(secondView)
+        guard(new Error('after registering'))
+        expect((second.messages[0] as { fatal: boolean }).fatal).toBe(false)
+      } finally {
+        process.off('uncaughtException', handler)
+      }
+
+      // registered, but nothing is left to handle it: the worker would have died
+      const third = createPort()
+      const thirdView = createSharedBufferView()
+      const guard = install(third.port, thirdView)
+      markWorkerRegistered(thirdView)
+      guard(new Error('unhandled after registering'))
+      expect((third.messages[0] as { fatal: boolean }).fatal).toBe(true)
     })
 
     test('arms once', () => {

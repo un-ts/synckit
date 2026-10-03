@@ -121,11 +121,15 @@ const installWorkerLoadGuard = data => {
     process.off('uncaughtException', guard)
     process.off('unhandledRejection', guard)
 
-    // A worker that never reached `runAsWorker` cannot answer a later call, so the failure is
-    // fatal for it. One that did may have recovered through its own handlers and can still
-    // serve, so the caller is told about the failure without the worker being written off.
-    const fatal =
-      Atomics.load(sharedBufferView, STATE_INDEX) !== STATE_REGISTERED
+    // The failure is fatal unless the worker both reached `runAsWorker` and has something left
+    // to handle these events: only then would it have survived and kept serving without the
+    // guard, and only then can it be used for the next call.
+    const registered =
+      Atomics.load(sharedBufferView, STATE_INDEX) === STATE_REGISTERED
+    const handled =
+      process.listenerCount('uncaughtException') > 0 ||
+      process.listenerCount('unhandledRejection') > 0
+    const fatal = !registered || !handled
 
     try {
       workerPort.postMessage({

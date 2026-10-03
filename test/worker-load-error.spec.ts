@@ -308,3 +308,33 @@ runAsWorker(
   // ... but the worker recovered, so the next call still reaches it
   expect(syncFn(2)).toBe(2)
 })
+
+test('a registered worker with nothing left to handle it is written off', () => {
+  const workerPath = writeWorker(
+    'unhandled-runtime-failure.cjs',
+    cjsWorker(
+      `runAsWorker(
+  value =>
+    new Promise(resolve => {
+      if (value === 1) {
+        setTimeout(() => {
+          throw new Error('unhandled runtime boom')
+        }, 20)
+      }
+      setTimeout(() => resolve(value), 100)
+    }),
+)`,
+    ),
+  )
+  const syncFn = createSyncFn<(value: number) => number>(workerPath, {
+    timeout: TIMEOUT,
+  })
+
+  expect(expectThrows(() => syncFn(1)).message).toContain(
+    'unhandled runtime boom',
+  )
+  // nothing recovered it, so the worker is written off rather than reused
+  expect(expectThrows(() => syncFn(2)).message).toContain(
+    'unhandled runtime boom',
+  )
+})
