@@ -11,7 +11,7 @@ import {
 
 import { tryExtensions, findUp, cjsRequire, isPkgAvailable } from '@pkgr/core'
 
-import { NOTIFY_INDEX, createSharedBufferView } from '../register.cjs'
+import { NOTIFY_INDEX, createSharedBufferView } from '../shared.cjs'
 
 import { compareNodeVersion } from './common.js'
 import {
@@ -50,10 +50,10 @@ import type {
   WorkerToMainMessage,
 } from './types.js'
 
-// The load guard and its shared state live in `register.cjs`, a plain CommonJS file at the
-// package root, so that the very same file is preloaded into every worker with `-r` — in
-// development, where a test runner maps the package to its source, and in the published package
-// alike.
+// The shared buffer and its notification byte live in `shared.cjs`, and the load guard that uses
+// them at the worker's end lives in `register.cjs` — both plain CommonJS files at the package
+// root, so that the very same files reach the worker with `-r` in development, where a test
+// runner maps the package to its source, and in the published package alike.
 
 export const isFile = (path: string) => {
   try {
@@ -68,8 +68,8 @@ export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
 // only `extractProperties` was part of the public surface before it moved into the preload;
-// the guard's other internals stay internal
-export { extractProperties } from '../register.cjs'
+// the other internals stay internal
+export { extractProperties } from '../shared.cjs'
 
 // MessagePort does not copy an error's own properties, so they are merged back in on this
 // side. A reason that is not an object is thrown as it came: `Object.assign` would box a
@@ -626,8 +626,14 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
     // Each report bumps the notification byte and posts one message, so consume exactly one
     // notification per message. This runs only after a wait that was actually notified: on
-    // `'timed-out'` the byte was still zero, and decrementing a report that arrived after the
-    // wait returned would leave its message queued with nothing left to wake the next call.
+    // `'timed-out'` the byte was still zero, and consuming a report that arrived after the wait
+    // returned would leave its message queued with nothing left to wake the next call.
+    //
+    // The check is not redundant, though: an unconditional decrement can take the counter
+    // negative, and a negative counter makes every `Atomics.wait` return `'not-equal'` at once,
+    // so the caller spins instead of sleeping and starves the worker until the deadline expires.
+    // Measured on Node 18.18 under the CI's load and timeout, restoring it took the
+    // `reliability` soak from three failures in four runs to none in six.
     if (Atomics.load(sharedBufferView, NOTIFY_INDEX) > 0) {
       Atomics.sub(sharedBufferView, NOTIFY_INDEX, 1)
     }

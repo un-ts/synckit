@@ -4,11 +4,8 @@ import type { MessagePort } from 'node:worker_threads'
 
 import { jest } from '@jest/globals'
 
-import {
-  createSharedBufferView,
-  installWorkerLoadGuard,
-  markWorkerRegistered,
-} from '../register.cjs'
+import { installWorkerLoadGuard, markWorkerRegistered } from '../register.cjs'
+import { createSharedBufferView } from '../shared.cjs'
 
 import {
   testIf,

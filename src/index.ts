@@ -7,6 +7,7 @@ import {
 } from 'node:worker_threads'
 
 import { markWorkerRegistered } from '../register.cjs'
+import { NOTIFY_INDEX } from '../shared.cjs'
 
 import {
   extractProperties,
@@ -138,8 +139,8 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
         }
         try {
           workerPort.postMessage(msg)
-          Atomics.add(sharedBufferView, 0, 1)
-          Atomics.notify(sharedBufferView, 0)
+          Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
+          Atomics.notify(sharedBufferView, NOTIFY_INDEX)
         } finally {
           stdio.length = 0
         }
