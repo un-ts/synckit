@@ -61,8 +61,18 @@ export const isFile = (path: string) => {
 export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
+// Reported back to the main thread when the worker module itself fails to load. The
+// error's own properties are copied because MessagePort does not clone them, so `code`
+// and friends survive the trip.
+const WORKER_LOAD_ERROR_REPORT = `const cause = error ?? new Error('Worker module failed to load')
+const properties = {}
+for (const key in cause) properties[key] = cause[key]
+workerPort.postMessage({ loadError: true, error: cause, properties })
+Atomics.add(sharedBufferView, 0, 1)
+Atomics.notify(sharedBufferView, 0)`
+
 /**
- * Source of the bootstrap that loads the user's worker module.
+ * Source of the bootstrap used to load CommonJS workers.
  *
  * The main thread blocks in `Atomics.wait()` until the worker reports back, so a worker
  * module which fails to load — a missing top-level import, a syntax error, ... — has to
@@ -71,27 +81,45 @@ export const dataUrl = (code: string) =>
  * The source deliberately avoids `require`, `module`, `exports`, `import.meta`, static
  * `import` and top-level `await`: Node then parses it identically whether a custom
  * `--input-type` makes the eval'd input CommonJS or ESM. `require` is bound locally from
- * `createRequire(workerPath)` so that CommonJS global shims and CommonJS workers still go
- * through the CommonJS loader, and therefore through any `--require` hook such as
+ * `createRequire(workerPath)` so that CommonJS global shims and the worker module itself
+ * still go through the CommonJS loader, and therefore through any `--require` hook such as
  * `ts-node/register`.
  *
  * @param loadStatement - The statement which loads the user's worker module.
  */
-const workerBootstrap = (loadStatement: string) => `;(async () => {
-const { sharedBufferView, workerPort, workerUrl, workerPath, globalsUrl } = (await import('node:worker_threads')).workerData
+const cjsWorkerBootstrap = (loadStatement: string) => `;(async () => {
+const { sharedBufferView, workerPort, workerPath, globalsUrl } = (await import('node:worker_threads')).workerData
 const require = (await import('node:module')).createRequire(workerPath)
 try {
 if (globalsUrl) await import(globalsUrl)
 ${loadStatement}
 } catch (error) {
-const cause = error ?? new Error('Worker module failed to load')
-const properties = {}
-for (const key in cause) properties[key] = cause[key]
-workerPort.postMessage({ loadError: true, error: cause, properties })
-Atomics.add(sharedBufferView, 0, 1)
-Atomics.notify(sharedBufferView, 0)
+${WORKER_LOAD_ERROR_REPORT}
 }
 })()`
+
+/**
+ * Bootstrap module used to load ESM workers.
+ *
+ * Unlike CommonJS workers it has to be a real module file rather than an `eval`'d script or
+ * a `data:` URL: on Node 18.18 and 20 the ESM loader hooks registered by `--loader` /
+ * `--import` are not consulted for a dynamic `import()` issued from a CommonJS entry, and
+ * `@oxc-node/core` rejects a `data:` URL entry outright. Both leave the worker module
+ * untransformed (`ERR_UNKNOWN_FILE_EXTENSION`).
+ *
+ * Its content is constant — the target travels in `workerData` — so it is written once per
+ * process and shared by every ESM worker.
+ */
+const ESM_WORKER_BOOTSTRAP = `import { workerData } from 'node:worker_threads'
+
+const { sharedBufferView, workerPort, workerUrl, globalsUrl } = workerData
+
+try {
+if (globalsUrl) await import(globalsUrl)
+await import(workerUrl)
+} catch (error) {
+${WORKER_LOAD_ERROR_REPORT}
+}`
 
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
@@ -452,6 +480,33 @@ const getTmpDir = () => {
 const globalsFilepath = (workerPath: string) =>
   path.resolve(getTmpDir(), md5Hash(workerPath) + '.mjs')
 
+let esmBootstrapUrl: URL | undefined
+
+/**
+ * Writes the ESM worker bootstrap (once per process) and returns its `file:` URL.
+ *
+ * The name is derived from the content, so an upgraded synckit never reuses a stale
+ * bootstrap, and concurrent processes writing the same bytes stay idempotent.
+ */
+const getEsmBootstrapUrl = () => {
+  if (esmBootstrapUrl) {
+    return esmBootstrapUrl
+  }
+
+  const filepath = path.resolve(
+    getTmpDir(),
+    `${md5Hash(ESM_WORKER_BOOTSTRAP)}.bootstrap.mjs`,
+  )
+
+  if (!isFile(filepath)) {
+    fs.writeFileSync(filepath, ESM_WORKER_BOOTSTRAP)
+  }
+
+  esmBootstrapUrl = pathToFileURL(filepath)
+
+  return esmBootstrapUrl
+}
+
 export const generateGlobals = (
   workerPath: string,
   globalShims: GlobalShim[],
@@ -619,7 +674,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   const useGlobals = finalGlobalShims.length > 0
 
   let globalsUrl: string | undefined
-  let loadStatement: string
+  let entry: URL | string
 
   if (isEsm) {
     if (useGlobals) {
@@ -628,16 +683,18 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       generateGlobals(finalWorkerPath, finalGlobalShims)
       globalsUrl = String(pathToFileURL(globalsFilepath(finalWorkerPath)))
     }
-    loadStatement = 'await import(workerUrl)'
+    entry = getEsmBootstrapUrl()
   } else {
     const globals = useGlobals
       ? generateGlobals(finalWorkerPath, finalGlobalShims, 'require')
       : ''
-    loadStatement = `${globals}${globals ? '\n' : ''}require(workerPath)`
+    entry = cjsWorkerBootstrap(
+      `${globals}${globals ? '\n' : ''}require(workerPath)`,
+    )
   }
 
-  const worker = new Worker(workerBootstrap(loadStatement), {
-    eval: true,
+  const worker = new Worker(entry, {
+    eval: !isEsm,
     workerData: {
       sharedBufferView,
       workerPort,
