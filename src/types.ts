@@ -25,6 +25,12 @@ export interface WorkerData {
   sharedBufferView: Int32Array
   workerPort: MessagePort
   pnpLoaderPath: string | undefined
+  /** `file:` URL of the worker module, used to load ESM workers. */
+  workerUrl: string
+  /** Absolute path of the worker module, used to load CommonJS workers. */
+  workerPath: string
+  /** `file:` URL of the generated ESM global shims module, when there is one. */
+  globalsUrl: string | undefined
 }
 
 export interface DataMessage<T> {
@@ -42,6 +48,18 @@ export interface StdioChunk {
 export interface WorkerToMainMessage<T> extends DataMessage<T> {
   id: number
   stdio: StdioChunk[]
+}
+
+/**
+ * Reported by the worker bootstrap when the worker module itself fails to load.
+ *
+ * It carries a marker instead of a request id: a load failure happens before any request
+ * exists, and a magic id would be indistinguishable from an outdated response.
+ */
+export interface WorkerLoadErrorMessage {
+  loadError: true
+  error: unknown
+  properties?: unknown
 }
 
 export interface GlobalShim {

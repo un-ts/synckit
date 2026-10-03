@@ -45,6 +45,7 @@ import type {
   PackageJson,
   StdioChunk,
   SynckitOptions,
+  WorkerLoadErrorMessage,
   WorkerToMainMessage,
 } from './types.js'
 
@@ -59,6 +60,38 @@ export const isFile = (path: string) => {
 
 export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
+
+/**
+ * Source of the bootstrap that loads the user's worker module.
+ *
+ * The main thread blocks in `Atomics.wait()` until the worker reports back, so a worker
+ * module which fails to load — a missing top-level import, a syntax error, ... — has to
+ * report that failure itself, otherwise the main thread waits forever.
+ *
+ * The source deliberately avoids `require`, `module`, `exports`, `import.meta`, static
+ * `import` and top-level `await`: Node then parses it identically whether a custom
+ * `--input-type` makes the eval'd input CommonJS or ESM. `require` is bound locally from
+ * `createRequire(workerPath)` so that CommonJS global shims and CommonJS workers still go
+ * through the CommonJS loader, and therefore through any `--require` hook such as
+ * `ts-node/register`.
+ *
+ * @param loadStatement - The statement which loads the user's worker module.
+ */
+const workerBootstrap = (loadStatement: string) => `;(async () => {
+const { sharedBufferView, workerPort, workerUrl, workerPath, globalsUrl } = (await import('node:worker_threads')).workerData
+const require = (await import('node:module')).createRequire(workerPath)
+try {
+if (globalsUrl) await import(globalsUrl)
+${loadStatement}
+} catch (error) {
+const cause = error ?? new Error('Worker module failed to load')
+const properties = {}
+for (const key in cause) properties[key] = cause[key]
+workerPort.postMessage({ loadError: true, error: cause, properties })
+Atomics.add(sharedBufferView, 0, 1)
+Atomics.notify(sharedBufferView, 0)
+}
+})()`
 
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
@@ -402,6 +435,23 @@ const _dirname =
     ? path.dirname(fileURLToPath(import.meta.url))
     : /* istanbul ignore next */ __dirname
 
+const getTmpDir = () => {
+  if (!tmpdir) {
+    tmpdir = path.resolve(findUp(_dirname), '../node_modules/.synckit')
+  }
+  fs.mkdirSync(tmpdir, { recursive: true })
+  return tmpdir
+}
+
+/**
+ * Absolute path of the generated ESM global shims module for `workerPath`.
+ *
+ * It is written next to the other generated files so that bare specifiers in the shims
+ * resolve from the project's `node_modules`, exactly as they would from the worker itself.
+ */
+const globalsFilepath = (workerPath: string) =>
+  path.resolve(getTmpDir(), md5Hash(workerPath) + '.mjs')
+
 export const generateGlobals = (
   workerPath: string,
   globalShims: GlobalShim[],
@@ -432,11 +482,7 @@ export const generateGlobals = (
   let filepath: string | undefined
 
   if (type === 'import') {
-    if (!tmpdir) {
-      tmpdir = path.resolve(findUp(_dirname), '../node_modules/.synckit')
-    }
-    fs.mkdirSync(tmpdir, { recursive: true })
-    filepath = path.resolve(tmpdir, md5Hash(workerPath) + '.mjs')
+    filepath = globalsFilepath(workerPath)
     content = encodeImportModule(filepath)
     fs.writeFileSync(filepath, globals)
   }
@@ -468,9 +514,6 @@ export function extractProperties<T>(object?: T) {
     return properties
   }
 }
-
-let sharedBuffer: SharedArrayBuffer | undefined
-let sharedBufferView: Int32Array | undefined
 
 /**
  * Spawns a worker thread and returns a synchronous function to dispatch tasks.
@@ -567,44 +610,51 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
         : []
   ).filter(({ moduleName }) => isPkgAvailable(moduleName))
 
-  // We store a single Byte in the SharedArrayBuffer
-  // for the notification, we can used a fixed size
-  sharedBufferView ??= new Int32Array(
-    /* istanbul ignore next */ (sharedBuffer ??= new SharedArrayBuffer(
-      INT32_BYTES,
-    )),
-    0,
-    1,
-  )
+  // A dedicated notification byte per worker: a worker reports its own load failure
+  // before any request exists, so a buffer shared between workers would let an
+  // unrelated `syncFn` call consume that notification and then hang forever.
+  const sharedBufferView = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
 
+  const isEsm = isTs ? tsUseEsm : jsUseEsm
   const useGlobals = finalGlobalShims.length > 0
 
-  const useEval = isTs ? !tsUseEsm : !jsUseEsm && useGlobals
+  let globalsUrl: string | undefined
+  let loadStatement: string
 
-  const worker = new Worker(
-    (jsUseEsm && useGlobals) || (tsUseEsm && finalTsRunner === TsRunner.TsNode)
-      ? dataUrl(
-          `${generateGlobals(
-            finalWorkerPath,
-            finalGlobalShims,
-          )};import '${String(workerPathUrl)}'`,
-        )
-      : useEval
-        ? `${generateGlobals(
-            finalWorkerPath,
-            finalGlobalShims,
-            'require',
-          )};${encodeImportModule(finalWorkerPath, 'require')}`
-        : workerPathUrl,
-    {
-      eval: useEval,
-      workerData: { sharedBufferView, workerPort, pnpLoaderPath },
-      transferList: [workerPort, ...transferList],
-      execArgv: finalExecArgv,
+  if (isEsm) {
+    if (useGlobals) {
+      // Generated as a module file so that bare specifiers resolve from the project's
+      // `node_modules`, exactly as they would from the worker itself.
+      generateGlobals(finalWorkerPath, finalGlobalShims)
+      globalsUrl = String(pathToFileURL(globalsFilepath(finalWorkerPath)))
+    }
+    loadStatement = 'await import(workerUrl)'
+  } else {
+    const globals = useGlobals
+      ? generateGlobals(finalWorkerPath, finalGlobalShims, 'require')
+      : ''
+    loadStatement = `${globals}${globals ? '\n' : ''}require(workerPath)`
+  }
+
+  const worker = new Worker(workerBootstrap(loadStatement), {
+    eval: true,
+    workerData: {
+      sharedBufferView,
+      workerPort,
+      pnpLoaderPath,
+      workerUrl: String(workerPathUrl),
+      workerPath: finalWorkerPath,
+      globalsUrl,
     },
-  )
+    transferList: [workerPort, ...transferList],
+    execArgv: finalExecArgv,
+  })
 
   let nextID = 0
+
+  // Cached so that later calls keep throwing the original load error instead of
+  // posting to a worker which never managed to register a handler.
+  let loadError: { error: object; properties?: unknown } | undefined
 
   const receiveMessageWithId = (
     port: MessagePort,
@@ -612,8 +662,8 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     waitingTimeout?: number,
   ): WorkerToMainMessage<R> => {
     const start = Date.now()
-    const status = Atomics.wait(sharedBufferView!, 0, 0, waitingTimeout)
-    Atomics.store(sharedBufferView!, 0, 0)
+    const status = Atomics.wait(sharedBufferView, 0, 0, waitingTimeout)
+    Atomics.store(sharedBufferView, 0, 0)
 
     if (!['ok', 'not-equal'].includes(status)) {
       const abortMsg: MainToWorkerCommandMessage = {
@@ -626,10 +676,23 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const result = receiveMessageOnPort(mainPort) as
-      | { message: WorkerToMainMessage<R> }
+      | { message: WorkerLoadErrorMessage | WorkerToMainMessage<R> }
       | undefined
 
     const msg = result?.message
+
+    if (msg && 'loadError' in msg) {
+      // The bootstrap always reports an `Error`, but a falsy thrown value must still
+      // surface here rather than fall through to the "not our id yet" branch below,
+      // which would wait again and hang forever.
+      const error: object =
+        msg.error && typeof msg.error === 'object'
+          ? msg.error
+          : new Error('Worker module failed to load')
+      loadError = { error, properties: msg.properties }
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw Object.assign(error, msg.properties)
+    }
 
     if (msg?.id == null || msg.id < expectedId) {
       const waitingTime = Date.now() - start
@@ -652,6 +715,11 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   }
 
   const syncFn = (...args: Parameters<T>): R => {
+    if (loadError) {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw Object.assign(loadError.error, loadError.properties)
+    }
+
     const id = nextID++
 
     const msg: MainToWorkerMessage<Parameters<T>> = { id, args }
