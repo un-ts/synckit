@@ -1,10 +1,13 @@
 /* eslint-disable jest/no-standalone-expect */
+import fs from 'node:fs'
+import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { jest } from '@jest/globals'
 import { cjsRequire } from '@pkgr/core'
 
 import {
+  _dirname,
   setupReceiveMessageOnPortMock,
   testIf,
   workerCjsPath,
@@ -93,6 +96,54 @@ test('createSyncFn', () => {
   expect(syncFn4(1)).toBe(1)
   expect(syncFn4(2)).toBe(2)
   expect(syncFn4(5, 0)).toBe(5)
+})
+
+test('worker module load failure is surfaced instead of hanging', () => {
+  const missingImportPath = path.resolve(_dirname, 'worker-missing-import.mjs')
+  const missingRequirePath = path.resolve(
+    _dirname,
+    'worker-missing-require.cjs',
+  )
+  const syntaxErrorPath = path.resolve(_dirname, 'worker-syntax-error.mjs')
+
+  fs.writeFileSync(
+    missingImportPath,
+    `import 'non-existed-package-for-synckit-test'\nimport { runAsWorker } from 'synckit'\nrunAsWorker(() => 'never')\n`,
+  )
+  fs.writeFileSync(
+    missingRequirePath,
+    `require('non-existed-package-for-synckit-test')\nconst { runAsWorker } = require('synckit')\nrunAsWorker(() => 'never')\n`,
+  )
+  fs.writeFileSync(
+    syntaxErrorPath,
+    `import { runAsWorker } from 'synckit'\nrunAsWorker(() => {\n  const = 1\n})\n`,
+  )
+
+  try {
+    // ESM worker with a top-level static import of a missing package
+    const missingImportSyncFn = createSyncFn<() => string>(missingImportPath)
+    expect(() => missingImportSyncFn()).toThrow(
+      `Cannot find package 'non-existed-package-for-synckit-test'`,
+    )
+    // subsequent calls should keep throwing the cached error instead of hanging
+    expect(() => missingImportSyncFn()).toThrow(
+      `Cannot find package 'non-existed-package-for-synckit-test'`,
+    )
+
+    // CommonJS worker with a top-level require of a missing package
+    const missingRequireSyncFn = createSyncFn<() => string>(missingRequirePath)
+    expect(() => missingRequireSyncFn()).toThrow(
+      `Cannot find module 'non-existed-package-for-synckit-test'`,
+    )
+
+    // ESM worker with a genuine syntax error
+    const syntaxErrorSyncFn = createSyncFn<() => string>(syntaxErrorPath)
+    expect(() => syntaxErrorSyncFn()).toThrow()
+  } finally {
+    fs.rmSync(missingImportPath, { force: true })
+    fs.rmSync(missingRequirePath, { force: true })
+    fs.rmSync(syntaxErrorPath, { force: true })
+  }
 })
 
 test('timeout', async () => {

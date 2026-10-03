@@ -111,3 +111,8 @@ export const LOADER_FLAGS = new Set([LOADER_FLAG, EXPERIMENTAL_LOADER_FLAG])
 export const IMPORT_FLAG_SUPPORTED = compareNodeVersion('20.6') >= 0
 
 export const INT32_BYTES = 4
+
+// Sentinel id used by the worker bootstrap to report a failure while loading
+// the worker module (e.g. a missing top-level import or a syntax error).
+// Regular request/response ids are always non-negative integers.
+export const WORKER_LOAD_ERROR_ID = -1
