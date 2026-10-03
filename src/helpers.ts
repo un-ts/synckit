@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
@@ -72,6 +73,8 @@ export const dataUrl = (code: string) =>
  * state — the preload (synckit's CommonJS build) and the worker module's own import of
  * synckit are two module instances that only share what travels in `workerData`.
  */
+const TS_SOURCE = /\.[cm]?ts$/
+
 const NOTIFY_INDEX = 0
 const STATE_INDEX = 1
 const SLICE_INTS = 2
@@ -454,6 +457,14 @@ const _dirname =
     ? path.dirname(fileURLToPath(import.meta.url))
     : /* istanbul ignore next */ __dirname
 
+// A `require` bound to this module, so it resolves like a consumer of synckit would, wherever
+// the package was installed.
+const synckitRequire = createRequire(
+  typeof __filename === 'undefined'
+    ? import.meta.url
+    : /* istanbul ignore next */ __filename,
+)
+
 export const generateGlobals = (
   workerPath: string,
   globalShims: GlobalShim[],
@@ -606,30 +617,41 @@ let workerPreload: string | null | undefined
 /**
  * Absolute path of the module preloaded into every worker to arm the load guard.
  *
- * It is the CommonJS entry declared by synckit's own manifest, so it follows a build layout
- * change instead of assuming one. `require.resolve('synckit')` is not usable here: a test
- * runner that maps the package to its source — this repository's jest config does — resolves
- * it to `src/index.ts`, which `-r` cannot load. When the manifest or the file is missing (a
- * bundler inlined synckit, or the package was not built) the guard is simply not installed
- * and a failing worker behaves as it did before.
+ * `require.resolve(synckit)` decides it, so the path follows whatever the package declares —
+ * a build layout change or an `exports` rewrite cannot break it. A test runner that maps the
+ * package to its source (this repository's jest config does) resolves to a `.ts` file
+ * instead, which `-r` can only load behind a TypeScript loader; the CommonJS entry declared by
+ * the manifest is used then. When neither is a real file — a bundler inlined synckit, or the
+ * package was not built — the guard is not armed and a failing worker behaves as it did before.
  */
 const getWorkerPreload = () => {
   if (workerPreload === undefined) {
-    workerPreload = null
+    const candidates: Array<string | undefined> = []
+
+    try {
+      candidates.push(synckitRequire.resolve('synckit'))
+    } catch {
+      // not resolvable as a package
+    }
+
     try {
       const { main } = JSON.parse(
         fs.readFileSync(path.resolve(_dirname, '../package.json'), 'utf8'),
       ) as { main?: string }
       if (main) {
-        const filepath = path.resolve(_dirname, '..', main)
-        if (isFile(filepath)) {
-          workerPreload = filepath
-        }
+        candidates.push(path.resolve(_dirname, '..', main))
       }
     } catch {
-      // no manifest next to this module; no guard
+      // no manifest next to this module
     }
+
+    workerPreload =
+      candidates.find(
+        candidate =>
+          candidate != null && !TS_SOURCE.test(candidate) && isFile(candidate),
+      ) ?? null
   }
+
   return workerPreload ?? undefined
 }
 
