@@ -273,7 +273,7 @@ describe('helpers', () => {
 
       process.stdout._writev!(chunks, callback)
 
-      expect(stdio.length).toBe(1)
+      expect(stdio).toHaveLength(1)
       expect(stdio[0].type).toBe('stdout')
       expect(stdio[0].chunk).toEqual(Buffer.from('test'))
       expect(callback).toHaveBeenCalled()
@@ -290,7 +290,7 @@ describe('helpers', () => {
 
       process.stderr._writev!(chunks, callback)
 
-      expect(stdio.length).toBe(1)
+      expect(stdio).toHaveLength(1)
       expect(stdio[0]).toEqual({
         type: 'stderr',
         chunk: Buffer.from('test error'),
