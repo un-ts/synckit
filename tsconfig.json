@@ -7,6 +7,17 @@
       "synckit": ["./src/index.ts"]
     },
     "target": "ES2020",
-    "types": ["jest", "node"]
-  }
+    "types": ["jest", "node"],
+    "allowJs": true
+  },
+  "files": ["register.cjs"],
+  "include": [
+    "src",
+    "test/**/*.ts",
+    "test/**/*.mts",
+    "test/**/*.cts",
+    "lib/**/*.d.ts",
+    "lib/**/*.d.cts",
+    "register.d.cts"
+  ]
 }

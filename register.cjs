@@ -18,6 +18,7 @@
  * has a single source.
  */
 
+// type-coverage:ignore-next-line -- node types mark workerData as any
 const { isMainThread, workerData } = require('node:worker_threads')
 
 // the shared state: [0] notification byte, [1] guard state

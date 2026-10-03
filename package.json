@@ -58,7 +58,6 @@
     "format": "prettier --write .",
     "lint": "concurrently -r 'yarn:lint:*'",
     "lint:es": "eslint . --cache --max-warnings 10",
-    "lint:register": "tsc -p tsconfig.register.json",
     "lint:tsc": "tsc --noEmit",
     "prepare": "patch-package && simple-git-hooks && yarn-berry-deduplicate || exit 0",
     "release": "clean-pkg-json && changeset publish",

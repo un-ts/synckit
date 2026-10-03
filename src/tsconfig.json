@@ -2,6 +2,9 @@
   "extends": "../tsconfig",
   "compilerOptions": {
     "rootDir": ".",
-    "outDir": "../lib"
-  }
+    "outDir": "../lib",
+    "allowJs": false
+  },
+  "include": ["."],
+  "files": []
 }
