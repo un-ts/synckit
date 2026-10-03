@@ -121,6 +121,37 @@ test('a custom --input-type=module does not break CommonJS workers', () => {
   ).toBe(2)
 })
 
+test('a userland --require preload still runs', () => {
+  const userPreload = writeWorker(
+    'user-preload.cjs',
+    `globalThis.__userPreload = 'ran'`,
+  )
+  const workerPath = writeWorker(
+    'uses-user-preload.cjs',
+    cjsWorker(`runAsWorker(() => globalThis.__userPreload)`),
+  )
+  const syncFn = createSyncFn<() => string>(workerPath, {
+    execArgv: ['-r', userPreload],
+    timeout: TIMEOUT,
+  })
+
+  expect(syncFn()).toBe('ran')
+})
+
+test('a throwing userland preload is reported instead of hanging', () => {
+  const userPreload = writeWorker(
+    'throwing-preload.cjs',
+    `throw new Error('preload boom')`,
+  )
+  const workerPath = writeWorker('unused-worker.cjs', cjsWorker(identityWorker))
+  const syncFn = createSyncFn<() => unknown>(workerPath, {
+    execArgv: ['-r', userPreload],
+    timeout: TIMEOUT,
+  })
+
+  expect(expectThrows(() => syncFn()).message).toContain('preload boom')
+})
+
 test('a failing global shim throws instead of hanging', () => {
   const esmShim = writeWorker('boom-shim.mjs', `throw new Error('BOOM_ESM')\n`)
   const esmPath = writeWorker('with-esm-shim.mjs', esmWorker(identityWorker))
