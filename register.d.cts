@@ -16,7 +16,9 @@ export declare const createSharedBufferView: () => Int32Array
 // error objects to have extra properties such as "warnings" so implement the
 // property copying manually.
 export function extractProperties<T extends object>(object: T): T
-export function extractProperties<T>(object?: T): T | undefined
+export function extractProperties(
+  object?: unknown,
+): Record<string, unknown> | undefined
 
 /** Reports a failure to load the worker module, and wakes the main thread.
  *

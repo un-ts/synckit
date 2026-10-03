@@ -79,7 +79,10 @@ export {
 // MessagePort does not copy an error's own properties, so they are merged back in on this
 // side. A reason that is not an object is thrown as it came: `Object.assign` would box a
 // primitive into a `String`/`Number` object with no `message`.
-const withProperties = (error: unknown, properties?: unknown) =>
+const withProperties = (
+  error: unknown,
+  properties?: Record<string, unknown>,
+) =>
   error && typeof error === 'object' ? Object.assign(error, properties) : error
 
 export const hasRequireFlag = (execArgv: string[]) =>
@@ -605,7 +608,8 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
   // Cached so that later calls keep throwing the original load error instead of
   // posting to a worker which never managed to register a handler.
-  let loadError: { error: unknown; properties?: unknown } | undefined
+  // the guard reports its own message, so it doubles as the cache entry
+  let loadError: WorkerLoadErrorMessage | undefined
 
   const receiveMessageWithId = (
     port: MessagePort,
@@ -638,10 +642,9 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     const msg = result?.message
 
     if (msg && 'loadError' in msg) {
-      const error = msg.error
-      loadError = { error, properties: msg.properties }
+      loadError = msg
 
-      throw withProperties(error, msg.properties)
+      throw withProperties(msg.error, msg.properties)
     }
 
     if (msg?.id == null || msg.id < expectedId) {

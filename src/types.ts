@@ -30,7 +30,7 @@ export interface WorkerData {
 export interface DataMessage<T> {
   result?: T
   error?: unknown
-  properties?: unknown
+  properties?: Record<string, unknown>
 }
 
 export interface StdioChunk {
@@ -53,7 +53,7 @@ export interface WorkerToMainMessage<T> extends DataMessage<T> {
 export interface WorkerLoadErrorMessage {
   loadError: true
   error: unknown
-  properties?: unknown
+  properties?: Record<string, unknown>
 }
 
 export interface GlobalShim {
