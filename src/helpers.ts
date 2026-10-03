@@ -6,7 +6,10 @@ import {
   type MessagePort,
   MessageChannel,
   Worker,
+  isMainThread,
   receiveMessageOnPort,
+  // type-coverage:ignore-next-line -- we can't control
+  workerData,
 } from 'node:worker_threads'
 
 import { tryExtensions, findUp, cjsRequire, isPkgAvailable } from '@pkgr/core'
@@ -45,6 +48,7 @@ import type {
   PackageJson,
   StdioChunk,
   SynckitOptions,
+  WorkerData,
   WorkerLoadErrorMessage,
   WorkerToMainMessage,
 } from './types.js'
@@ -74,8 +78,6 @@ type WorkerLoadGuardStore = Record<symbol, (() => void) | undefined>
 
 const workerLoadGuardStore = globalThis as WorkerLoadGuardStore
 
-let atomicWriteCount = 0
-
 /**
  * Writes a file atomically: a reader either sees the previous contents or the complete new
  * ones, never a half-written file. Generated files are shared between processes in
@@ -83,7 +85,7 @@ let atomicWriteCount = 0
  * guard cannot always report.
  */
 const writeFileAtomic = (filepath: string, content: string) => {
-  const temp = `${filepath}.${process.pid}.${(atomicWriteCount += 1)}.tmp`
+  const temp = `${filepath}.${process.pid}.tmp`
   fs.writeFileSync(temp, content)
   fs.renameSync(temp, filepath)
 }
@@ -533,72 +535,50 @@ export function extractProperties<T>(object?: T) {
 }
 
 /**
- * Reports a failure to load the worker module back to the main thread.
+ * Reports a failure to load the worker module, and wakes the main thread.
+ *
+ * It is installed from synckit's CommonJS build, which `startWorkerThread` preloads into the
+ * worker with `-r`, so it is in place before the worker module and before any `--require` /
+ * `--import` hook that module needs. `runAsWorker` removes it once the module registered, so
+ * it never changes the semantics of errors raised later.
  *
  * The main thread is blocked in `Atomics.wait()` and cannot observe the worker's `error`
  * event, so this notification is the only way out. The error's own properties are copied
- * because MessagePort does not clone them, and the shared buffer is notified even when the
- * error cannot be serialized at all — otherwise the main thread would wait forever.
+ * because MessagePort does not clone them, and the shared buffer is notified whatever
+ * happens — even when the error cannot be serialized at all.
  *
  * @internal
  */
-export const reportWorkerLoadError = (
-  workerPort: MessagePort,
-  sharedBufferView: Int32Array,
-  error: unknown,
-) => {
-  try {
-    const cause = error ?? new Error('Worker module failed to load')
-    let properties: unknown
-    try {
-      properties = extractProperties(cause)
-    } catch {
-      // an enumerable getter threw; report the error without its properties
-    }
-    workerPort.postMessage({ loadError: true, error: cause, properties })
-  } catch {
-    // the error is not cloneable; report something that always is
-    workerPort.postMessage({
-      loadError: true,
-      error: new Error('Worker module failed to load'),
-    })
-  } finally {
-    Atomics.add(sharedBufferView, 0, 1)
-    Atomics.notify(sharedBufferView, 0)
-  }
-}
-
-/**
- * Creates the callback the load guard installs for `uncaughtException` and
- * `unhandledRejection`.
- *
- * @internal
- */
-export const createWorkerLoadGuard =
-  (workerPort: MessagePort, sharedBufferView: Int32Array) =>
-  (error: unknown) => {
-    reportWorkerLoadError(workerPort, sharedBufferView, error)
-  }
-
-/**
- * Installs the guard which reports a failure to load the worker module.
- *
- * It is installed from synckit's CommonJS build, which `startWorkerThread` preloads into
- * the worker with `-r`, so that it is in place before the worker module — and before any
- * `--require` / `--import` hook it depends on — is loaded. `runAsWorker` removes it again,
- * so it never changes the semantics of errors raised after the worker registered.
- *
- * @internal
- */
-export const installWorkerLoadGuard = (
-  workerPort: MessagePort,
-  sharedBufferView: Int32Array,
-) => {
-  if (workerLoadGuardStore[WORKER_LOAD_GUARD]) {
+export const installWorkerLoadGuard = (data?: Partial<WorkerData>) => {
+  // a loader thread re-runs the `-r` preload with `workerData` null, and there is nothing to
+  // guard there
+  const { sharedBufferView, workerPort } = data ?? {}
+  if (
+    !sharedBufferView ||
+    !workerPort ||
+    workerLoadGuardStore[WORKER_LOAD_GUARD]
+  ) {
     return
   }
 
-  const guard = createWorkerLoadGuard(workerPort, sharedBufferView)
+  const guard = (error: unknown) => {
+    try {
+      workerPort.postMessage({
+        loadError: true,
+        error: error ?? new Error('Worker module failed to load'),
+        properties: extractProperties(error as object),
+      })
+    } catch {
+      // the error is not cloneable; report something that always is
+      workerPort.postMessage({
+        loadError: true,
+        error: new Error('Worker module failed to load'),
+      })
+    } finally {
+      Atomics.add(sharedBufferView, 0, 1)
+      Atomics.notify(sharedBufferView, 0)
+    }
+  }
 
   process.on('uncaughtException', guard)
   process.on('unhandledRejection', guard)
@@ -616,6 +596,15 @@ export const installWorkerLoadGuard = (
  */
 export const removeWorkerLoadGuard = () => {
   workerLoadGuardStore[WORKER_LOAD_GUARD]?.()
+}
+
+// A worker preloads this module with `-r <synckit>`, before the worker module and before any
+// `--require` / `--import` hook it needs, so arming the guard here is what reports a failure
+// to load that module instead of leaving the main thread blocked in `Atomics.wait()`.
+/* istanbul ignore next -- only reached inside a worker, whose copy is not instrumented */
+// type-coverage:ignore-next-line -- we cannot control
+if (!isMainThread) {
+  installWorkerLoadGuard(workerData as Partial<WorkerData>)
 }
 
 let workerPreload: string | null | undefined
@@ -813,13 +802,8 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     const msg = result?.message
 
     if (msg && 'loadError' in msg) {
-      // The guard always reports an `Error`, but a falsy thrown value must still surface
-      // here rather than fall through to the "not our id yet" branch below, which would
-      // wait again and hang forever.
-      const error: object =
-        msg.error && typeof msg.error === 'object'
-          ? msg.error
-          : new Error('Worker module failed to load')
+      // the guard always reports a normalized `Error`
+      const error = msg.error as object
       loadError = { error, properties: msg.properties }
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw Object.assign(error, msg.properties)

@@ -24,7 +24,6 @@ import {
   TRANSFORM_TYPES_NODE_VERSION,
   TsRunner,
   compareNodeVersion,
-  createWorkerLoadGuard,
   dataUrl,
   extractProperties,
   generateGlobals,
@@ -35,7 +34,6 @@ import {
   md5Hash,
   overrideStdio,
   removeWorkerLoadGuard,
-  reportWorkerLoadError,
   setupTsRunner,
   type StdioChunk,
 } from 'synckit'
@@ -303,22 +301,40 @@ describe('helpers', () => {
   })
 
   describe('worker load guard', () => {
-    const createPort = () => {
+    const createPort = (failFirst = false) => {
       const messages: unknown[] = []
+      let calls = 0
       const port = {
         postMessage: (message: unknown) => {
+          calls += 1
+          if (failFirst && calls === 1) {
+            throw new Error('not cloneable')
+          }
           messages.push(message)
         },
       } as unknown as MessagePort
       return { messages, port }
     }
 
-    test('reports the error with its properties and notifies the buffer', () => {
+    const install = (port: MessagePort, view: Int32Array) => {
+      installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+      return process.listeners('uncaughtException').pop() as unknown as (
+        error: unknown,
+      ) => void
+    }
+
+    test('reports the error with its properties and wakes the main thread', () => {
       const { messages, port } = createPort()
       const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
-      const error = Object.assign(new Error('boom'), { code: 'E_BOOM' })
 
-      reportWorkerLoadError(port, view, error)
+      try {
+        install(
+          port,
+          view,
+        )(Object.assign(new Error('boom'), { code: 'E_BOOM' }))
+      } finally {
+        removeWorkerLoadGuard()
+      }
 
       expect(messages).toHaveLength(1)
       const [message] = messages as [
@@ -330,7 +346,22 @@ describe('helpers', () => {
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
-    test('reports without properties when reading them throws', () => {
+    test('reports a falsy failure', () => {
+      const { messages, port } = createPort()
+      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+
+      try {
+        install(port, view)(null)
+      } finally {
+        removeWorkerLoadGuard()
+      }
+
+      const [message] = messages as [{ error: Error }]
+      expect(message.error.message).toBe('Worker module failed to load')
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('wakes the main thread when reading the properties throws', () => {
       const { messages, port } = createPort()
       const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
       const error = new Error('boom')
@@ -341,46 +372,30 @@ describe('helpers', () => {
         },
       })
 
-      reportWorkerLoadError(port, view, error)
+      try {
+        install(port, view)(error)
+      } finally {
+        removeWorkerLoadGuard()
+      }
 
-      expect(messages).toHaveLength(1)
-      const [message] = messages as [{ properties: unknown }]
-      expect(message.properties).toBeUndefined()
-      expect(Atomics.load(view, 0)).toBe(1)
-    })
-
-    test('still notifies when the error cannot be serialized', () => {
-      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
-      const messages: unknown[] = []
-      let calls = 0
-      const port = {
-        postMessage: (message: unknown) => {
-          calls += 1
-          if (calls === 1) {
-            throw new Error('not cloneable')
-          }
-          messages.push(message)
-        },
-      } as unknown as MessagePort
-
-      reportWorkerLoadError(port, view, new Error('boom'))
-
-      expect(messages).toHaveLength(1)
       const [message] = messages as [{ error: Error }]
       expect(message.error.message).toBe('Worker module failed to load')
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
-    test('the guard callback reports the uncaught error', () => {
-      const { messages, port } = createPort()
+    test('wakes the main thread when the error cannot be serialized', () => {
+      const { messages, port } = createPort(true)
       const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
 
-      createWorkerLoadGuard(port, view)(new Error('uncaught'))
+      try {
+        install(port, view)(new Error('boom'))
+      } finally {
+        removeWorkerLoadGuard()
+      }
 
       expect(messages).toHaveLength(1)
-      const [message] = messages as [{ error: Error; loadError: boolean }]
-      expect(message.loadError).toBe(true)
-      expect(message.error.message).toBe('uncaught')
+      const [message] = messages as [{ error: Error }]
+      expect(message.error.message).toBe('Worker module failed to load')
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
@@ -390,11 +405,11 @@ describe('helpers', () => {
       const before = process.listenerCount('uncaughtException')
 
       try {
-        installWorkerLoadGuard(port, view)
+        installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
         expect(process.listenerCount('uncaughtException')).toBe(before + 1)
 
         // installing again is a no-op
-        installWorkerLoadGuard(port, view)
+        installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
         expect(process.listenerCount('uncaughtException')).toBe(before + 1)
       } finally {
         removeWorkerLoadGuard()
