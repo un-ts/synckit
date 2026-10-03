@@ -1,0 +1,10 @@
+{
+  "extends": "@1stg/tsconfig/nodenext",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "files": ["register.cjs"]
+}

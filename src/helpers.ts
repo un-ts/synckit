@@ -7,13 +7,12 @@ import {
   type MessagePort,
   MessageChannel,
   Worker,
-  isMainThread,
   receiveMessageOnPort,
-  // type-coverage:ignore-next-line -- we can't control
-  workerData,
 } from 'node:worker_threads'
 
 import { tryExtensions, findUp, cjsRequire, isPkgAvailable } from '@pkgr/core'
+
+import { NOTIFY_INDEX, createSharedBufferView } from '../register.cjs'
 
 import { compareNodeVersion } from './common.js'
 import {
@@ -25,7 +24,6 @@ import {
   DEFAULT_TYPES_NODE_VERSION,
   IMPORT_FLAG,
   IMPORT_FLAG_SUPPORTED,
-  INT32_BYTES,
   LOADER_FLAG,
   LOADER_FLAGS,
   MTS_SUPPORTED,
@@ -49,10 +47,14 @@ import type {
   PackageJson,
   StdioChunk,
   SynckitOptions,
-  WorkerData,
   WorkerLoadErrorMessage,
   WorkerToMainMessage,
 } from './types.js'
+
+// The load guard, its shared state and `extractProperties` live in `register.cjs`, a plain
+// CommonJS file at the package root, so that the very same file is preloaded into every worker
+// with `-r` — in development, where a test runner maps the package to its source, and in the
+// published package alike. It is re-exported here to keep the public surface.
 
 export const isFile = (path: string) => {
   try {
@@ -66,54 +68,13 @@ export const isFile = (path: string) => {
 export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
-/**
- * The shared state the main thread and a worker agree on: a notification byte and the load
- * guard's state (idle, armed, or the module finished loading). Keeping the guard state here
- * is what makes it idempotent and lets it disarm itself without any module-level or global
- * state — the preload (synckit's CommonJS build) and the worker module's own import of
- * synckit are two module instances that only share what travels in `workerData`.
- */
-const TS_SOURCE = /\.[cm]?ts$/
-
-const NOTIFY_INDEX = 0
-const STATE_INDEX = 1
-const SLICE_INTS = 2
-const STATE_ARMED = 1
-const STATE_LOADED = 2
-const INITIAL_SLICES = 64
-
-let sharedBuffer: SharedArrayBuffer | undefined
-let sharedSlices = 0
-let nextSlice = 0
-
-/**
- * Reserves this worker's slice of the process-wide shared buffer and returns a view of it.
- *
- * One buffer per process, as in #154, so the allocation stays off the per-worker cost; one
- * slice per worker because a worker reports its own load failure before any request exists,
- * and a single shared word would let an unrelated `syncFn` call consume that notification
- * and then hang forever.
- *
- * Growing allocates a new, larger buffer; workers already running keep their views on the old
- * one.
- *
- * @internal
- */
-export const createSharedBufferView = () => {
-  const slice = nextSlice++
-  const needed = (slice + 1) * SLICE_INTS
-
-  if (needed > sharedSlices || !sharedBuffer) {
-    sharedSlices = Math.max(needed, sharedSlices * 2, INITIAL_SLICES)
-    sharedBuffer = new SharedArrayBuffer(sharedSlices * INT32_BYTES)
-  }
-
-  return new Int32Array(
-    sharedBuffer,
-    slice * SLICE_INTS * INT32_BYTES,
-    SLICE_INTS,
-  )
-}
+export {
+  createSharedBufferView,
+  extractProperties,
+  installWorkerLoadGuard,
+  markWorkerLoaded,
+  NOTIFY_INDEX,
+} from '../register.cjs'
 
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
@@ -509,147 +470,25 @@ export const generateGlobals = (
   return content
 }
 
-// MessagePort doesn't copy the properties of Error objects. We still want
-// error objects to have extra properties such as "warnings" so implement the
-// property copying manually.
-export function extractProperties<T extends object>(object: T): T
-export function extractProperties<T>(object?: T): T | undefined
-
-/**
- * Creates a shallow copy of the enumerable properties from the provided object.
- *
- * @param object - An optional object whose properties are to be extracted.
- * @returns A new object containing the enumerable properties of the input, or
- *   undefined if no valid object is provided.
- */
-export function extractProperties<T>(object?: T) {
-  if (object && typeof object === 'object') {
-    const properties = {} as T
-    for (const key in object) {
-      properties[key as keyof T] = object[key]
-    }
-    return properties
-  }
-}
-
-/**
- * Reports a failure to load the worker module, and wakes the main thread.
- *
- * It is installed from synckit's CommonJS build, which `startWorkerThread` preloads into the
- * worker with `-r`, so it is in place before the worker module and before any `--require` /
- * `--import` hook that module needs. `runAsWorker` removes it once the module registered, so
- * it never changes the semantics of errors raised later.
- *
- * The main thread is blocked in `Atomics.wait()` and cannot observe the worker's `error`
- * event, so this notification is the only way out. The error's own properties are copied
- * because MessagePort does not clone them, and the shared buffer is notified whatever
- * happens — even when the error cannot be serialized at all.
- *
- * @internal
- */
-export const installWorkerLoadGuard = (data?: Partial<WorkerData>) => {
-  // a loader thread re-runs the `-r` preload with `workerData` null, and there is nothing to
-  // guard there
-  const { sharedBufferView, workerPort } = data ?? {}
-  if (!sharedBufferView || !workerPort) {
-    return
-  }
-
-  // the preload and the worker module's own import of synckit both get here, and only one
-  // guard must be armed
-  if (
-    Atomics.compareExchange(sharedBufferView, STATE_INDEX, 0, STATE_ARMED) !== 0
-  ) {
-    return
-  }
-
-  const guard = (error: unknown) => {
-    // disarm: from here on this worker behaves exactly as an unguarded one
-    process.off('uncaughtException', guard)
-    process.off('unhandledRejection', guard)
-
-    if (Atomics.load(sharedBufferView, STATE_INDEX) === STATE_LOADED) {
-      // the module loaded, so this is a runtime failure, not a load failure
-      throw error
-    }
-
-    try {
-      workerPort.postMessage({
-        loadError: true,
-        error: error ?? new Error('Worker module failed to load'),
-        properties: extractProperties(error as object),
-      })
-    } catch {
-      // the error is not cloneable; report something that always is
-      workerPort.postMessage({
-        loadError: true,
-        error: new Error('Worker module failed to load'),
-      })
-    } finally {
-      Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
-      Atomics.notify(sharedBufferView, NOTIFY_INDEX)
-    }
-  }
-
-  process.on('uncaughtException', guard)
-  process.on('unhandledRejection', guard)
-}
-
-/** Marks the worker module as loaded, so the guard stops reporting failures.
- *
- * @internal
- */
-export const markWorkerLoaded = (sharedBufferView: Int32Array) => {
-  Atomics.store(sharedBufferView, STATE_INDEX, STATE_LOADED)
-}
-
-// A worker preloads this module with `-r <synckit>`, before the worker module and before any
-// `--require` / `--import` hook it needs, so arming the guard here is what reports a failure
-// to load that module instead of leaving the main thread blocked in `Atomics.wait()`.
-/* istanbul ignore next -- only reached inside a worker, whose copy is not instrumented */
-// type-coverage:ignore-next-line -- we cannot control
-if (!isMainThread) {
-  installWorkerLoadGuard(workerData as Partial<WorkerData>)
-}
-
 let workerPreload: string | null | undefined
 
 /**
  * Absolute path of the module preloaded into every worker to arm the load guard.
  *
- * `require.resolve(synckit)` decides it, so the path follows whatever the package declares —
- * a build layout change or an `exports` rewrite cannot break it. A test runner that maps the
- * package to its source (this repository's jest config does) resolves to a `.ts` file
- * instead, which `-r` can only load behind a TypeScript loader; the CommonJS entry declared by
- * the manifest is used then. When neither is a real file — a bundler inlined synckit, or the
- * package was not built — the guard is not armed and a failing worker behaves as it did before.
+ * `require.resolve('synckit/register.cjs')` keeps the path independent of where the file
+ * sits in the package, so a build layout change cannot break it. It resolves to the
+ * checked-in CommonJS file itself — in this repository and in the published package alike —
+ * so no build step and no loader is involved. When it cannot be resolved (a bundler inlined
+ * synckit) the guard is simply not armed and a failing worker behaves as it did before.
  */
 const getWorkerPreload = () => {
   if (workerPreload === undefined) {
-    const candidates: Array<string | undefined> = []
-
     try {
-      candidates.push(synckitRequire.resolve('synckit'))
+      const resolved = synckitRequire.resolve('synckit/register.cjs')
+      workerPreload = isFile(resolved) ? resolved : null
     } catch {
-      // not resolvable as a package
+      workerPreload = null
     }
-
-    try {
-      const { main } = JSON.parse(
-        fs.readFileSync(path.resolve(_dirname, '../package.json'), 'utf8'),
-      ) as { main?: string }
-      if (main) {
-        candidates.push(path.resolve(_dirname, '..', main))
-      }
-    } catch {
-      // no manifest next to this module
-    }
-
-    workerPreload =
-      candidates.find(
-        candidate =>
-          candidate != null && !TS_SOURCE.test(candidate) && isFile(candidate),
-      ) ?? null
   }
 
   return workerPreload ?? undefined
@@ -795,8 +634,13 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     waitingTimeout?: number,
   ): WorkerToMainMessage<R> => {
     const start = Date.now()
-    const status = Atomics.wait(sharedBufferView, 0, 0, waitingTimeout)
-    Atomics.store(sharedBufferView, 0, 0)
+    const status = Atomics.wait(
+      sharedBufferView,
+      NOTIFY_INDEX,
+      0,
+      waitingTimeout,
+    )
+    Atomics.store(sharedBufferView, NOTIFY_INDEX, 0)
 
     if (!['ok', 'not-equal'].includes(status)) {
       const abortMsg: MainToWorkerCommandMessage = {

@@ -15,18 +15,23 @@
   "types": "./lib/index.d.cts",
   "module": "./lib/index.js",
   "exports": {
-    "import": {
-      "types": "./lib/index.d.ts",
-      "default": "./lib/index.js"
+    ".": {
+      "import": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "require": {
+        "types": "./lib/index.d.cts",
+        "default": "./lib/index.cjs"
+      }
     },
-    "require": {
-      "types": "./lib/index.d.cts",
-      "default": "./lib/index.cjs"
-    }
+    "./register.cjs": "./register.cjs"
   },
   "files": [
     "index.d.cts",
     "lib",
+    "register.cjs",
+    "register.d.cts",
     "!**/*.tsbuildinfo"
   ],
   "keywords": [
@@ -53,6 +58,7 @@
     "format": "prettier --write .",
     "lint": "concurrently -r 'yarn:lint:*'",
     "lint:es": "eslint . --cache --max-warnings 10",
+    "lint:register": "tsc -p tsconfig.register.json",
     "lint:tsc": "tsc --noEmit",
     "prepare": "patch-package && simple-git-hooks && yarn-berry-deduplicate || exit 0",
     "release": "clean-pkg-json && changeset publish",
