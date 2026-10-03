@@ -9,7 +9,6 @@ import {
 import {
   extractProperties,
   overrideStdio,
-  markWorkerLoadedSoon,
   startWorkerThread,
 } from './helpers.js'
 import type {
@@ -107,8 +106,6 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
   overrideStdio(stdio)
 
   const { workerPort, sharedBufferView } = workerData as WorkerData
-
-  markWorkerLoadedSoon(sharedBufferView)
 
   parentPort!.on(
     'message',

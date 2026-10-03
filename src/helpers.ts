@@ -71,8 +71,6 @@ export {
   createSharedBufferView,
   extractProperties,
   installWorkerLoadGuard,
-  markWorkerLoaded,
-  markWorkerLoadedSoon,
   NOTIFY_INDEX,
 } from '../register.cjs'
 

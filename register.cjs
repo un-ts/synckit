@@ -5,10 +5,12 @@
  * Preloaded into every worker with `-r <synckit>/register.cjs`, so it is in place before the
  * worker module and before any `--require` / `--import` hook that module depends on.
  *
- * If that module then fails to load, nothing would ever tell the main thread: it is blocked
- * in `Atomics.wait()` and cannot process the worker's `error` event. This file reports the
- * failure through `workerData` instead — the transferred port carries the error and a
- * notification byte in the shared buffer wakes the wait.
+ * If that module then fails to load — or raises any uncaught failure before the main thread
+ * hears from it, including one that only surfaces after a top-level `await` — nothing would
+ * ever tell the main thread: it is blocked in `Atomics.wait()` and cannot process the worker's
+ * `error` event. This file reports the first such failure through `workerData` instead: the
+ * transferred port carries the error and a notification byte in the shared buffer wakes the
+ * wait. It disarms itself afterwards, so later failures behave as they would without it.
  *
  * It is a plain CommonJS file at the package root, with no build step and no loader of its
  * own, so a test runner that maps the package to its source preloads exactly what the
@@ -21,16 +23,15 @@
 // type-coverage:ignore-next-line -- node types mark workerData as any
 const { isMainThread, workerData } = require('node:worker_threads')
 
-// the shared state: [0] notification byte, [1] guard state
+// the shared state: [0] notification byte, [1] guard-armed flag
 const NOTIFY_INDEX = 0
 const STATE_INDEX = 1
 const SLICE_INTS = 2
 const STATE_ARMED = 1
-const STATE_LOADED = 2
 
 // one SharedArrayBuffer per process, sliced per worker: a single buffer keeps the allocation
-// off the per-worker cost, while a slice per worker stops an unsolicited load-failure
-// notification from waking another worker's `Atomics.wait()`
+// off the per-worker cost, while a slice per worker stops an unsolicited failure notification
+// from waking another worker's `Atomics.wait()`
 const INITIAL_SLICES = 64
 
 /** @type {SharedArrayBuffer | undefined} */
@@ -38,7 +39,6 @@ let sharedBuffer
 let sharedSlices = 0
 let nextSlice = 0
 
-/** Reserves this worker's slice of the process-wide shared buffer. */
 /**
  * Reserves this worker's slice of the process-wide shared buffer.
  *
@@ -114,14 +114,10 @@ const installWorkerLoadGuard = data => {
 
   /** @param {unknown} error */
   const guard = error => {
-    // disarm: from here on this worker behaves exactly as an unguarded one
+    // disarm: only the first failure is reported, anything after it behaves as it would
+    // without the guard
     process.off('uncaughtException', guard)
     process.off('unhandledRejection', guard)
-
-    if (Atomics.load(sharedBufferView, STATE_INDEX) === STATE_LOADED) {
-      // the module loaded, so this is a runtime failure, not a load failure
-      throw error
-    }
 
     try {
       workerPort.postMessage({
@@ -136,6 +132,7 @@ const installWorkerLoadGuard = data => {
         error: new Error('Worker module failed to load'),
       })
     } finally {
+      // whatever happens next, a caller must not be left waiting
       Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
       Atomics.notify(sharedBufferView, NOTIFY_INDEX)
     }
@@ -143,30 +140,6 @@ const installWorkerLoadGuard = data => {
 
   process.on('uncaughtException', guard)
   process.on('unhandledRejection', guard)
-}
-
-/**
- * Marks the worker module as loaded, so the guard stops reporting failures.
- *
- * @param {Int32Array} sharedBufferView
- */
-const markWorkerLoaded = sharedBufferView => {
-  Atomics.store(sharedBufferView, STATE_INDEX, STATE_LOADED)
-}
-
-/**
- * Marks the worker module as loaded once this turn of the event loop ends.
- *
- * The entry can still throw after registering — or reject a top-level `await` — so the module
- * only counts as loaded once it finished evaluating; until then the guard keeps reporting a
- * failure instead of letting the worker die unnoticed.
- *
- * @param {Int32Array} sharedBufferView
- */
-const markWorkerLoadedSoon = sharedBufferView => {
-  setImmediate(() => {
-    markWorkerLoaded(sharedBufferView)
-  })
 }
 
 if (!isMainThread) {
@@ -178,6 +151,4 @@ module.exports = {
   createSharedBufferView,
   extractProperties,
   installWorkerLoadGuard,
-  markWorkerLoaded,
-  markWorkerLoadedSoon,
 }

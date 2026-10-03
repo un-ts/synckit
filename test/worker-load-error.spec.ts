@@ -242,3 +242,38 @@ test('a primitive load failure is thrown as it is, not boxed', () => {
   // merging the copied properties used to box it into a `String` with no `message`
   expect(caught).toBe('primitive boom')
 })
+
+test('an ESM worker that throws after a top-level await is reported', () => {
+  // nothing signals that a top-level `await` is still pending, so the module can be marked
+  // loaded while it is still evaluating: the failure has to be reported regardless
+  const workerPath = writeWorker(
+    'throws-after-top-level-await.mjs',
+    esmWorker(
+      `runAsWorker(() => new Promise(resolve => setTimeout(() => resolve('late'), 300)))
+await new Promise(resolve => setTimeout(resolve, 50))
+throw new Error('boom after a top-level await')`,
+    ),
+  )
+  const syncFn = createSyncFn<() => unknown>(workerPath, { timeout: TIMEOUT })
+
+  expect(expectThrows(() => syncFn()).message).toContain(
+    'boom after a top-level await',
+  )
+})
+
+test('a runtime failure while a call is in flight is reported', () => {
+  const workerPath = writeWorker(
+    'throws-while-serving.cjs',
+    cjsWorker(
+      `runAsWorker(() => new Promise(resolve => setTimeout(() => resolve('late'), 300)))
+setTimeout(() => {
+  throw new Error('boom while a call is in flight')
+}, 50)`,
+    ),
+  )
+  const syncFn = createSyncFn<() => unknown>(workerPath, { timeout: TIMEOUT })
+
+  expect(expectThrows(() => syncFn()).message).toContain(
+    'boom while a call is in flight',
+  )
+})

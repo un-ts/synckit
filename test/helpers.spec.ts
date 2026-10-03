@@ -33,7 +33,6 @@ import {
   md5Hash,
   overrideStdio,
   createSharedBufferView,
-  markWorkerLoaded,
   setupTsRunner,
   type StdioChunk,
 } from 'synckit'
@@ -385,7 +384,7 @@ describe('helpers', () => {
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
-    test('arms once and stays silent once the module loaded', () => {
+    test('arms once', () => {
       const { messages, port } = createPort()
       const view = createSharedBufferView()
       const before = listeners()
@@ -397,11 +396,9 @@ describe('helpers', () => {
       installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
       expect(listeners()).toBe(before + 1)
 
-      markWorkerLoaded(view)
-      expect(() => guard(new Error('runtime'))).toThrow('runtime')
-
-      expect(messages).toHaveLength(0)
-      expect(Atomics.load(view, 0)).toBe(0)
+      // reporting disarms it: only the first failure is reported
+      guard(new Error('boom'))
+      expect(messages).toHaveLength(1)
       expect(listeners()).toBe(before)
     })
 

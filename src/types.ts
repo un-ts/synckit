@@ -45,10 +45,12 @@ export interface WorkerToMainMessage<T> extends DataMessage<T> {
 }
 
 /**
- * Reported by the worker load guard when the worker module itself fails to load.
+ * Reported by the worker load guard for the worker's first uncaught failure — normally a
+ * failure to load its module, but also one that only surfaces later, after a top-level `await`.
  *
- * It carries a marker instead of a request id: a load failure happens before any request
- * exists, and a magic id would be indistinguishable from an outdated response.
+ * It carries a marker instead of a request id: such a failure happens before any request
+ * exists (or while one is in flight), and a magic id would be indistinguishable from an
+ * outdated response.
  */
 export interface WorkerLoadErrorMessage {
   loadError: true

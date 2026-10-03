@@ -26,17 +26,3 @@ export declare const installWorkerLoadGuard: (data?: {
   sharedBufferView?: Int32Array
   workerPort?: MessagePort
 }) => void
-
-/** Marks the worker module as loaded, so the guard stops reporting failures.
- *
- * @internal
- */
-export declare const markWorkerLoaded: (sharedBufferView: Int32Array) => void
-
-/** Marks the worker module as loaded once this turn of the event loop ends.
- *
- * @internal
- */
-export declare const markWorkerLoadedSoon: (
-  sharedBufferView: Int32Array,
-) => void
