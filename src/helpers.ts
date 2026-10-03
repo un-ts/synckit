@@ -461,25 +461,14 @@ export const generateGlobals = (
   return content
 }
 
-let workerPreload: string | null | undefined
-
 /**
  * Absolute path of the module preloaded into every worker to arm the load guard.
  *
- * `register.cjs` sits next to the package root — next to this module in the built package,
- * next to `src` in this repository — so a plain relative path needs no build step and no
- * loader, in a test run and in the published package alike. `isFile` is false when a bundler
- * inlined synckit and the file is not there; the guard is then simply not armed and a failing
- * worker behaves as it did before.
+ * `register.cjs` ships with the package, next to the package root: `lib/../register.cjs` in
+ * the built package, `src/../register.cjs` in this repository, so the one relative path covers
+ * a test run and a release alike.
  */
-const getWorkerPreload = () => {
-  if (workerPreload === undefined) {
-    const filepath = path.resolve(_dirname, '../register.cjs')
-    workerPreload = isFile(filepath) ? filepath : null
-  }
-
-  return workerPreload ?? undefined
-}
+const workerPreload = path.resolve(_dirname, '../register.cjs')
 
 /**
  * Spawns a worker thread and returns a synchronous function to dispatch tasks.
@@ -582,8 +571,6 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
   const useEval = isTs ? !tsUseEsm : !jsUseEsm && useGlobals
 
-  const preload = getWorkerPreload()
-
   const worker = new Worker(
     (jsUseEsm && useGlobals) || (tsUseEsm && finalTsRunner === TsRunner.TsNode)
       ? dataUrl(
@@ -603,9 +590,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       eval: useEval,
       workerData: { sharedBufferView, workerPort, pnpLoaderPath },
       transferList: [workerPort, ...transferList],
-      execArgv: preload
-        ? [REQUIRE_ABBR_FLAG, preload, ...finalExecArgv]
-        : finalExecArgv,
+      execArgv: [REQUIRE_ABBR_FLAG, workerPreload, ...finalExecArgv],
     },
   )
 
