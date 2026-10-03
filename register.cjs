@@ -69,7 +69,7 @@ const createSharedBufferView = () => {
  * Copies the enumerable properties of an object.
  *
  * @param {unknown} object The object to copy the properties of.
- * @returns {Record<string, unknown> | undefined} The copied properties, if any.
+ * @returns {object | undefined} The copied properties, if any.
  */
 const extractProperties = object => {
   if (object && typeof object === 'object') {

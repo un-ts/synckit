@@ -79,10 +79,7 @@ export {
 // MessagePort does not copy an error's own properties, so they are merged back in on this
 // side. A reason that is not an object is thrown as it came: `Object.assign` would box a
 // primitive into a `String`/`Number` object with no `message`.
-const withProperties = (
-  error: unknown,
-  properties?: Record<string, unknown>,
-) =>
+const withProperties = (error: unknown, properties?: object) =>
   error && typeof error === 'object' ? Object.assign(error, properties) : error
 
 export const hasRequireFlag = (execArgv: string[]) =>
