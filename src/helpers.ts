@@ -66,17 +66,28 @@ export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
 /**
- * Global key under which the worker load guard publishes its remover.
- *
- * The guard is installed by synckit's CommonJS build — preloaded into the worker with
- * `-r` — while the worker module usually imports the ESM build, so the two module
- * instances have to agree through a well-known global rather than a module-level variable.
+ * Slots the main thread and the worker share: the notification byte, a flag saying the load
+ * guard is armed, and a flag saying the worker module finished loading. The last two are how
+ * the guard is kept idempotent and disarmed without any module-level or global state — the
+ * preload (synckit's CommonJS build) and the worker module's own import of synckit are two
+ * different module instances that only share what travels in `workerData`.
  */
-const WORKER_LOAD_GUARD = Symbol.for('synckit.workerLoadGuard')
+const NOTIFY_INDEX = 0
+const GUARD_INDEX = 1
+const LOADED_INDEX = 2
+const SHARED_STATE_INTS = 3
 
-type WorkerLoadGuardStore = Record<symbol, (() => void) | undefined>
-
-const workerLoadGuardStore = globalThis as WorkerLoadGuardStore
+/**
+ * Allocates the shared state a worker and the main thread agree on.
+ *
+ * One per worker: a worker reports its own load failure before any request exists, so a
+ * buffer shared between workers would let an unrelated `syncFn` call consume that
+ * notification and then hang forever.
+ *
+ * @internal
+ */
+export const createSharedBufferView = () =>
+  new Int32Array(new SharedArrayBuffer(INT32_BYTES * SHARED_STATE_INTS))
 
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
@@ -506,15 +517,26 @@ export const installWorkerLoadGuard = (data?: Partial<WorkerData>) => {
   // a loader thread re-runs the `-r` preload with `workerData` null, and there is nothing to
   // guard there
   const { sharedBufferView, workerPort } = data ?? {}
-  if (
-    !sharedBufferView ||
-    !workerPort ||
-    workerLoadGuardStore[WORKER_LOAD_GUARD]
-  ) {
+  if (!sharedBufferView || !workerPort) {
+    return
+  }
+
+  // the preload and the worker module's own import of synckit both get here, and only one
+  // guard must be armed
+  if (Atomics.compareExchange(sharedBufferView, GUARD_INDEX, 0, 1) !== 0) {
     return
   }
 
   const guard = (error: unknown) => {
+    // disarm: from here on this worker behaves exactly as an unguarded one
+    process.off('uncaughtException', guard)
+    process.off('unhandledRejection', guard)
+
+    if (Atomics.load(sharedBufferView, LOADED_INDEX)) {
+      // the module loaded, so this is a runtime failure, not a load failure
+      throw error
+    }
+
     try {
       workerPort.postMessage({
         loadError: true,
@@ -528,27 +550,21 @@ export const installWorkerLoadGuard = (data?: Partial<WorkerData>) => {
         error: new Error('Worker module failed to load'),
       })
     } finally {
-      Atomics.add(sharedBufferView, 0, 1)
-      Atomics.notify(sharedBufferView, 0)
+      Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
+      Atomics.notify(sharedBufferView, NOTIFY_INDEX)
     }
   }
 
   process.on('uncaughtException', guard)
   process.on('unhandledRejection', guard)
-
-  workerLoadGuardStore[WORKER_LOAD_GUARD] = () => {
-    process.off('uncaughtException', guard)
-    process.off('unhandledRejection', guard)
-    delete workerLoadGuardStore[WORKER_LOAD_GUARD]
-  }
 }
 
-/** Removes the load guard once the worker module has registered its handler.
+/** Marks the worker module as loaded, so the guard stops reporting failures.
  *
  * @internal
  */
-export const removeWorkerLoadGuard = () => {
-  workerLoadGuardStore[WORKER_LOAD_GUARD]?.()
+export const markWorkerLoaded = (sharedBufferView: Int32Array) => {
+  Atomics.store(sharedBufferView, LOADED_INDEX, 1)
 }
 
 // A worker preloads this module with `-r <synckit>`, before the worker module and before any
@@ -563,19 +579,31 @@ if (!isMainThread) {
 let workerPreload: string | null | undefined
 
 /**
- * Absolute path of the module preloaded into every worker to install the load guard.
+ * Absolute path of the module preloaded into every worker to arm the load guard.
  *
- * It is synckit's own CommonJS entry, which already ships with the package, so no extra
- * file is needed. The path is derived from this module's own location rather than from
- * `require.resolve('synckit')`: under a test runner the latter resolves through the
- * runner's module map and can point at source instead of the built bundle. When the file
- * is not there — a bundler inlined synckit, or an unexpected layout — the guard is simply
- * not installed and a failing worker behaves as it did before.
+ * It is the CommonJS entry declared by synckit's own manifest, so it follows a build layout
+ * change instead of assuming one. `require.resolve('synckit')` is not usable here: a test
+ * runner that maps the package to its source — this repository's jest config does — resolves
+ * it to `src/index.ts`, which `-r` cannot load. When the manifest or the file is missing (a
+ * bundler inlined synckit, or the package was not built) the guard is simply not installed
+ * and a failing worker behaves as it did before.
  */
 const getWorkerPreload = () => {
   if (workerPreload === undefined) {
-    const filepath = path.resolve(_dirname, '../lib/index.cjs')
-    workerPreload = isFile(filepath) ? filepath : null
+    workerPreload = null
+    try {
+      const { main } = JSON.parse(
+        fs.readFileSync(path.resolve(_dirname, '../package.json'), 'utf8'),
+      ) as { main?: string }
+      if (main) {
+        const filepath = path.resolve(_dirname, '..', main)
+        if (isFile(filepath)) {
+          workerPreload = filepath
+        }
+      }
+    } catch {
+      // no manifest next to this module; no guard
+    }
   }
   return workerPreload ?? undefined
 }
@@ -675,10 +703,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
         : []
   ).filter(({ moduleName }) => isPkgAvailable(moduleName))
 
-  // A dedicated notification byte per worker: a worker reports its own load failure
-  // before any request exists, so a buffer shared between workers would let an
-  // unrelated `syncFn` call consume that notification and then hang forever.
-  const sharedBufferView = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+  const sharedBufferView = createSharedBufferView()
 
   const useGlobals = finalGlobalShims.length > 0
 

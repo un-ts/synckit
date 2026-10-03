@@ -16,7 +16,6 @@ import {
 import {
   DEFAULT_TYPES_NODE_VERSION,
   IMPORT_FLAG,
-  INT32_BYTES,
   LOADER_FLAG,
   REQUIRE_ABBR_FLAG,
   REQUIRE_FLAG,
@@ -33,7 +32,8 @@ import {
   installWorkerLoadGuard,
   md5Hash,
   overrideStdio,
-  removeWorkerLoadGuard,
+  createSharedBufferView,
+  markWorkerLoaded,
   setupTsRunner,
   type StdioChunk,
 } from 'synckit'
@@ -323,18 +323,14 @@ describe('helpers', () => {
       ) => void
     }
 
+    const listeners = () => process.listenerCount('uncaughtException')
+
     test('reports the error with its properties and wakes the main thread', () => {
       const { messages, port } = createPort()
-      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+      const view = createSharedBufferView()
+      const before = listeners()
 
-      try {
-        install(
-          port,
-          view,
-        )(Object.assign(new Error('boom'), { code: 'E_BOOM' }))
-      } finally {
-        removeWorkerLoadGuard()
-      }
+      install(port, view)(Object.assign(new Error('boom'), { code: 'E_BOOM' }))
 
       expect(messages).toHaveLength(1)
       const [message] = messages as [
@@ -344,17 +340,15 @@ describe('helpers', () => {
       expect(message.error.message).toBe('boom')
       expect(message.properties).toEqual({ code: 'E_BOOM' })
       expect(Atomics.load(view, 0)).toBe(1)
+      // invoking the guard disarmed it
+      expect(listeners()).toBe(before)
     })
 
     test('reports a falsy failure', () => {
       const { messages, port } = createPort()
-      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+      const view = createSharedBufferView()
 
-      try {
-        install(port, view)(null)
-      } finally {
-        removeWorkerLoadGuard()
-      }
+      install(port, view)(null)
 
       const [message] = messages as [{ error: Error }]
       expect(message.error.message).toBe('Worker module failed to load')
@@ -363,7 +357,7 @@ describe('helpers', () => {
 
     test('wakes the main thread when reading the properties throws', () => {
       const { messages, port } = createPort()
-      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+      const view = createSharedBufferView()
       const error = new Error('boom')
       Object.defineProperty(error, 'trap', {
         enumerable: true,
@@ -372,11 +366,7 @@ describe('helpers', () => {
         },
       })
 
-      try {
-        install(port, view)(error)
-      } finally {
-        removeWorkerLoadGuard()
-      }
+      install(port, view)(error)
 
       const [message] = messages as [{ error: Error }]
       expect(message.error.message).toBe('Worker module failed to load')
@@ -385,13 +375,9 @@ describe('helpers', () => {
 
     test('wakes the main thread when the error cannot be serialized', () => {
       const { messages, port } = createPort(true)
-      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
+      const view = createSharedBufferView()
 
-      try {
-        install(port, view)(new Error('boom'))
-      } finally {
-        removeWorkerLoadGuard()
-      }
+      install(port, view)(new Error('boom'))
 
       expect(messages).toHaveLength(1)
       const [message] = messages as [{ error: Error }]
@@ -399,27 +385,24 @@ describe('helpers', () => {
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
-    test('installs once and removes', () => {
-      const { port } = createPort()
-      const view = new Int32Array(new SharedArrayBuffer(INT32_BYTES))
-      const before = process.listenerCount('uncaughtException')
+    test('arms once and stays silent once the module loaded', () => {
+      const { messages, port } = createPort()
+      const view = createSharedBufferView()
+      const before = listeners()
 
-      try {
-        installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
-        expect(process.listenerCount('uncaughtException')).toBe(before + 1)
+      const guard = install(port, view)
+      expect(listeners()).toBe(before + 1)
 
-        // installing again is a no-op
-        installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
-        expect(process.listenerCount('uncaughtException')).toBe(before + 1)
-      } finally {
-        removeWorkerLoadGuard()
-      }
+      // arming again is a no-op
+      installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+      expect(listeners()).toBe(before + 1)
 
-      expect(process.listenerCount('uncaughtException')).toBe(before)
+      markWorkerLoaded(view)
+      expect(() => guard(new Error('runtime'))).toThrow('runtime')
 
-      // removing again is a no-op
-      removeWorkerLoadGuard()
-      expect(process.listenerCount('uncaughtException')).toBe(before)
+      expect(messages).toHaveLength(0)
+      expect(Atomics.load(view, 0)).toBe(0)
+      expect(listeners()).toBe(before)
     })
 
     test('generateGlobals returns nothing without shims', () => {

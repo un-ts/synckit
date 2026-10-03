@@ -9,7 +9,7 @@ import {
 import {
   extractProperties,
   overrideStdio,
-  removeWorkerLoadGuard,
+  markWorkerLoaded,
   startWorkerThread,
 } from './helpers.js'
 import type {
@@ -106,10 +106,10 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
 
   overrideStdio(stdio)
 
-  // the module loaded and is about to register, so a load failure is no longer possible
-  removeWorkerLoadGuard()
-
   const { workerPort, sharedBufferView } = workerData as WorkerData
+
+  // the module loaded and is about to register, so a load failure is no longer possible
+  markWorkerLoaded(sharedBufferView)
 
   parentPort!.on(
     'message',
