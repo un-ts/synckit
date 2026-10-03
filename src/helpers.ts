@@ -46,7 +46,7 @@ import type {
   PackageJson,
   StdioChunk,
   SynckitOptions,
-  WorkerLoadErrorMessage,
+  WorkerFailureMessage,
   WorkerToMainMessage,
 } from './types.js'
 
@@ -598,9 +598,9 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
   let nextID = 0
 
-  // Cached so that later calls keep throwing the original load error instead of posting to a
-  // worker which never managed to register a handler
-  let loadError: WorkerLoadErrorMessage | undefined
+  // Cached so that later calls keep throwing the original failure instead of posting to a
+  // worker which cannot answer
+  let workerFailure: WorkerFailureMessage | undefined
 
   const receiveMessageWithId = (
     port: MessagePort,
@@ -614,7 +614,6 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       0,
       waitingTimeout,
     )
-    Atomics.store(sharedBufferView, NOTIFY_INDEX, 0)
 
     if (!['ok', 'not-equal'].includes(status)) {
       const abortMsg: MainToWorkerCommandMessage = {
@@ -625,18 +624,26 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
     }
 
+    // Each report bumps the notification byte and posts one message, so consume exactly one
+    // notification per message. This runs only after a wait that was actually notified: on
+    // `'timed-out'` the byte was still zero, and decrementing a report that arrived after the
+    // wait returned would leave its message queued with nothing left to wake the next call.
+    if (Atomics.load(sharedBufferView, NOTIFY_INDEX) > 0) {
+      Atomics.sub(sharedBufferView, NOTIFY_INDEX, 1)
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const result = receiveMessageOnPort(mainPort) as
-      | { message: WorkerLoadErrorMessage | WorkerToMainMessage<R> }
+      | { message: WorkerFailureMessage | WorkerToMainMessage<R> }
       | undefined
 
     const msg = result?.message
 
-    if (msg && 'loadError' in msg) {
-      // a worker that never registered a handler cannot serve later calls, so its failure is
-      // cached; one that did is only reporting a failure, and may well serve again
+    if (msg && 'workerFailure' in msg) {
+      // a worker that never registered a handler, or that is gone, cannot serve later calls, so
+      // its failure is cached; one that only reported a failure may well serve again
       if (msg.fatal) {
-        loadError = msg
+        workerFailure = msg
       }
 
       throw withProperties(msg.error, msg.properties)
@@ -663,8 +670,8 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   }
 
   const syncFn = (...args: Parameters<T>): R => {
-    if (loadError) {
-      throw withProperties(loadError.error, loadError.properties)
+    if (workerFailure) {
+      throw withProperties(workerFailure.error, workerFailure.properties)
     }
 
     const id = nextID++

@@ -338,3 +338,53 @@ test('a registered worker with nothing left to handle it is written off', () => 
     'unhandled runtime boom',
   )
 })
+
+test('a worker that exits while a call is in flight is reported', () => {
+  const workerPath = writeWorker(
+    'exits-while-serving.cjs',
+    cjsWorker(
+      `runAsWorker(
+  () =>
+    new Promise(() => {
+      setTimeout(() => process.exit(2), 20)
+    }),
+)`,
+    ),
+  )
+  const syncFn = createSyncFn<() => unknown>(workerPath, { timeout: TIMEOUT })
+
+  expect(expectThrows(() => syncFn()).message).toContain(
+    'Worker exited with code 2',
+  )
+})
+
+test('a worker whose own handler exits is not waited on', () => {
+  const workerPath = writeWorker(
+    'exits-in-its-own-handler.cjs',
+    cjsWorker(
+      `process.on('uncaughtException', () => process.exit(1))
+
+runAsWorker(
+  value =>
+    new Promise(resolve => {
+      if (value === 1) {
+        setTimeout(() => {
+          throw new Error('handled by exiting')
+        }, 20)
+      }
+      setTimeout(() => resolve(value), 100)
+    }),
+)`,
+    ),
+  )
+  const syncFn = createSyncFn<(value: number) => number>(workerPath, {
+    timeout: TIMEOUT,
+  })
+
+  // the failure itself is reported first, because the handler is still installed
+  expect(expectThrows(() => syncFn(1)).message).toContain('handled by exiting')
+  // and then the exit is, so the next call fails instead of waiting on a stopped worker
+  expect(expectThrows(() => syncFn(2)).message).toContain(
+    'Worker exited with code 1',
+  )
+})

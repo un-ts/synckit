@@ -337,9 +337,9 @@ describe('helpers', () => {
 
       expect(messages).toHaveLength(1)
       const [message] = messages as [
-        { error: Error; loadError: boolean; properties: unknown },
+        { error: Error; workerFailure: boolean; properties: unknown },
       ]
-      expect(message.loadError).toBe(true)
+      expect(message.workerFailure).toBe(true)
       expect(message.error.message).toBe('boom')
       expect(message.properties).toEqual({ code: 'E_BOOM' })
       expect(Atomics.load(view, 0)).toBe(1)

@@ -114,6 +114,39 @@ const installWorkerLoadGuard = data => {
     return
   }
 
+  /**
+   * Reports a failure to the main thread and wakes whoever waits for it.
+   *
+   * @param {unknown} error
+   * @param {boolean} fatal
+   */
+  const report = (error, fatal) => {
+    // the last resort, when there is no usable error to send: only a worker that never loaded
+    // can be described as a failure to load
+    const fallback = () =>
+      new Error(fatal ? 'Worker module failed to load' : 'Worker failed')
+
+    try {
+      workerPort.postMessage({
+        workerFailure: true,
+        fatal,
+        error: error ?? fallback(),
+        properties: extractProperties(error),
+      })
+    } catch {
+      // the error is not cloneable; report something that always is
+      workerPort.postMessage({
+        workerFailure: true,
+        fatal,
+        error: fallback(),
+      })
+    } finally {
+      // whatever happens next, a caller must not be left waiting
+      Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
+      Atomics.notify(sharedBufferView, NOTIFY_INDEX)
+    }
+  }
+
   /** @param {unknown} error */
   const guard = error => {
     // disarm: only the first failure is reported, anything after it behaves as it would
@@ -123,37 +156,26 @@ const installWorkerLoadGuard = data => {
 
     // The failure is fatal unless the worker both reached `runAsWorker` and has something left
     // to handle these events: only then would it have survived and kept serving without the
-    // guard, and only then can it be used for the next call.
+    // guard, and only then can it be used for the next call. A handler that exits or rethrows
+    // is caught by the exit report below, so a worker that dies is never waited on.
     const registered =
       Atomics.load(sharedBufferView, STATE_INDEX) === STATE_REGISTERED
     const handled =
       process.listenerCount('uncaughtException') > 0 ||
       process.listenerCount('unhandledRejection') > 0
-    const fatal = !registered || !handled
 
-    try {
-      workerPort.postMessage({
-        loadError: true,
-        fatal,
-        error: error ?? new Error('Worker module failed to load'),
-        properties: extractProperties(error),
-      })
-    } catch {
-      // the error is not cloneable; report something that always is
-      workerPort.postMessage({
-        loadError: true,
-        fatal,
-        error: new Error('Worker module failed to load'),
-      })
-    } finally {
-      // whatever happens next, a caller must not be left waiting
-      Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
-      Atomics.notify(sharedBufferView, NOTIFY_INDEX)
-    }
+    report(error, !registered || !handled)
   }
 
   process.on('uncaughtException', guard)
   process.on('unhandledRejection', guard)
+
+  // However this worker ends — a handler that calls `process.exit()`, the module exiting on its
+  // own, or a clean shutdown — it cannot answer another call, and the guard may have been
+  // disarmed long before. This is the last chance to say so.
+  process.on('exit', code => {
+    report(new Error(`Worker exited with code ${code}`), true)
+  })
 }
 
 /**

@@ -45,17 +45,21 @@ export interface WorkerToMainMessage<T> extends DataMessage<T> {
 }
 
 /**
- * Reported by the worker load guard for the worker's first uncaught failure — normally a
- * failure to load its module, but also one that only surfaces later, after a top-level `await`.
+ * Reported by the worker's preload for a failure it caught — normally a failure to load the
+ * module, but also one that only surfaces later, after a top-level `await` — or for the worker
+ * exiting, which no call can survive either.
  *
  * It carries a marker instead of a request id: such a failure happens before any request
  * exists (or while one is in flight), and a magic id would be indistinguishable from an
  * outdated response.
  */
-export interface WorkerLoadErrorMessage {
-  /** Set by the guard rather than by a request. */
-  loadError: true
-  /** Whether the worker never registered a handler, and so cannot serve later calls. */
+export interface WorkerFailureMessage {
+  /** Set by the preload rather than by a request. */
+  workerFailure: true
+  /**
+   * Whether the worker cannot serve a later call: it never registered a handler, nothing is left
+   * to handle the failure, or it exited.
+   */
   fatal: boolean
   error: unknown
   properties?: object
