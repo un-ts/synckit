@@ -42,17 +42,14 @@ const registered = new WeakSet()
  * @property {import('node:worker_threads').MessagePort} [workerPort] The port a failure is reported on.
  */
 
-// `Error.isError` recognises an error from another realm, where `instanceof Error` does not; it is
-// not in every supported runtime, so feature-detect it
-const errorStatics = /** @type {{ isError?: (value: unknown) => boolean }} */ (
-  /** @type {unknown} */ (Error)
-)
-
-/** @type {(value: unknown) => boolean} */
-const isError =
-  typeof errorStatics.isError === 'function'
-    ? errorStatics.isError
-    : value => value instanceof Error
+/**
+ * `Error.isError` recognises an error from another realm, where `instanceof Error` does not; it is
+ * not in every supported runtime, so feature-detect it
+ *
+ * @param {unknown} value
+ * @returns {value is Error} Whether the value is an error.
+ */
+const isError = value => Error.isError?.(value) ?? value instanceof Error
 
 /**
  * Reports a failure to load the worker module, and wakes the main thread.
@@ -76,35 +73,31 @@ const installWorkerLoadGuard = data => {
    * @param {boolean} fatal
    */
   const report = (error, fatal) => {
-    try {
-      // the caller sees the reason exactly as it was thrown, even when it is falsy, with its own
-      // properties re-attached by `withProperties` on the other side; a reason that cannot cross
-      // falls back to the bare error, and only then to a synthetic message that names it
-      const payloads = [
-        { error, properties: extractProperties(error) },
-        { error },
-        {
-          error: new Error(
-            `Worker ${fatal ? 'module failed to load' : 'failed'}: ${
-              isError(error)
-                ? /** @type {Error} */ (error).message
-                : String(error)
-            }`,
-          ),
-        },
-      ]
+    // the caller sees the reason exactly as it was thrown, even when it is falsy, with its own
+    // properties re-attached by `withProperties` on the other side; a reason that cannot cross
+    // falls back to the bare error, and only then to a synthetic message that names it
+    const payloads = [
+      { error, properties: extractProperties(error) },
+      { error },
+      {
+        error: new Error(
+          `Worker ${fatal ? 'module failed to load' : 'failed'}: ${
+            isError(error) ? error.message : String(error)
+          }`,
+        ),
+      },
+    ]
 
-      for (const payload of payloads) {
-        try {
-          workerPort.postMessage({ workerFailure: true, fatal, ...payload })
-          break
-        } catch {}
-      }
-    } finally {
-      // whatever happens next, a caller must not be left waiting
-      Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
-      Atomics.notify(sharedBufferView, NOTIFY_INDEX)
+    for (const payload of payloads) {
+      try {
+        workerPort.postMessage({ workerFailure: true, fatal, ...payload })
+        break
+      } catch {}
     }
+
+    // this report is one notification: wake whoever waits for it
+    Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
+    Atomics.notify(sharedBufferView, NOTIFY_INDEX)
   }
 
   /** @param {unknown} error */
