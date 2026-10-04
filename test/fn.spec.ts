@@ -297,13 +297,47 @@ test('a per-call deadline shrinks each successive wait across outdated messages'
   const [, , , secondTimeout] = secondWaitArgs
   const [, , , thirdTimeout] = thirdWaitArgs
 
-  // the budget belongs to the call, not to each wait: every wait gets strictly less than the one
-  // before it instead of the full timeout starting over
+  // the budget belongs to the call, not to each wait: the first wait gets all of it and every wait
+  // after an outdated message gets what is left, never a negative remainder. A loaded or coarse
+  // clock can already have reached the deadline, where `0` means the deadline is due rather than a
+  // wrong value, so it is not required to stay above zero.
   expect(firstTimeout).toBe(synckitTimeout)
-  expect(secondTimeout).toBeGreaterThan(0)
+  expect(secondTimeout).toBeGreaterThanOrEqual(0)
   expect(secondTimeout).toBeLessThan(firstTimeout!)
-  expect(thirdTimeout).toBeGreaterThan(0)
-  expect(thirdTimeout).toBeLessThan(secondTimeout!)
+  expect(thirdTimeout).toBeGreaterThanOrEqual(0)
+  expect(thirdTimeout).toBeLessThanOrEqual(secondTimeout!)
+})
+
+test('an exhausted budget waits with 0 and fails at the deadline', async () => {
+  process.env.SYNCKIT_TIMEOUT = '20'
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+
+  const atomicsWaitSpy = jest
+    .spyOn(Atomics, 'wait')
+    .mockImplementation((_typedArray, _index, _value, timeout) => {
+      const start = Date.now()
+      // each wait outlives what is left of the 20ms budget, so the remainder must be clamped
+      while (Date.now() - start < 15) {
+        continue
+      }
+
+      // like the real thing: a due deadline gives up now instead of waiting
+      return timeout !== undefined && timeout <= 0 ? 'timed-out' : 'ok'
+    })
+
+  receiveMessageOnPortMock.mockReturnValue({
+    message: { id: -1, stdio, result: undefined },
+  })
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+
+  // the deadline is reached and reported, rather than the wait becoming indefinite
+  expect(() => syncFn(1)).toThrow('Atomics.wait() failed: timed-out')
+
+  const timeouts = atomicsWaitSpy.mock.calls.map(([, , , timeout]) => timeout)
+  expect(timeouts.every(timeout => timeout! >= 0)).toBe(true)
+  expect(timeouts).toContain(0)
 })
 
 test('unexpected message from worker', async () => {

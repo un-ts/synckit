@@ -672,14 +672,22 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     const deadline =
       waitingTimeout === undefined ? undefined : Date.now() + waitingTimeout
 
-    let remaining = waitingTimeout
+    // Never negative: a coarse or loaded clock can overshoot the deadline, and a negative timeout
+    // is not a shorter wait. `0` means the deadline is due, so the wait returns `'timed-out'` and
+    // the call fails now, while `undefined` is what waits indefinitely.
+    let remaining =
+      waitingTimeout === undefined ? undefined : Math.max(0, waitingTimeout)
 
     for (;;) {
       const msg = waitForMessage(expectedId, remaining)
 
       if (msg?.id == null || msg.id < expectedId) {
-        // an outdated or missing response: wait again with only the time this call has left
-        remaining = deadline === undefined ? undefined : deadline - Date.now()
+        // an outdated or missing response: wait again with only the time this call has left, never
+        // a negative remainder
+        remaining =
+          deadline === undefined
+            ? undefined
+            : Math.max(0, deadline - Date.now())
         continue
       }
 
