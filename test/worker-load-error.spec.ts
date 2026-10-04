@@ -511,3 +511,30 @@ runAsWorker(
   // swallowed by the worker's own handler and this call would wait out its deadline
   expect(failureOf(syncFn, 2)).toContain('boom 2')
 })
+
+test('execArgv from the options sets the rejection mode the guard sees', () => {
+  const body = cjsWorker(
+    `runAsWorker(
+  value =>
+    new Promise(resolve => {
+      if (value === 1) {
+        Promise.reject(new Error('warned rejection'))
+      }
+      setTimeout(() => resolve(value), 100)
+    }),
+)`,
+  )
+
+  // the option becomes the worker's own `execArgv`, which the guard reads
+  const warned = syncFnFor<(value: number) => number>('warned.cjs', body, {
+    execArgv: ['--unhandled-rejections=warn'],
+  })
+  expect(failureOf(warned, 1)).toContain('warned rejection')
+  // `warn` leaves the worker serving, so the next call is answered
+  expect(warned(2)).toBe(2)
+
+  // without it the default `throw` stops the worker, and later calls keep throwing that failure
+  const thrown = syncFnFor<(value: number) => number>('thrown.cjs', body)
+  expect(failureOf(thrown, 1)).toContain('warned rejection')
+  expect(failureOf(thrown, 2)).toContain('warned rejection')
+})
