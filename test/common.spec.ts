@@ -6,10 +6,13 @@ describe('common', () => {
   describe('hasFlag', () => {
     let hasFlag: (flag: string) => boolean
 
+    const { execArgv } = process
+
     beforeEach(() => {
       jest.resetModules()
       delete process.env.NODE_OPTIONS
       process.argv = []
+      process.execArgv = execArgv
     })
 
     it('should return true if the flag is present in NODE_OPTIONS', async () => {
@@ -27,6 +30,22 @@ describe('common', () => {
     it('should return true if the flag is present in process.argv', async () => {
       process.argv.push('--experimental-modules')
       ;({ hasFlag } = await import('synckit'))
+      expect(hasFlag('--experimental-modules')).toBe(true)
+    })
+
+    it('should return true if the flag is passed to the runtime', async () => {
+      // Node puts a command-line flag in `execArgv`, not in `argv`
+      process.execArgv = ['--experimental-modules']
+      ;({ hasFlag } = await import('synckit'))
+      expect(hasFlag('--experimental-modules')).toBe(true)
+    })
+
+    it('should return true if the flag carries its value', async () => {
+      process.execArgv = ['--experimental-modules=value']
+      ;({ hasFlag } = await import('synckit'))
+      expect(hasFlag('--experimental-modules')).toBe(true)
+
+      process.execArgv = ['--experimental-modules', 'value']
       expect(hasFlag('--experimental-modules')).toBe(true)
     })
 

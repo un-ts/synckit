@@ -13,6 +13,15 @@ export declare const NOTIFY_INDEX: number
  */
 export declare const NODE_OPTIONS: string[]
 
+/** The value of a flag, `''` when it is set without one, or `undefined` when it is not set.
+ *
+ * @internal
+ */
+export declare const getFlag: (
+  flag: string,
+  args?: string[],
+) => string | undefined
+
 /** The running Node version.
  *
  * @internal

@@ -9,7 +9,7 @@ import type { MessagePort } from 'node:worker_threads'
 import { jest } from '@jest/globals'
 
 import { installWorkerLoadGuard, markWorkerRegistered } from '../register.cjs'
-import { createSharedBufferView } from '../shared.cjs'
+import { createSharedBufferView, getFlag } from '../shared.cjs'
 
 import {
   _dirname,
@@ -94,6 +94,23 @@ describe('helpers', () => {
 
       // Should return false for empty array
       expect(hasLoaderFlag([])).toBe(false)
+    })
+
+    test('getFlag reads a value joined with = or given as the next argument', () => {
+      expect(getFlag('--key', ['--key=value'])).toBe('value')
+      expect(getFlag('--key', ['--key', 'value'])).toBe('value')
+      expect(getFlag('--key', ['--other', '--key=value'])).toBe('value')
+      // the first source that sets the flag wins
+      expect(getFlag('--key', ['--key=first', '--key=second'])).toBe('first')
+    })
+
+    test('getFlag tells a flag without a value from an absent flag', () => {
+      expect(getFlag('--key', ['--key'])).toBe('')
+      expect(getFlag('--key', ['--key='])).toBe('')
+      // a following flag is not this flag's value
+      expect(getFlag('--key', ['--key', '--other'])).toBe('')
+      expect(getFlag('--key', ['--other'])).toBeUndefined()
+      expect(getFlag('--key', [])).toBeUndefined()
     })
   })
 
@@ -620,42 +637,49 @@ process.stdout.write(JSON.stringify({ fatal: messages[0].fatal, exited }))
       )
 
       const classify = ({
-        mode,
+        args,
         nodeOptions,
-      }: { mode?: string; nodeOptions?: string } = {}) =>
+      }: { args?: string[]; nodeOptions?: string } = {}) =>
         JSON.parse(
-          execFileSync(
-            process.execPath,
-            mode ? [`--unhandled-rejections=${mode}`, probe] : [probe],
-            {
-              encoding: 'utf8',
-              env: { ...process.env, NODE_OPTIONS: nodeOptions ?? '' },
-            },
-          ),
+          execFileSync(process.execPath, [...(args ?? []), probe], {
+            encoding: 'utf8',
+            env: { ...process.env, NODE_OPTIONS: nodeOptions ?? '' },
+          }),
         ) as { fatal: boolean; exited: boolean }
 
       try {
         // Node 15+ defaults to `throw`; the flag overrides it either way
         expect(classify()).toEqual({ fatal: true, exited: true })
-        expect(classify({ mode: 'throw' })).toEqual({
+        expect(classify({ args: ['--unhandled-rejections=throw'] })).toEqual({
           fatal: true,
           exited: true,
         })
-        expect(classify({ mode: 'strict' })).toEqual({
+        expect(classify({ args: ['--unhandled-rejections=strict'] })).toEqual({
           fatal: true,
           exited: true,
         })
-        expect(classify({ mode: 'warn' })).toEqual({
+        expect(classify({ args: ['--unhandled-rejections=warn'] })).toEqual({
           fatal: false,
           exited: false,
         })
-        expect(classify({ mode: 'none' })).toEqual({
+        expect(classify({ args: ['--unhandled-rejections=none'] })).toEqual({
           fatal: false,
           exited: false,
         })
-        // `NODE_OPTIONS` carries the mode too, and a worker inherits it
+        // Node also takes the value as the next argument
+        expect(classify({ args: ['--unhandled-rejections', 'throw'] })).toEqual(
+          { fatal: true, exited: true },
+        )
+        expect(classify({ args: ['--unhandled-rejections', 'warn'] })).toEqual({
+          fatal: false,
+          exited: false,
+        })
+        // `NODE_OPTIONS` carries the mode too, in either form, and a worker inherits it
         expect(
           classify({ nodeOptions: '--unhandled-rejections=warn' }),
+        ).toEqual({ fatal: false, exited: false })
+        expect(
+          classify({ nodeOptions: '--unhandled-rejections warn' }),
         ).toEqual({ fatal: false, exited: false })
         expect(
           classify({ nodeOptions: '--unhandled-rejections=throw' }),

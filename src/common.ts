@@ -1,4 +1,4 @@
-import { NODE_OPTIONS } from '../shared.cjs'
+import { getFlag } from '../shared.cjs'
 
 export {
   compareNodeVersion,
@@ -7,5 +7,6 @@ export {
   parseVersion,
 } from '../shared.cjs'
 
-export const hasFlag = (flag: string) =>
-  NODE_OPTIONS.includes(flag) || process.argv.includes(flag)
+// A flag is set when any source carries it, whether its value is joined with `=` or given as the
+// next argument; `getFlag` tells a flag without a value from one that is absent.
+export const hasFlag = (flag: string) => getFlag(flag) !== undefined

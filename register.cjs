@@ -27,10 +27,10 @@
 const { isMainThread, workerData } = require('node:worker_threads')
 
 const {
-  NODE_OPTIONS,
   NOTIFY_INDEX,
   compareNodeVersion,
   extractProperties,
+  getFlag,
 } = require('./shared.cjs')
 
 // Both are keyed by the worker's slice: one slice is one worker, and one guard must be armed even
@@ -69,19 +69,16 @@ const THROWING_REJECTION_MODES = new Set(['strict', 'throw'])
 /**
  * Whether an unhandled rejection stops this worker rather than only warning.
  *
- * Read from the flag when it is set, and from the Node major's default otherwise. `NODE_OPTIONS`
- * is split once in `shared.cjs`, because a worker inherits it and it never appears in
- * `execArgv`. This is a best-effort match: the flag is not the only way a mode can be set.
+ * Read from the flag when it is set, in either form and from any source `getFlag` reads, and from
+ * the Node major's default otherwise. An empty value is a flag without one, which only a start-up
+ * error can produce. This is a best-effort match: the flag is not the only way a mode can be set.
  *
  * @returns {boolean} Whether a rejection is raised as an uncaught exception.
  */
 const unhandledRejectionsThrow = () => {
-  const prefix = `${UNHANDLED_REJECTIONS_FLAG}=`
-  const flag = [...process.execArgv, ...NODE_OPTIONS].find(arg =>
-    arg.startsWith(prefix),
-  )
-  if (flag) {
-    return THROWING_REJECTION_MODES.has(flag.slice(prefix.length))
+  const mode = getFlag(UNHANDLED_REJECTIONS_FLAG)
+  if (mode !== undefined) {
+    return THROWING_REJECTION_MODES.has(mode)
   }
   return compareNodeVersion(UNHANDLED_REJECTIONS_THROW_NODE_VERSION) >= 0
 }
