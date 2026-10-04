@@ -134,14 +134,21 @@ const installWorkerLoadGuard = data => {
     process.off('unhandledRejection', onUnhandledRejection)
 
     // The failure is fatal unless the worker both reached `runAsWorker` and has something left to
-    // handle *this* event: only then would it have survived and kept serving without the guard,
-    // and only then can it be used for the next call. A listener for the other event cannot handle
-    // this one. A handler that exits or rethrows is caught by the exit report below, so a worker
-    // that dies is never waited on.
-    report(
-      error,
-      !registered.has(sharedBufferView) || process.listenerCount(event) === 0,
-    )
+    // handle what follows: only then would it have survived and kept serving without the guard,
+    // and only then can it be used for the next call. A handler that exits or rethrows is caught
+    // by the exit report below, so a worker that dies is never waited on.
+    //
+    // An `unhandledRejection` listener cannot handle an uncaught exception, so only an
+    // `uncaughtException` listener counts there. A rejection is different: with no
+    // `unhandledRejection` listener left, Node's default `--unhandled-rejections=throw` promotes
+    // it to an uncaught exception, which a remaining `uncaughtException` listener does handle.
+    // That half is a best-effort match for the default mode.
+    const handled =
+      process.listenerCount(event) > 0 ||
+      (event === 'unhandledRejection' &&
+        process.listenerCount('uncaughtException') > 0)
+
+    report(error, !registered.has(sharedBufferView) || !handled)
   }
 
   /** @param {unknown} error */

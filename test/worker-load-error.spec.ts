@@ -460,3 +460,28 @@ runAsWorker(
   await new Promise(resolve => setTimeout(resolve, 1000))
   expect(fs.existsSync(marker)).toBe(false)
 })
+
+test('an unhandled rejection is recoverable through an uncaughtException handler', () => {
+  const syncFn = syncFnFor<(value: number) => number>(
+    'rejection-recovered.cjs',
+    cjsWorker(
+      `process.on('uncaughtException', () => {})
+
+runAsWorker(
+  value =>
+    new Promise(resolve => {
+      if (value === 1) {
+        Promise.reject(new Error('recovered rejection'))
+      }
+      setTimeout(() => resolve(value), 100)
+    }),
+)`,
+    ),
+  )
+
+  // the rejection reaches the caller of the call in flight ...
+  expect(failureOf(syncFn, 1)).toContain('recovered rejection')
+  // ... but under the default mode Node would promote a later one to the uncaughtException
+  // handler, so the worker keeps serving
+  expect(syncFn(2)).toBe(2)
+})

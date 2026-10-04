@@ -475,6 +475,29 @@ describe('helpers', () => {
       }
     })
 
+    test('an unhandled rejection is recoverable through an uncaughtException listener', () => {
+      const handler = jest.fn()
+      process.on('uncaughtException', handler)
+      try {
+        const { messages, port } = createPort()
+        const view = createSharedBufferView()
+        installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+        const rejectionGuard = process
+          .listeners('unhandledRejection')
+          .pop() as unknown as (reason: unknown) => void
+        markWorkerRegistered(view)
+
+        rejectionGuard(new Error('rejection boom'))
+
+        // Node promotes a rejection to the uncaughtException handler under the default mode
+        const [message] = messages as [{ fatal: boolean }]
+        expect(message.fatal).toBe(false)
+        expect(jest.mocked(process.exit)).not.toHaveBeenCalled()
+      } finally {
+        process.off('uncaughtException', handler)
+      }
+    })
+
     test('marks a failure fatal unless the worker is left handled', () => {
       // never registered: nothing can serve a later call
       const first = createPort()
