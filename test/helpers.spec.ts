@@ -286,30 +286,34 @@ describe('helpers', () => {
       }
     })
 
-    test('getFlag keeps a quoted value with spaces together', () => {
-      // `NODE_OPTIONS` is read the way the runtime reads it: double quotes group, and are removed
-      const required = path.join(
-        os.tmpdir(),
-        `synckit required ${process.pid}.cjs`,
-      )
-      const probe = path.join(os.tmpdir(), `synckit-flags-${process.pid}.cjs`)
-      fs.writeFileSync(required, '')
+    test('getFlag reads a quoted NODE_OPTIONS value the way the runtime does', () => {
+      // double quotes group and are removed, and a backslash inside them escapes, so the value is
+      // the one the runtime applies. A relative path keeps platform separators out of the value
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'synckit-flags-'))
+      const probe = path.join(dir, 'probe.cjs')
+      fs.writeFileSync(path.join(dir, 'required file.cjs'), '')
+      fs.writeFileSync(path.join(dir, 'ab.cjs'), '')
       fs.writeFileSync(
         probe,
         `process.stdout.write(require(${JSON.stringify(
           path.join(_dirname, '../shared.cjs'),
         )}).getFlag('--require') ?? '')`,
       )
+      const read = (nodeOptions: string) =>
+        execFileSync(process.execPath, [probe], {
+          encoding: 'utf8',
+          cwd: dir,
+          env: { ...process.env, NODE_OPTIONS: nodeOptions },
+        })
       try {
-        expect(
-          execFileSync(process.execPath, [probe], {
-            encoding: 'utf8',
-            env: { ...process.env, NODE_OPTIONS: `--require "${required}"` },
-          }),
-        ).toBe(required)
+        // a quoted value with a space stays one argument
+        expect(read('--require "./required file.cjs"')).toBe(
+          './required file.cjs',
+        )
+        // and the backslash escapes, as it does for the runtime
+        expect(read(String.raw`--require "./a\b.cjs"`)).toBe('./ab.cjs')
       } finally {
-        fs.rmSync(probe, { force: true })
-        fs.rmSync(required, { force: true })
+        fs.rmSync(dir, { recursive: true, force: true })
       }
     })
   })
