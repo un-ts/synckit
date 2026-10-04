@@ -687,20 +687,19 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
     worker.postMessage(msg)
 
-    const { result, error, properties, stdio } = receiveMessageWithId(
-      mainPort,
-      id,
-      timeout,
-    )
+    const message = receiveMessageWithId(mainPort, id, timeout)
+
+    const { result, stdio } = message
 
     for (const { type, chunk, encoding } of stdio) {
       process[type].write(chunk, encoding)
     }
 
-    // `error` is never `undefined` for a failure — the worker normalizes a nullish reason — and
-    // every other falsy reason (`0`, `''`) must still be thrown rather than read as a result
-    if (error !== undefined) {
-      throw withProperties(error, properties)
+    // a message that carries an `error` key is a failure, whatever the reason is. Key presence is
+    // the faithful test: a structured clone keeps an own key whose value is `undefined`, which is
+    // itself a legitimate reason, and truthiness or `!== undefined` would swallow it
+    if ('error' in message) {
+      throw withProperties(message.error, message.properties)
     }
 
     return result!

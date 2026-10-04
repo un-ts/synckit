@@ -129,14 +129,7 @@ export function runAsWorker<T extends AnyFn<Promise<R> | R>, R = ReturnType<T>>(
         try {
           msg = { id, stdio, result: await fn(...args) }
         } catch (error: unknown) {
-          // a nullish reason carries nothing to throw, so normalize it the way the preload does;
-          // every other reason travels as it is, including falsy ones like `0` and `''`
-          msg = {
-            id,
-            stdio,
-            error: error ?? new Error('Worker failed'),
-            properties: extractProperties(error),
-          }
+          msg = { id, stdio, error, properties: extractProperties(error) }
         }
         workerPort.off('message', handleAbortMessage)
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- false positive for `handleAbortMessage`

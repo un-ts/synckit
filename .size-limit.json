@@ -1,6 +1,6 @@
 [
   {
     "path": "./src/index.ts",
-    "limit": "1.7kB"
+    "limit": "1.6kB"
   }
 ]

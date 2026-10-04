@@ -102,7 +102,7 @@ test('createSyncFn', () => {
   expect(caught).toBe('Worker primitive rejection')
 
   // a falsy reason used to be indistinguishable from a successful `undefined` result: every one
-  // must still throw — `0` and `''` as they came, `undefined` normalized to an `Error`
+  // must still throw exactly as it was thrown, `undefined` and `null` included
   const notThrown = Symbol('not thrown')
   const thrownBy = (reason: unknown) => {
     try {
@@ -112,12 +112,9 @@ test('createSyncFn', () => {
     }
     return notThrown
   }
-  const [undefinedThrown, zeroThrown, emptyThrown] = [undefined, 0, ''].map(
-    thrownBy,
-  )
-  expect(undefinedThrown).toHaveProperty('message', expect.any(String))
-  expect(zeroThrown).toBe(0)
-  expect(emptyThrown).toBe('')
+  for (const reason of [undefined, null, 0, '', false, Number.NaN]) {
+    expect(thrownBy(reason)).toBe(reason)
+  }
 
   const syncFn4 = createSyncFn<AsyncWorkerFn>(workerCjsPath)
 
