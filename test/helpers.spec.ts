@@ -96,24 +96,80 @@ describe('helpers', () => {
       expect(hasLoaderFlag([])).toBe(false)
     })
 
+    /** Runs `fn` with the process's runtime flags replaced, restoring them afterwards. */
+    const withExecArgv = (execArgv: string[], fn: () => void) => {
+      const previous = process.execArgv
+      process.execArgv = execArgv
+      try {
+        fn()
+      } finally {
+        process.execArgv = previous
+      }
+    }
+
     test('getFlag reads a value joined with = or given as the next argument', () => {
-      expect(getFlag('--key', ['--key=value'])).toBe('value')
-      expect(getFlag('--key', ['--key', 'value'])).toBe('value')
-      expect(getFlag('--key', ['--other', '--key=value'])).toBe('value')
-      // the first source that sets the flag wins
-      expect(getFlag('--key', ['--key=first', '--key=second'])).toBe('first')
+      withExecArgv(['--key=value'], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      withExecArgv(['--key', 'value'], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      withExecArgv(['--other', '--key=value'], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      // the first value wins
+      withExecArgv(['--key=first', '--key=second'], () => {
+        expect(getFlag('--key')).toBe('first')
+      })
     })
 
     test('getFlag tells a flag without a value from an absent flag', () => {
-      expect(getFlag('--key', ['--key'])).toBe('')
-      expect(getFlag('--key', ['--key='])).toBe('')
+      withExecArgv(['--key'], () => {
+        expect(getFlag('--key')).toBe('')
+      })
+      withExecArgv(['--key='], () => {
+        expect(getFlag('--key')).toBe('')
+      })
       // a following flag is not this flag's value
-      expect(getFlag('--key', ['--key', '--other'])).toBe('')
-      expect(getFlag('--key', ['--other'])).toBeUndefined()
-      expect(getFlag('--key', [])).toBeUndefined()
+      withExecArgv(['--key', '--other'], () => {
+        expect(getFlag('--key')).toBe('')
+      })
+      withExecArgv(['--other'], () => {
+        expect(getFlag('--key')).toBeUndefined()
+      })
+      withExecArgv([], () => {
+        expect(getFlag('--key')).toBeUndefined()
+      })
     })
 
-    test('getFlag does not read a script argument by default', () => {
+    test('getFlag takes any of a set of names', () => {
+      const require = new Set(['-r', '--require'])
+      withExecArgv(['-r', 'value'], () => {
+        expect(getFlag(require)).toBe('value')
+      })
+      withExecArgv(['--require=value'], () => {
+        expect(getFlag(require)).toBe('value')
+      })
+      withExecArgv(['--other', 'value'], () => {
+        expect(getFlag(require)).toBeUndefined()
+      })
+      // the first name found wins, whatever its form
+      withExecArgv(['--require=first', '-r', 'second'], () => {
+        expect(getFlag(require)).toBe('first')
+      })
+    })
+
+    test('getFlag skips the values that are not the accepted one', () => {
+      const require = new Set(['-r', '--require'])
+      withExecArgv(['--require', 'first', '-r', 'second'], () => {
+        expect(getFlag(require)).toBe('first')
+        // a value that is not accepted does not end the scan
+        expect(getFlag(require, 'second')).toBe('second')
+        expect(getFlag(require, 'third')).toBeUndefined()
+      })
+    })
+
+    test('getFlag does not read a script argument', () => {
       // a flag after the script path reaches `argv`, which Node does not apply
       process.argv.push('--key=value')
       try {

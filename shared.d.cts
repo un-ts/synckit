@@ -18,8 +18,8 @@ export declare const NODE_OPTIONS: string[]
  * @internal
  */
 export declare const getFlag: (
-  flag: string,
-  args?: string[],
+  flag: Set<string> | string,
+  accepted?: string,
 ) => string | undefined
 
 /** The running Node version.

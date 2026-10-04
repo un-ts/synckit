@@ -77,29 +77,45 @@ const extractProperties = object => {
 const NODE_OPTIONS = (process.env.NODE_OPTIONS ?? '').split(/\s+/)
 
 /**
- * The value of a flag, or `undefined` when the flag is not set at all.
+ * The value of a flag, or `undefined` when none of its names carries the accepted value.
  *
- * A flag can carry its value joined with `=` or in the next argument. The sources are the ones
- * the runtime applies: the command line, where Node puts it in `execArgv` rather than `argv` (a
- * worker inherits it in its own `execArgv`), and `NODE_OPTIONS`. `argv` is not read: a flag after
- * the script path is an argument to the script, which Node does not apply. The first source that
- * sets the flag wins. `''` is a flag that was set without a value, which is not the same as the
+ * `flag` is one name, or a set of names when the same flag has aliases (`-r` and `--require`), so
+ * one lookup covers them all. A name can carry its value joined with `=` or in the next argument.
+ * When `accepted` is given, only a flag with that exact value counts, so a flag set more than once
+ * is read until one of its values matches; every value is accepted by default. The sources are the
+ * ones the runtime applies: the command line, where Node puts it in `execArgv` rather than `argv`
+ * (a worker inherits it in its own `execArgv`), and `NODE_OPTIONS`. `argv` is not read: a flag
+ * after the script path is an argument to the script, which Node does not apply. The first
+ * accepted value wins. `''` is a flag that was set without a value, which is not the same as the
  * flag being absent.
  *
- * @param {string} flag The flag to look for.
- * @param {string[]} [args] The arguments to read, defaulting to this process's runtime flags.
- * @returns {string | undefined} The value, `''` for a flag without one, or `undefined`.
+ * @param {Set<string> | string} flag The flag name, or the names it can have.
+ * @param {string} [accepted] The value the flag must carry; any value counts by default.
+ * @returns {string | undefined} The accepted value, `''` for a flag without one, or `undefined`.
  */
-const getFlag = (flag, args = [...process.execArgv, ...NODE_OPTIONS]) => {
-  const prefix = `${flag}=`
+const getFlag = (flag, accepted) => {
+  const flags = typeof flag === 'string' ? new Set([flag]) : flag
+  // read at call time: `execArgv` is the process's, and `NODE_OPTIONS` was split when this file
+  // was loaded
+  const args = [...process.execArgv, ...NODE_OPTIONS]
   for (const [index, arg] of args.entries()) {
-    if (arg.startsWith(prefix)) {
-      return arg.slice(prefix.length)
+    const separator = arg.indexOf('=')
+    const name = separator === -1 ? arg : arg.slice(0, separator)
+    if (!flags.has(name)) {
+      continue
     }
-    if (arg === flag) {
-      const value = args[index + 1]
-      // a following flag is not this flag's value
-      return value === undefined || value.startsWith('-') ? '' : value
+    if (separator !== -1) {
+      const value = arg.slice(separator + 1)
+      if (accepted === undefined || value === accepted) {
+        return value
+      }
+      continue
+    }
+    const next = args[index + 1]
+    // a following flag is not this flag's value
+    const value = next === undefined || next.startsWith('-') ? '' : next
+    if (accepted === undefined || value === accepted) {
+      return value
     }
   }
 }

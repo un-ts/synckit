@@ -10,7 +10,7 @@ import {
 
 import { tryExtensions, findUp, cjsRequire, isPkgAvailable } from '@pkgr/core'
 
-import { NOTIFY_INDEX, createSharedBufferView } from '../shared.cjs'
+import { NOTIFY_INDEX, createSharedBufferView, getFlag } from '../shared.cjs'
 
 import { compareNodeVersion } from './common.js'
 import {
@@ -27,7 +27,6 @@ import {
   MTS_SUPPORTED,
   NO_STRIP_TYPES,
   NO_STRIP_TYPES_FLAG,
-  NODE_OPTIONS,
   REQUIRE_ABBR_FLAG,
   REQUIRE_FLAGS,
   STRIP_TYPES_FLAG,
@@ -313,15 +312,10 @@ export const setupTsRunner = (
       /** @see https://github.com/facebook/jest/issues/9543 */
       pnpApiPath = cjsRequire.resolve('pnpapi')
     } catch {}
-    if (
-      pnpApiPath &&
-      !NODE_OPTIONS.some(
-        (option, index) =>
-          REQUIRE_FLAGS.has(option) &&
-          pnpApiPath === cjsRequire.resolve(NODE_OPTIONS[index + 1]),
-      ) &&
-      !execArgv.includes(pnpApiPath)
-    ) {
+    // `REQUIRE_FLAGS` covers both `--require` and `-r`, in either form; only a value equal to the
+    // pnp API path counts, so a require of anything else is skipped rather than ending the scan
+    const alreadyRequired = pnpApiPath && getFlag(REQUIRE_FLAGS, pnpApiPath)
+    if (pnpApiPath && !alreadyRequired && !execArgv.includes(pnpApiPath)) {
       execArgv = [REQUIRE_ABBR_FLAG, pnpApiPath, ...execArgv]
       const pnpLoaderPath = path.resolve(pnpApiPath, '../.pnp.loader.mjs')
       if (isFile(pnpLoaderPath)) {
