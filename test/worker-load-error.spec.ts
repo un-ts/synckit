@@ -485,3 +485,29 @@ runAsWorker(
   // handler, so the worker keeps serving
   expect(syncFn(2)).toBe(2)
 })
+
+test('a later failure on a recovered worker is reported too', () => {
+  const syncFn = syncFnFor<(value: number) => number>(
+    'recovered-twice.cjs',
+    cjsWorker(
+      `process.on('uncaughtException', () => {})
+
+runAsWorker(
+  value =>
+    new Promise(resolve => {
+      if (value === 1) {
+        setTimeout(() => resolve(value), 100)
+      }
+      setTimeout(() => {
+        throw new Error(\`boom \${value}\`)
+      }, 20)
+    }),
+)`,
+    ),
+  )
+
+  expect(failureOf(syncFn, 1)).toContain('boom 1')
+  // the worker recovered, so the guard armed again; without that the second failure would be
+  // swallowed by the worker's own handler and this call would wait out its deadline
+  expect(failureOf(syncFn, 2)).toContain('boom 2')
+})

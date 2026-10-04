@@ -8,11 +8,12 @@
  * If that module then fails to load — or raises any uncaught failure before the main thread
  * hears from it, including one that only surfaces after a top-level `await` — nothing would
  * ever tell the main thread: it is blocked in `Atomics.wait()` and cannot process the worker's
- * `error` event. This file reports the first such failure through the transferred port instead:
+ * `error` event. This file reports each such failure through the transferred port instead:
  * it carries the error and bumps the notification byte in this worker's slice of the shared
- * buffer (`shared.cjs`) to wake the wait. The failure guard disarms itself afterwards, so later
- * failures behave as they would without it; the exit report below stays armed, because a worker
- * that ends can never serve another call.
+ * buffer (`shared.cjs`) to wake the wait. The failure guard disarms itself while it reports and
+ * arms again after a failure that leaves the worker serving, so a worker that keeps going keeps
+ * reporting; the exit report below stays armed, because a worker that ends can never serve
+ * another call.
  *
  * It is a plain CommonJS file at the package root, with no build step and no loader of its
  * own, so a test runner that maps the package to its source preloads exactly what the
@@ -72,6 +73,24 @@ const installWorkerLoadGuard = data => {
   // does not turn that one failure into a second message and a second notification
   let exiting = false
 
+  // Node made `throw` the default for unhandled rejections in 15; 14 warns and carries on, and a
+  // `--unhandled-rejections=…` flag overrides the default. Both the worker's own flags and
+  // `NODE_OPTIONS` can carry it. This is a best-effort match: an unusual embedding can still
+  // differ, and no other mode is looked for.
+  const rejectionMode = (() => {
+    const args = [
+      ...process.execArgv,
+      ...(process.env.NODE_OPTIONS ?? '').split(' '),
+    ]
+    const flag = args.find(arg => arg.startsWith('--unhandled-rejections='))
+    if (flag) {
+      return flag.slice('--unhandled-rejections='.length)
+    }
+    return Number(process.versions.node.split('.')[0]) >= 15 ? 'throw' : 'warn'
+  })()
+  const rejectionThrows =
+    rejectionMode === 'throw' || rejectionMode === 'strict'
+
   /**
    * Reports a failure to the main thread and wakes whoever waits for it.
    *
@@ -128,8 +147,8 @@ const installWorkerLoadGuard = data => {
    * @param {'uncaughtException' | 'unhandledRejection'} event
    */
   const guard = (error, event) => {
-    // disarm: only the first failure is reported, anything after it behaves as it would
-    // without the guard
+    // disarm while reporting, so a throw from our own report cannot be caught right back here;
+    // below they are put back unless this failure is stopping the worker
     process.off('uncaughtException', onUncaughtException)
     process.off('unhandledRejection', onUnhandledRejection)
 
@@ -139,16 +158,24 @@ const installWorkerLoadGuard = data => {
     // by the exit report below, so a worker that dies is never waited on.
     //
     // An `unhandledRejection` listener cannot handle an uncaught exception, so only an
-    // `uncaughtException` listener counts there. A rejection is different: with no
-    // `unhandledRejection` listener left, Node's default `--unhandled-rejections=throw` promotes
-    // it to an uncaught exception, which a remaining `uncaughtException` listener does handle.
-    // That half is a best-effort match for the default mode.
+    // `uncaughtException` listener counts there. A rejection is different: under a throwing mode
+    // (`throw`/`strict`, the default from Node 15) the runtime promotes a later one to an
+    // uncaught exception, which a remaining `uncaughtException` listener does handle; under
+    // `warn`/`none` a later one only warns and is ignored, so the worker keeps serving either way.
     const handled =
       process.listenerCount(event) > 0 ||
       (event === 'unhandledRejection' &&
-        process.listenerCount('uncaughtException') > 0)
+        (!rejectionThrows || process.listenerCount('uncaughtException') > 0))
 
-    report(error, !registered.has(sharedBufferView) || !handled)
+    const fatal = !registered.has(sharedBufferView) || !handled
+    report(error, fatal)
+
+    // a non-fatal failure leaves the worker serving, so arm again and report the next one too;
+    // a fatal report has already stopped the worker
+    if (!fatal) {
+      process.on('uncaughtException', onUncaughtException)
+      process.on('unhandledRejection', onUnhandledRejection)
+    }
   }
 
   /** @param {unknown} error */

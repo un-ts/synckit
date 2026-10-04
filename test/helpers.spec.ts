@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/unbound-method, jest/no-standalone-expect */
 
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { MessagePort } from 'node:worker_threads'
 
 import { jest } from '@jest/globals'
@@ -8,6 +12,7 @@ import { installWorkerLoadGuard, markWorkerRegistered } from '../register.cjs'
 import { createSharedBufferView } from '../shared.cjs'
 
 import {
+  _dirname,
   testIf,
   workerCjsPath,
   workerCjsTsPath,
@@ -325,7 +330,32 @@ describe('helpers', () => {
 
     const listeners = () => process.listenerCount('uncaughtException')
 
+    // the guard registers listeners on the process; snapshot them so a test that leaves the guard
+    // armed (a non-fatal report re-arms it) cannot leak into the next test
+    let beforeListeners: {
+      uncaughtException: unknown[]
+      unhandledRejection: unknown[]
+    }
+
+    /** Drop any listener the guard added since the snapshot, such as a re-armed one. */
+    const removeAddedListeners = () => {
+      for (const listener of process.listeners('uncaughtException')) {
+        if (!beforeListeners.uncaughtException.includes(listener)) {
+          process.off('uncaughtException', listener)
+        }
+      }
+      for (const listener of process.listeners('unhandledRejection')) {
+        if (!beforeListeners.unhandledRejection.includes(listener)) {
+          process.off('unhandledRejection', listener)
+        }
+      }
+    }
+
     beforeEach(() => {
+      beforeListeners = {
+        uncaughtException: process.listeners('uncaughtException'),
+        unhandledRejection: process.listeners('unhandledRejection'),
+      }
       // a fatal report stops the worker; jest-runner installs its own `process.exit` when the file
       // runs, so spy on it here, after that replacement is in place
       jest
@@ -334,6 +364,7 @@ describe('helpers', () => {
     })
 
     afterEach(() => {
+      removeAddedListeners()
       jest.restoreAllMocks()
     })
 
@@ -519,7 +550,9 @@ describe('helpers', () => {
         process.off('uncaughtException', handler)
       }
 
-      // registered, but nothing is left to handle it: the worker would have died
+      // registered, but nothing is left to handle it: the worker would have died. The second case
+      // re-armed its own guard, so drop that before asking about this view on its own.
+      removeAddedListeners()
       const third = createPort()
       const thirdView = createSharedBufferView()
       const guard = install(third.port, thirdView)
@@ -528,7 +561,85 @@ describe('helpers', () => {
       expect((third.messages[0] as { fatal: boolean }).fatal).toBe(true)
     })
 
-    test('arms once', () => {
+    test('arms again after a non-fatal report', () => {
+      const handler = jest.fn()
+      process.on('uncaughtException', handler)
+      try {
+        const { messages, port } = createPort()
+        const view = createSharedBufferView()
+        const before = listeners()
+        const guard = install(port, view)
+        markWorkerRegistered(view)
+
+        guard(new Error('first'))
+
+        // non-fatal, so the guard is armed again for the next failure
+        expect((messages[0] as { fatal: boolean }).fatal).toBe(false)
+        expect(messages).toHaveLength(1)
+        expect(listeners()).toBe(before + 1)
+
+        // the re-armed listener reports the second failure with its own reason
+        const second = process
+          .listeners('uncaughtException')
+          .pop() as unknown as (error: unknown) => void
+        second(new Error('second'))
+
+        expect(messages).toHaveLength(2)
+        expect((messages[1] as { error: Error }).error.message).toBe('second')
+        expect((messages[1] as { fatal: boolean }).fatal).toBe(false)
+      } finally {
+        process.off('uncaughtException', handler)
+      }
+    })
+
+    test('follows the runtime rejection mode for a listener-less rejection', () => {
+      const probe = path.join(
+        os.tmpdir(),
+        `synckit-rejection-mode-${process.pid}.cjs`,
+      )
+      fs.writeFileSync(
+        probe,
+        `const { installWorkerLoadGuard, markWorkerRegistered } = require(${JSON.stringify(
+          path.join(_dirname, '../register.cjs'),
+        )})
+const { createSharedBufferView } = require(${JSON.stringify(
+          path.join(_dirname, '../shared.cjs'),
+        )})
+const messages = []
+const port = { postMessage: message => messages.push(message) }
+const view = createSharedBufferView()
+installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+markWorkerRegistered(view)
+let exited = false
+process.exit = () => {
+  exited = true
+}
+process.listeners('unhandledRejection').pop()(new Error('mode probe'))
+process.stdout.write(JSON.stringify({ fatal: messages[0].fatal, exited }))
+`,
+      )
+
+      const classify = (mode?: string) =>
+        JSON.parse(
+          execFileSync(
+            process.execPath,
+            mode ? [`--unhandled-rejections=${mode}`, probe] : [probe],
+            { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } },
+          ),
+        ) as { fatal: boolean; exited: boolean }
+
+      try {
+        // Node 15+ defaults to `throw`; the flag overrides it either way
+        expect(classify()).toEqual({ fatal: true, exited: true })
+        expect(classify('throw')).toEqual({ fatal: true, exited: true })
+        expect(classify('warn')).toEqual({ fatal: false, exited: false })
+        expect(classify('none')).toEqual({ fatal: false, exited: false })
+      } finally {
+        fs.rmSync(probe, { force: true })
+      }
+    })
+
+    test('arms once, and stays disarmed after a fatal report', () => {
       const { messages, port } = createPort()
       const view = createSharedBufferView()
       const before = listeners()
@@ -540,7 +651,7 @@ describe('helpers', () => {
       installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
       expect(listeners()).toBe(before + 1)
 
-      // reporting disarms it: only the first failure is reported
+      // a fatal report stops the worker, so it is not armed again
       guard(new Error('boom'))
       expect(messages).toHaveLength(1)
       expect(listeners()).toBe(before)
