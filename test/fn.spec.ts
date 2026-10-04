@@ -157,6 +157,41 @@ test('handling of outdated message from worker', async () => {
   expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
 })
 
+test('never consumes a notification the counter does not show', async () => {
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+
+  jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
+
+  receiveMessageOnPortMock
+    .mockReturnValueOnce({ message: { id: -1, stdio } })
+    .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
+
+  // `Atomics.wait` here reports a notification the counter never received. Consuming it must not
+  // take the counter below zero: every later wait would then return at once, so the caller would
+  // spin instead of sleeping and starve the worker until its deadline expires.
+  const observed: number[] = []
+  const sub = Atomics.sub
+
+  const subSpy = jest.spyOn(Atomics, 'sub')
+
+  subSpy.mockImplementation(((
+    array: Int32Array,
+    index: number,
+    value: number,
+  ) => {
+    observed.push(Atomics.load(array, index))
+    return sub(array, index, value)
+  }) as unknown as typeof Atomics.sub)
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+  expect(syncFn(1)).toBe(1)
+
+  for (const counter of observed) {
+    expect(counter).toBeGreaterThan(0)
+  }
+})
+
 test('propagation of undefined timeout', async () => {
   delete process.env.SYNCKIT_TIMEOUT
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
