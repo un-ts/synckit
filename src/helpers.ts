@@ -76,6 +76,12 @@ export { extractProperties } from '../shared.cjs'
 const withProperties = (error: unknown, properties?: object) =>
   error && typeof error === 'object' ? Object.assign(error, properties) : error
 
+// How many consecutive empty port reads a still-pending notification is retried for before it is
+// spent. The window it covers is the hand-off between the worker's post and this thread seeing the
+// message, which is short; the cap only bounds a notification that never brings one, whose wait
+// could otherwise never time out. See `receiveMessageWithId`.
+const EMPTY_PORT_READS = 100_000
+
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
 
@@ -603,8 +609,28 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   let workerFailure: WorkerFailureMessage | undefined
 
   /**
+   * Spends one pending notification, never taking the counter below zero.
+   *
+   * The check is not redundant: an unconditional decrement can take the counter negative, and a
+   * negative counter makes every `Atomics.wait` return `'not-equal'` at once, so the caller spins
+   * instead of sleeping and starves the worker until the deadline expires. Measured on Node 18.18
+   * under the CI's load and timeout, restoring it took the `reliability` soak from three failures
+   * in four runs to none in six.
+   */
+  const spendNotification = () => {
+    if (Atomics.load(sharedBufferView, NOTIFY_INDEX) > 0) {
+      Atomics.sub(sharedBufferView, NOTIFY_INDEX, 1)
+    }
+  }
+
+  /**
    * Waits once for a notification and returns the message it announced, if any. A failure the
    * preload reported is thrown from here.
+   *
+   * The notification is spent only once its message is in hand. Spending it first would let a
+   * notification whose message is not readable yet be spent on nothing: the next wait, seeing a zero
+   * counter, would sleep past a message that never notifies again — measured with a real
+   * `Atomics.wait`, where the call failed at its deadline although the response was queued.
    *
    * @param abortId - The request to abort when the wait itself fails.
    * @param remaining - Milliseconds left of the call's budget.
@@ -624,20 +650,6 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
     }
 
-    // Each report bumps the notification byte and posts one message, so consume exactly one
-    // notification per message. This runs only after a wait that was actually notified: on
-    // `'timed-out'` the byte was still zero, and consuming a report that arrived after the wait
-    // returned would leave its message queued with nothing left to wake the next call.
-    //
-    // The check is not redundant, though: an unconditional decrement can take the counter
-    // negative, and a negative counter makes every `Atomics.wait` return `'not-equal'` at once,
-    // so the caller spins instead of sleeping and starves the worker until the deadline expires.
-    // Measured on Node 18.18 under the CI's load and timeout, restoring it took the
-    // `reliability` soak from three failures in four runs to none in six.
-    if (Atomics.load(sharedBufferView, NOTIFY_INDEX) > 0) {
-      Atomics.sub(sharedBufferView, NOTIFY_INDEX, 1)
-    }
-
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const result = receiveMessageOnPort(mainPort) as
       | { message: WorkerFailureMessage | WorkerToMainMessage<R> }
@@ -646,11 +658,12 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     const msg = result?.message
 
     if (!msg) {
-      // a notification can reach this thread just before the message it announces is readable;
-      // the 1M-call soak hits that about once in a hundred thousand calls, and waiting again picks
-      // the message up, while the call's deadline still bounds the wait
+      // a notification can reach this thread just before the message it announces is readable; it
+      // stays pending, and the caller re-reads the port at once instead of sleeping past it
       return
     }
+
+    spendNotification()
 
     if ('workerFailure' in msg) {
       // a worker that never registered a handler, or that is gone, cannot serve later calls, so
@@ -681,12 +694,25 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     let remaining =
       waitingTimeout == null ? undefined : Math.max(0, waitingTimeout)
 
+    // A pending notification whose message is not readable yet is retried at once, because it is
+    // still unspent; this bounds that retrying. `Atomics.wait` cannot time out while the counter is
+    // non-zero, so a notification that never brings a message — a report whose every post failed on
+    // a closed port — would spin past the deadline. After this many empty reads it is spent, and the
+    // wait sleeps to the deadline again.
+    let emptyReads = 0
+
     for (;;) {
       const msg = waitForMessage(expectedId, remaining)
 
       if (msg?.id == null || msg.id < expectedId) {
         // an outdated or missing response: wait again with only the time this call has left, never
-        // a negative remainder
+        // a negative remainder. Every batch of empty reads past the cap spends one pending
+        // notification, so a notification that never brings a message lets the wait sleep to the
+        // deadline instead of spinning past it
+        if (msg == null && ++emptyReads % EMPTY_PORT_READS === 0) {
+          spendNotification()
+        }
+
         remaining =
           deadline == null ? undefined : Math.max(0, deadline - Date.now())
         continue

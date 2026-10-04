@@ -26,6 +26,10 @@ import {
 
 const { SYNCKIT_TIMEOUT } = process.env
 
+// a test that lets a deliberately unmatched notification reach the call's own deadline needs to
+// outlive that deadline before jest intervenes
+const BOUNDED_RETRY_TIMEOUT = 20_000
+
 beforeEach(() => {
   jest.resetModules()
   jest.restoreAllMocks()
@@ -174,21 +178,42 @@ test('handling of outdated message from worker', async () => {
 
 test('waits again when a notification arrives before its message', async () => {
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+  const executionTimeout = 1000
 
-  jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
-
-  // the soak hits this about once in a hundred thousand calls: the wait is woken but the message it
-  // announces is not readable yet, so the call has to wait again instead of failing
-  receiveMessageOnPortMock
-    // eslint-disable-next-line unicorn-x/no-useless-undefined -- returning nothing is the case here
-    .mockReturnValueOnce(undefined)
-    .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
+  // the message really is announced while a port read finds nothing, and the real `Atomics.wait`
+  // runs here: the notification has to stay pending, or the next wait sleeps past the message and
+  // the call fails at its deadline however long that deadline is
+  // eslint-disable-next-line unicorn-x/no-useless-undefined -- the empty read is the case here
+  receiveMessageOnPortMock.mockReturnValueOnce(undefined)
 
   const { createSyncFn } = await import('synckit')
-  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath, executionTimeout)
   expect(syncFn(1)).toBe(1)
-  expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
+  // the forced empty read, then one that found the message
+  expect(receiveMessageOnPortMock.mock.calls.length).toBeGreaterThanOrEqual(2)
 })
+
+test(
+  'a notification that never brings a message still fails at the deadline',
+  async () => {
+    const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+    const executionTimeout = 300
+    const boundedWithin = 5000
+
+    // every read is empty while the worker keeps announcing its response, so the pending notification
+    // is never spent with a message in hand. `Atomics.wait` cannot time out while the counter is
+    // non-zero, so this only ends because the retries are bounded
+    // eslint-disable-next-line unicorn-x/no-useless-undefined -- the empty read is the case here
+    receiveMessageOnPortMock.mockReturnValue(undefined)
+
+    const { createSyncFn } = await import('synckit')
+    const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath, executionTimeout)
+    const started = Date.now()
+    expect(() => syncFn(1)).toThrow(/timed-out/)
+    expect(Date.now() - started).toBeLessThan(boundedWithin)
+  },
+  BOUNDED_RETRY_TIMEOUT,
+)
 
 test('never consumes a notification the counter does not show', async () => {
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
