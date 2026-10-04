@@ -66,14 +66,15 @@ const installWorkerLoadGuard = data => {
   const report = (error, fatal) => {
     // the last resort, when there is no usable error to send: only a worker that never loaded
     // can be described as a failure to load
-    const fallback = () =>
-      new Error(fatal ? 'Worker module failed to load' : 'Worker failed')
+    const fallback = new Error(
+      fatal ? 'Worker module failed to load' : 'Worker failed',
+    )
 
     try {
       workerPort.postMessage({
         workerFailure: true,
         fatal,
-        error: error ?? fallback(),
+        error: error ?? fallback,
         properties: extractProperties(error),
       })
     } catch {
@@ -82,7 +83,7 @@ const installWorkerLoadGuard = data => {
         workerPort.postMessage({
           workerFailure: true,
           fatal,
-          error: fallback(),
+          error: fallback,
         })
       } catch {
         // the port itself is unusable: the notification below is all that is left

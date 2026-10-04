@@ -109,5 +109,3 @@ export const LOADER_FLAGS = new Set([LOADER_FLAG, EXPERIMENTAL_LOADER_FLAG])
 
 // >=
 export const IMPORT_FLAG_SUPPORTED = compareNodeVersion('20.6') >= 0
-
-export const INT32_BYTES = 4

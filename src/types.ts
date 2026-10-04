@@ -27,11 +27,19 @@ export interface WorkerData {
   pnpLoaderPath: string | undefined
 }
 
-export interface DataMessage<T> {
-  result?: T
-  error?: unknown
-  properties?: object
-}
+/**
+ * A worker's answer to one request: either a result or a failure. The failure arm requires
+ * `error`, because an optional property cannot express a reason that is present but `undefined`,
+ * and key presence is what the caller tests.
+ */
+export type DataMessage<T> =
+  | {
+      error: unknown
+      properties?: object
+    }
+  | {
+      result: T
+    }
 
 export interface StdioChunk {
   type: 'stderr' | 'stdout'
@@ -39,7 +47,7 @@ export interface StdioChunk {
   encoding: BufferEncoding
 }
 
-export interface WorkerToMainMessage<T> extends DataMessage<T> {
+export type WorkerToMainMessage<T> = DataMessage<T> & {
   id: number
   stdio: StdioChunk[]
 }

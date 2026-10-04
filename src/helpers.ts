@@ -3,7 +3,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
-  type MessagePort,
   MessageChannel,
   Worker,
   receiveMessageOnPort,
@@ -603,25 +602,25 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   // worker which cannot answer
   let workerFailure: WorkerFailureMessage | undefined
 
-  const receiveMessageWithId = (
-    port: MessagePort,
-    expectedId: number,
-    waitingTimeout?: number,
-  ): WorkerToMainMessage<R> => {
-    const start = Date.now()
-    const status = Atomics.wait(
-      sharedBufferView,
-      NOTIFY_INDEX,
-      0,
-      waitingTimeout,
-    )
+  /**
+   * Waits once for a notification and returns the message it announced, if any. A failure the
+   * preload reported is thrown from here.
+   *
+   * @param abortId - The request to abort when the wait itself fails.
+   * @param remaining - Milliseconds left of the call's budget.
+   */
+  const waitForMessage = (
+    abortId: number,
+    remaining?: number,
+  ): WorkerToMainMessage<R> | undefined => {
+    const status = Atomics.wait(sharedBufferView, NOTIFY_INDEX, 0, remaining)
 
     if (!['ok', 'not-equal'].includes(status)) {
       const abortMsg: MainToWorkerCommandMessage = {
-        id: expectedId,
+        id: abortId,
         cmd: 'abort',
       }
-      port.postMessage(abortMsg)
+      mainPort.postMessage(abortMsg)
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
     }
 
@@ -646,7 +645,11 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
     const msg = result?.message
 
-    if (msg && 'workerFailure' in msg) {
+    if (!msg) {
+      return
+    }
+
+    if ('workerFailure' in msg) {
       // a worker that never registered a handler, or that is gone, cannot serve later calls, so
       // its failure is cached; one that only reported a failure may well serve again
       if (msg.fatal) {
@@ -656,24 +659,38 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       throw withProperties(msg.error, msg.properties)
     }
 
-    if (msg?.id == null || msg.id < expectedId) {
-      const waitingTime = Date.now() - start
-      return receiveMessageWithId(
-        port,
-        expectedId,
-        waitingTimeout ? waitingTimeout - waitingTime : undefined,
-      )
+    return msg
+  }
+
+  const receiveMessageWithId = (
+    expectedId: number,
+    waitingTimeout?: number,
+  ): WorkerToMainMessage<R> => {
+    // One deadline for the whole call: the first wait gets the full budget and every later wait
+    // only what is left of it, so a stream of outdated messages cannot push the total wait past
+    // `waitingTimeout`.
+    const deadline =
+      waitingTimeout === undefined ? undefined : Date.now() + waitingTimeout
+
+    let remaining = waitingTimeout
+
+    for (;;) {
+      const msg = waitForMessage(expectedId, remaining)
+
+      if (msg?.id == null || msg.id < expectedId) {
+        // an outdated or missing response: wait again with only the time this call has left
+        remaining = deadline === undefined ? undefined : deadline - Date.now()
+        continue
+      }
+
+      if (expectedId !== msg.id) {
+        throw new Error(
+          `Internal error: Expected id ${expectedId} but got id ${msg.id}`,
+        )
+      }
+
+      return msg
     }
-
-    const { id, ...message } = msg
-
-    if (expectedId !== id) {
-      throw new Error(
-        `Internal error: Expected id ${expectedId} but got id ${id}`,
-      )
-    }
-
-    return { id, ...message }
   }
 
   const syncFn = (...args: Parameters<T>): R => {
@@ -687,9 +704,9 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
     worker.postMessage(msg)
 
-    const message = receiveMessageWithId(mainPort, id, timeout)
+    const message = receiveMessageWithId(id, timeout)
 
-    const { result, stdio } = message
+    const { stdio } = message
 
     for (const { type, chunk, encoding } of stdio) {
       process[type].write(chunk, encoding)
@@ -702,7 +719,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       throw withProperties(message.error, message.properties)
     }
 
-    return result!
+    return message.result
   }
 
   worker.unref()
