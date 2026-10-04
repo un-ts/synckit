@@ -1,6 +1,11 @@
 /* eslint-disable @typescript-eslint/unbound-method, jest/no-standalone-expect */
 
+import type { MessagePort } from 'node:worker_threads'
+
 import { jest } from '@jest/globals'
+
+import { installWorkerLoadGuard, markWorkerRegistered } from '../register.cjs'
+import { createSharedBufferView } from '../shared.cjs'
 
 import {
   testIf,
@@ -23,6 +28,7 @@ import {
   compareNodeVersion,
   dataUrl,
   extractProperties,
+  generateGlobals,
   hasImportFlag,
   hasLoaderFlag,
   hasRequireFlag,
@@ -267,7 +273,7 @@ describe('helpers', () => {
 
       process.stdout._writev!(chunks, callback)
 
-      expect(stdio.length).toBe(1)
+      expect(stdio).toHaveLength(1)
       expect(stdio[0].type).toBe('stdout')
       expect(stdio[0].chunk).toEqual(Buffer.from('test'))
       expect(callback).toHaveBeenCalled()
@@ -284,13 +290,153 @@ describe('helpers', () => {
 
       process.stderr._writev!(chunks, callback)
 
-      expect(stdio.length).toBe(1)
+      expect(stdio).toHaveLength(1)
       expect(stdio[0]).toEqual({
         type: 'stderr',
         chunk: Buffer.from('test error'),
         encoding: 'utf8',
       })
       expect(callback).toHaveBeenCalled()
+    })
+  })
+
+  describe('worker load guard', () => {
+    const createPort = (failFirst = false) => {
+      const messages: unknown[] = []
+      let calls = 0
+      const port = {
+        postMessage: (message: unknown) => {
+          calls += 1
+          if (failFirst && calls === 1) {
+            throw new Error('not cloneable')
+          }
+          messages.push(message)
+        },
+      } as unknown as MessagePort
+      return { messages, port }
+    }
+
+    const install = (port: MessagePort, view: Int32Array) => {
+      installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+      return process.listeners('uncaughtException').pop() as unknown as (
+        error: unknown,
+      ) => void
+    }
+
+    const listeners = () => process.listenerCount('uncaughtException')
+
+    test('reports the error with its properties and wakes the main thread', () => {
+      const { messages, port } = createPort()
+      const view = createSharedBufferView()
+      const before = listeners()
+
+      install(port, view)(Object.assign(new Error('boom'), { code: 'E_BOOM' }))
+
+      expect(messages).toHaveLength(1)
+      const [message] = messages as [
+        { error: Error; workerFailure: boolean; properties: unknown },
+      ]
+      expect(message.workerFailure).toBe(true)
+      expect(message.error.message).toBe('boom')
+      expect(message.properties).toEqual({ code: 'E_BOOM' })
+      expect(Atomics.load(view, 0)).toBe(1)
+      // invoking the guard disarmed it
+      expect(listeners()).toBe(before)
+    })
+
+    test('reports a falsy failure as it is', () => {
+      const { messages, port } = createPort()
+      const view = createSharedBufferView()
+
+      install(port, view)(null)
+
+      const [message] = messages as [{ error: unknown }]
+      expect(message.error).toBeNull()
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('wakes the main thread when reading the properties throws', () => {
+      const { messages, port } = createPort()
+      const view = createSharedBufferView()
+      const error = new Error('boom')
+      Object.defineProperty(error, 'trap', {
+        enumerable: true,
+        get() {
+          throw new Error('nope')
+        },
+      })
+
+      install(port, view)(error)
+
+      const [message] = messages as [{ error: Error }]
+      // the properties could not be read, so the bare error is sent instead
+      expect(message.error.message).toBe('boom')
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('wakes the main thread when the error cannot be serialized', () => {
+      const { messages, port } = createPort(true)
+      const view = createSharedBufferView()
+
+      install(port, view)(new Error('boom'))
+
+      expect(messages).toHaveLength(1)
+      const [message] = messages as [{ error: Error }]
+      // the first post failed, so the bare original error is sent instead of a synthetic one
+      expect(message.error.message).toBe('boom')
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('marks a failure fatal unless the worker is left handled', () => {
+      // never registered: nothing can serve a later call
+      const first = createPort()
+      const firstView = createSharedBufferView()
+      install(first.port, firstView)(new Error('before registering'))
+      expect((first.messages[0] as { fatal: boolean }).fatal).toBe(true)
+
+      // registered, and another listener is left to handle the event
+      const handler = jest.fn()
+      process.on('uncaughtException', handler)
+      try {
+        const second = createPort()
+        const secondView = createSharedBufferView()
+        const guard = install(second.port, secondView)
+        markWorkerRegistered(secondView)
+        guard(new Error('after registering'))
+        expect((second.messages[0] as { fatal: boolean }).fatal).toBe(false)
+      } finally {
+        process.off('uncaughtException', handler)
+      }
+
+      // registered, but nothing is left to handle it: the worker would have died
+      const third = createPort()
+      const thirdView = createSharedBufferView()
+      const guard = install(third.port, thirdView)
+      markWorkerRegistered(thirdView)
+      guard(new Error('unhandled after registering'))
+      expect((third.messages[0] as { fatal: boolean }).fatal).toBe(true)
+    })
+
+    test('arms once', () => {
+      const { messages, port } = createPort()
+      const view = createSharedBufferView()
+      const before = listeners()
+
+      const guard = install(port, view)
+      expect(listeners()).toBe(before + 1)
+
+      // arming again is a no-op
+      installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+      expect(listeners()).toBe(before + 1)
+
+      // reporting disarms it: only the first failure is reported
+      guard(new Error('boom'))
+      expect(messages).toHaveLength(1)
+      expect(listeners()).toBe(before)
+    })
+
+    test('generateGlobals returns nothing without shims', () => {
+      expect(generateGlobals(workerCjsPath, [])).toBe('')
     })
   })
 })

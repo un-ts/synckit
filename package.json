@@ -27,6 +27,9 @@
   "files": [
     "index.d.cts",
     "lib",
+    "register.cjs",
+    "shared.cjs",
+    "shared.d.cts",
     "!**/*.tsbuildinfo"
   ],
   "keywords": [
@@ -49,7 +52,7 @@
     "benchmark:esm": "node benchmarks/benchmark.js",
     "build": "concurrently -r 'yarn:build:*'",
     "build:tsc": "tsc -p src",
-    "build:tsdown": "tsdown --no-clean -d lib -f cjs src/index.ts",
+    "build:tsdown": "tsdown --no-clean -d lib -f cjs --external ../register.cjs --external ../shared.cjs src/index.ts",
     "format": "prettier --write .",
     "lint": "concurrently -r 'yarn:lint:*'",
     "lint:es": "eslint . --cache --max-warnings 10",

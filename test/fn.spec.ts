@@ -10,6 +10,7 @@ import {
   workerCjsPath,
   workerCjsTsPath,
   workerErrorPath,
+  workerErrorPrimitivePath,
   workerEsmTsPath,
   workerJsAsTsPath,
   workerMjsPath,
@@ -88,6 +89,33 @@ test('createSyncFn', () => {
 
   expect(() => errSyncFn()).toThrowErrorMatchingInlineSnapshot(`"Worker Error"`)
 
+  // a reason that is not an object is thrown as it came, not boxed by the property merge
+  const primitiveErrSyncFn = createSyncFn<(reason: unknown) => Promise<void>>(
+    workerErrorPrimitivePath,
+  )
+  let caught: unknown
+  try {
+    primitiveErrSyncFn('Worker primitive rejection')
+  } catch (error) {
+    caught = error
+  }
+  expect(caught).toBe('Worker primitive rejection')
+
+  // a falsy reason used to be indistinguishable from a successful `undefined` result: every one
+  // must still throw exactly as it was thrown, `undefined` and `null` included
+  const notThrown = Symbol('not thrown')
+  const thrownBy = (reason: unknown) => {
+    try {
+      primitiveErrSyncFn(reason)
+    } catch (error) {
+      return error
+    }
+    return notThrown
+  }
+  for (const reason of [undefined, null, 0, '', false, Number.NaN]) {
+    expect(thrownBy(reason)).toBe(reason)
+  }
+
   const syncFn4 = createSyncFn<AsyncWorkerFn>(workerCjsPath)
 
   expect(syncFn4(1)).toBe(1)
@@ -135,13 +163,48 @@ test('handling of outdated message from worker', async () => {
   jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
 
   receiveMessageOnPortMock
-    .mockReturnValueOnce({ message: { id: -1, stdio } })
+    .mockReturnValueOnce({ message: { id: -1, stdio, result: undefined } })
     .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
   expect(syncFn(1)).toBe(1)
   expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
+})
+
+test('never consumes a notification the counter does not show', async () => {
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+
+  jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
+
+  receiveMessageOnPortMock
+    .mockReturnValueOnce({ message: { id: -1, stdio, result: undefined } })
+    .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
+
+  // `Atomics.wait` here reports a notification the counter never received. Consuming it must not
+  // take the counter below zero: every later wait would then return at once, so the caller would
+  // spin instead of sleeping and starve the worker until its deadline expires.
+  const observed: number[] = []
+  const sub = Atomics.sub
+
+  const subSpy = jest.spyOn(Atomics, 'sub')
+
+  subSpy.mockImplementation(((
+    array: Int32Array,
+    index: number,
+    value: number,
+  ) => {
+    observed.push(Atomics.load(array, index))
+    return sub(array, index, value)
+  }) as unknown as typeof Atomics.sub)
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+  expect(syncFn(1)).toBe(1)
+
+  for (const counter of observed) {
+    expect(counter).toBeGreaterThan(0)
+  }
 })
 
 test('propagation of undefined timeout', async () => {
@@ -151,7 +214,7 @@ test('propagation of undefined timeout', async () => {
   const atomicsWaitSpy = jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
 
   receiveMessageOnPortMock
-    .mockReturnValueOnce({ message: { id: -1, stdio } })
+    .mockReturnValueOnce({ message: { id: -1, stdio, result: undefined } })
     .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
 
   const { createSyncFn } = await import('synckit')
@@ -184,7 +247,7 @@ test('reduction of waiting time', async () => {
   })
 
   receiveMessageOnPortMock
-    .mockReturnValueOnce({ message: { id: -1, stdio } })
+    .mockReturnValueOnce({ message: { id: -1, stdio, result: undefined } })
     .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
 
   const { createSyncFn } = await import('synckit')
@@ -203,11 +266,53 @@ test('reduction of waiting time', async () => {
   expect(secondAtomicsWaitCallTimeout).toBeLessThan(synckitTimeout)
 })
 
+test('a per-call deadline shrinks each successive wait across outdated messages', async () => {
+  const synckitTimeout = 60
+  process.env.SYNCKIT_TIMEOUT = synckitTimeout.toString()
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+
+  const atomicsWaitSpy = jest.spyOn(Atomics, 'wait').mockImplementation(() => {
+    const start = Date.now()
+    // simulate waiting 10ms for worker to respond
+    while (Date.now() - start < 10) {
+      continue
+    }
+
+    return 'ok'
+  })
+
+  receiveMessageOnPortMock
+    .mockReturnValueOnce({ message: { id: -2, stdio, result: undefined } })
+    .mockReturnValueOnce({ message: { id: -1, stdio, result: undefined } })
+    .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+  expect(syncFn(1)).toBe(1)
+  expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(3)
+
+  const [firstWaitArgs, secondWaitArgs, thirdWaitArgs] =
+    atomicsWaitSpy.mock.calls
+  const [, , , firstTimeout] = firstWaitArgs
+  const [, , , secondTimeout] = secondWaitArgs
+  const [, , , thirdTimeout] = thirdWaitArgs
+
+  // the budget belongs to the call, not to each wait: every wait gets strictly less than the one
+  // before it instead of the full timeout starting over
+  expect(firstTimeout).toBe(synckitTimeout)
+  expect(secondTimeout).toBeGreaterThan(0)
+  expect(secondTimeout).toBeLessThan(firstTimeout!)
+  expect(thirdTimeout).toBeGreaterThan(0)
+  expect(thirdTimeout).toBeLessThan(secondTimeout!)
+})
+
 test('unexpected message from worker', async () => {
   jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
 
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
-  receiveMessageOnPortMock.mockReturnValueOnce({ message: { id: 100, stdio } })
+  receiveMessageOnPortMock.mockReturnValueOnce({
+    message: { id: 100, stdio, result: undefined },
+  })
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)

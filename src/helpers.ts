@@ -3,13 +3,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
-  type MessagePort,
   MessageChannel,
   Worker,
   receiveMessageOnPort,
 } from 'node:worker_threads'
 
 import { tryExtensions, findUp, cjsRequire, isPkgAvailable } from '@pkgr/core'
+
+import { NOTIFY_INDEX, createSharedBufferView } from '../shared.cjs'
 
 import { compareNodeVersion } from './common.js'
 import {
@@ -21,7 +22,6 @@ import {
   DEFAULT_TYPES_NODE_VERSION,
   IMPORT_FLAG,
   IMPORT_FLAG_SUPPORTED,
-  INT32_BYTES,
   LOADER_FLAG,
   LOADER_FLAGS,
   MTS_SUPPORTED,
@@ -45,8 +45,15 @@ import type {
   PackageJson,
   StdioChunk,
   SynckitOptions,
+  WorkerFailureMessage,
   WorkerToMainMessage,
 } from './types.js'
+
+// The shared buffer and its notification byte live in `shared.cjs`, and the load guard that uses
+// them at the worker's end lives in `register.cjs` — both plain CommonJS files at the package
+// root, so that `register.cjs` reaches the worker unchanged with `-r` in development, where a
+// test runner maps the package to its source, and in the published package alike; `shared.cjs`
+// reaches it because `register.cjs` requires it.
 
 export const isFile = (path: string) => {
   try {
@@ -59,6 +66,16 @@ export const isFile = (path: string) => {
 
 export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
+
+// only `extractProperties` was part of the public surface before it moved into `shared.cjs`;
+// the other internals stay internal
+export { extractProperties } from '../shared.cjs'
+
+// MessagePort does not copy an error's own properties, so they are merged back in on this
+// side. A reason that is not an object is thrown as it came: `Object.assign` would box a
+// primitive into a `String`/`Number` object with no `message`.
+const withProperties = (error: unknown, properties?: object) =>
+  error && typeof error === 'object' ? Object.assign(error, properties) : error
 
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
@@ -446,31 +463,14 @@ export const generateGlobals = (
   return content
 }
 
-// MessagePort doesn't copy the properties of Error objects. We still want
-// error objects to have extra properties such as "warnings" so implement the
-// property copying manually.
-export function extractProperties<T extends object>(object: T): T
-export function extractProperties<T>(object?: T): T | undefined
-
 /**
- * Creates a shallow copy of the enumerable properties from the provided object.
+ * Absolute path of the module preloaded into every worker to arm the load guard.
  *
- * @param object - An optional object whose properties are to be extracted.
- * @returns A new object containing the enumerable properties of the input, or
- *   undefined if no valid object is provided.
+ * `register.cjs` ships with the package, next to the package root: `lib/../register.cjs` in
+ * the built package, `src/../register.cjs` in this repository, so the one relative path covers
+ * a test run and a release alike.
  */
-export function extractProperties<T>(object?: T) {
-  if (object && typeof object === 'object') {
-    const properties = {} as T
-    for (const key in object) {
-      properties[key as keyof T] = object[key]
-    }
-    return properties
-  }
-}
-
-let sharedBuffer: SharedArrayBuffer | undefined
-let sharedBufferView: Int32Array | undefined
+const workerPreload = path.resolve(_dirname, '../register.cjs')
 
 /**
  * Spawns a worker thread and returns a synchronous function to dispatch tasks.
@@ -567,15 +567,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
         : []
   ).filter(({ moduleName }) => isPkgAvailable(moduleName))
 
-  // We store a single Byte in the SharedArrayBuffer
-  // for the notification, we can used a fixed size
-  sharedBufferView ??= new Int32Array(
-    /* istanbul ignore next */ (sharedBuffer ??= new SharedArrayBuffer(
-      INT32_BYTES,
-    )),
-    0,
-    1,
-  )
+  const sharedBufferView = createSharedBufferView()
 
   const useGlobals = finalGlobalShims.length > 0
 
@@ -600,80 +592,132 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       eval: useEval,
       workerData: { sharedBufferView, workerPort, pnpLoaderPath },
       transferList: [workerPort, ...transferList],
-      execArgv: finalExecArgv,
+      execArgv: [REQUIRE_ABBR_FLAG, workerPreload, ...finalExecArgv],
     },
   )
 
   let nextID = 0
 
-  const receiveMessageWithId = (
-    port: MessagePort,
-    expectedId: number,
-    waitingTimeout?: number,
-  ): WorkerToMainMessage<R> => {
-    const start = Date.now()
-    const status = Atomics.wait(sharedBufferView!, 0, 0, waitingTimeout)
-    Atomics.store(sharedBufferView!, 0, 0)
+  // Cached so that later calls keep throwing the original failure instead of posting to a
+  // worker which cannot answer
+  let workerFailure: WorkerFailureMessage | undefined
+
+  /**
+   * Waits once for a notification and returns the message it announced, if any. A failure the
+   * preload reported is thrown from here.
+   *
+   * @param abortId - The request to abort when the wait itself fails.
+   * @param remaining - Milliseconds left of the call's budget.
+   */
+  const waitForMessage = (
+    abortId: number,
+    remaining?: number,
+  ): WorkerToMainMessage<R> | undefined => {
+    const status = Atomics.wait(sharedBufferView, NOTIFY_INDEX, 0, remaining)
 
     if (!['ok', 'not-equal'].includes(status)) {
       const abortMsg: MainToWorkerCommandMessage = {
-        id: expectedId,
+        id: abortId,
         cmd: 'abort',
       }
-      port.postMessage(abortMsg)
+      mainPort.postMessage(abortMsg)
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
+    }
+
+    // Each report bumps the notification byte and posts one message, so consume exactly one
+    // notification per message. This runs only after a wait that was actually notified: on
+    // `'timed-out'` the byte was still zero, and consuming a report that arrived after the wait
+    // returned would leave its message queued with nothing left to wake the next call.
+    //
+    // The check is not redundant, though: an unconditional decrement can take the counter
+    // negative, and a negative counter makes every `Atomics.wait` return `'not-equal'` at once,
+    // so the caller spins instead of sleeping and starves the worker until the deadline expires.
+    // Measured on Node 18.18 under the CI's load and timeout, restoring it took the
+    // `reliability` soak from three failures in four runs to none in six.
+    if (Atomics.load(sharedBufferView, NOTIFY_INDEX) > 0) {
+      Atomics.sub(sharedBufferView, NOTIFY_INDEX, 1)
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const result = receiveMessageOnPort(mainPort) as
-      | { message: WorkerToMainMessage<R> }
+      | { message: WorkerFailureMessage | WorkerToMainMessage<R> }
       | undefined
 
     const msg = result?.message
 
-    if (msg?.id == null || msg.id < expectedId) {
-      const waitingTime = Date.now() - start
-      return receiveMessageWithId(
-        port,
-        expectedId,
-        waitingTimeout ? waitingTimeout - waitingTime : undefined,
-      )
+    if (!msg) {
+      return
     }
 
-    const { id, ...message } = msg
+    if ('workerFailure' in msg) {
+      // a worker that never registered a handler, or that is gone, cannot serve later calls, so
+      // its failure is cached; one that only reported a failure may well serve again
+      if (msg.fatal) {
+        workerFailure = msg
+      }
 
-    if (expectedId !== id) {
-      throw new Error(
-        `Internal error: Expected id ${expectedId} but got id ${id}`,
-      )
+      throw withProperties(msg.error, msg.properties)
     }
 
-    return { id, ...message }
+    return msg
+  }
+
+  const receiveMessageWithId = (
+    expectedId: number,
+    waitingTimeout?: number,
+  ): WorkerToMainMessage<R> => {
+    // One deadline for the whole call: the first wait gets the full budget and every later wait
+    // only what is left of it, so a stream of outdated messages cannot push the total wait past
+    // `waitingTimeout`.
+    const deadline =
+      waitingTimeout === undefined ? undefined : Date.now() + waitingTimeout
+
+    let remaining = waitingTimeout
+
+    for (;;) {
+      const msg = waitForMessage(expectedId, remaining)
+
+      if (msg?.id == null || msg.id < expectedId) {
+        // an outdated or missing response: wait again with only the time this call has left
+        remaining = deadline === undefined ? undefined : deadline - Date.now()
+        continue
+      }
+
+      if (expectedId !== msg.id) {
+        throw new Error(
+          `Internal error: Expected id ${expectedId} but got id ${msg.id}`,
+        )
+      }
+
+      return msg
+    }
   }
 
   const syncFn = (...args: Parameters<T>): R => {
+    if (workerFailure) {
+      throw withProperties(workerFailure.error, workerFailure.properties)
+    }
+
     const id = nextID++
 
     const msg: MainToWorkerMessage<Parameters<T>> = { id, args }
 
     worker.postMessage(msg)
 
-    const { result, error, properties, stdio } = receiveMessageWithId(
-      mainPort,
-      id,
-      timeout,
-    )
+    const message = receiveMessageWithId(id, timeout)
 
-    for (const { type, chunk, encoding } of stdio) {
+    for (const { type, chunk, encoding } of message.stdio) {
       process[type].write(chunk, encoding)
     }
 
-    if (error) {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw Object.assign(error, properties)
+    // a message that carries an `error` key is a failure, whatever the reason is. Key presence is
+    // the faithful test: a structured clone keeps an own key whose value is `undefined`, which is
+    // itself a legitimate reason, and truthiness or `!== undefined` would swallow it
+    if ('error' in message) {
+      throw withProperties(message.error, message.properties)
     }
 
-    return result!
+    return message.result
   }
 
   worker.unref()
