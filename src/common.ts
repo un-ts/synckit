@@ -11,4 +11,4 @@ export {
 // `--flag=value` or `--flag value` form. A flag after the script path is a script argument, which
 // Node does not apply, so it is not counted; `getFlag` also tells a flag without a value from an
 // absent one.
-export const hasFlag = (flag: string) => getFlag(flag) !== undefined
+export const hasFlag = (flag: string) => getFlag(flag) != null

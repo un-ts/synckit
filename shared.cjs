@@ -106,15 +106,15 @@ const getFlag = (flag, accepted) => {
     }
     if (separator !== -1) {
       const value = arg.slice(separator + 1)
-      if (accepted === undefined || value === accepted) {
+      if (accepted == null || value === accepted) {
         return value
       }
       continue
     }
     const next = args[index + 1]
     // a following flag is not this flag's value
-    const value = next === undefined || next.startsWith('-') ? '' : next
-    if (accepted === undefined || value === accepted) {
+    const value = next == null || next.startsWith('-') ? '' : next
+    if (accepted == null || value === accepted) {
       return value
     }
   }

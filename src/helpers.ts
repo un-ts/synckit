@@ -312,10 +312,12 @@ export const setupTsRunner = (
       /** @see https://github.com/facebook/jest/issues/9543 */
       pnpApiPath = cjsRequire.resolve('pnpapi')
     } catch {}
-    // `REQUIRE_FLAGS` covers both `--require` and `-r`, in either form; only a value equal to the
-    // pnp API path counts, so a require of anything else is skipped rather than ending the scan
-    const alreadyRequired = pnpApiPath && getFlag(REQUIRE_FLAGS, pnpApiPath)
-    if (pnpApiPath && !alreadyRequired && !execArgv.includes(pnpApiPath)) {
+    // a `--require`/`-r` that already loads the pnp API is skipped; only a value equal to it counts
+    if (
+      pnpApiPath &&
+      !getFlag(REQUIRE_FLAGS, pnpApiPath) &&
+      !execArgv.includes(pnpApiPath)
+    ) {
       execArgv = [REQUIRE_ABBR_FLAG, pnpApiPath, ...execArgv]
       const pnpLoaderPath = path.resolve(pnpApiPath, '../.pnp.loader.mjs')
       if (isFile(pnpLoaderPath)) {
@@ -664,13 +666,13 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     // only what is left of it, so a stream of outdated messages cannot push the total wait past
     // `waitingTimeout`.
     const deadline =
-      waitingTimeout === undefined ? undefined : Date.now() + waitingTimeout
+      waitingTimeout == null ? undefined : Date.now() + waitingTimeout
 
     // Never negative: a coarse or loaded clock can overshoot the deadline, and a negative timeout
     // is not a shorter wait. `0` means the deadline is due, so the wait returns `'timed-out'` and
     // the call fails now, while `undefined` is what waits indefinitely.
     let remaining =
-      waitingTimeout === undefined ? undefined : Math.max(0, waitingTimeout)
+      waitingTimeout == null ? undefined : Math.max(0, waitingTimeout)
 
     for (;;) {
       const msg = waitForMessage(expectedId, remaining)
@@ -679,9 +681,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
         // an outdated or missing response: wait again with only the time this call has left, never
         // a negative remainder
         remaining =
-          deadline === undefined
-            ? undefined
-            : Math.max(0, deadline - Date.now())
+          deadline == null ? undefined : Math.max(0, deadline - Date.now())
         continue
       }
 

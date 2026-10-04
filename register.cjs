@@ -77,7 +77,7 @@ const THROWING_REJECTION_MODES = new Set(['strict', 'throw'])
  */
 const unhandledRejectionsThrow = () => {
   const mode = getFlag(UNHANDLED_REJECTIONS_FLAG)
-  if (mode !== undefined) {
+  if (mode != null) {
     return THROWING_REJECTION_MODES.has(mode)
   }
   return compareNodeVersion(UNHANDLED_REJECTIONS_THROW_NODE_VERSION) >= 0
