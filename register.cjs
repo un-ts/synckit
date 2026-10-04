@@ -69,7 +69,8 @@ const installWorkerLoadGuard = data => {
     const message = fatal ? 'Worker module failed to load' : 'Worker failed'
 
     try {
-      // the caller sees the reason exactly as it was thrown, even when it is falsy
+      // the caller sees the reason exactly as it was thrown, even when it is falsy, with its own
+      // properties re-attached by `withProperties` on the other side
       workerPort.postMessage({
         workerFailure: true,
         fatal,
@@ -77,13 +78,13 @@ const installWorkerLoadGuard = data => {
         properties: extractProperties(error),
       })
     } catch {
-      // the error or its properties are not cloneable: keep the original as the cause, and drop
-      // it only when it cannot be cloned at all
+      // the properties, or the error itself, are not cloneable: retry with the bare error, which
+      // keeps its name, message, stack and cause, and only then say something synthetic
       try {
         workerPort.postMessage({
           workerFailure: true,
           fatal,
-          error: new Error(message, { cause: error }),
+          error,
         })
       } catch {
         try {
