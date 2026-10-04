@@ -42,6 +42,18 @@ const registered = new WeakSet()
  * @property {import('node:worker_threads').MessagePort} [workerPort] The port a failure is reported on.
  */
 
+// `Error.isError` recognises an error from another realm, where `instanceof Error` does not; it is
+// not in every supported runtime, so feature-detect it
+const errorStatics = /** @type {{ isError?: (value: unknown) => boolean }} */ (
+  /** @type {unknown} */ (Error)
+)
+
+/** @type {(value: unknown) => boolean} */
+const isError =
+  typeof errorStatics.isError === 'function'
+    ? errorStatics.isError
+    : value => value instanceof Error
+
 /**
  * Reports a failure to load the worker module, and wakes the main thread.
  *
@@ -64,21 +76,22 @@ const installWorkerLoadGuard = data => {
    * @param {boolean} fatal
    */
   const report = (error, fatal) => {
-    // a synthetic message for a reason that cannot cross the port at all: keep the load failure
-    // distinction and the reason it came with
-    const detail = error instanceof Error ? error.message : String(error)
-    const message = `Worker ${
-      fatal ? 'module failed to load' : 'failed'
-    }: ${detail}`
-
     try {
       // the caller sees the reason exactly as it was thrown, even when it is falsy, with its own
       // properties re-attached by `withProperties` on the other side; a reason that cannot cross
-      // falls back to the bare error, and only then to the synthetic message
+      // falls back to the bare error, and only then to a synthetic message that names it
       const payloads = [
         { error, properties: extractProperties(error) },
         { error },
-        { error: new Error(message) },
+        {
+          error: new Error(
+            `Worker ${fatal ? 'module failed to load' : 'failed'}: ${
+              isError(error)
+                ? /** @type {Error} */ (error).message
+                : String(error)
+            }`,
+          ),
+        },
       ]
 
       for (const payload of payloads) {

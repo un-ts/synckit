@@ -411,6 +411,35 @@ describe('helpers', () => {
       }
     })
 
+    test('falls back to `instanceof` when `Error.isError` is unavailable', async () => {
+      const descriptor = Object.getOwnPropertyDescriptor(Error, 'isError')
+      Reflect.deleteProperty(Error, 'isError')
+      jest.resetModules()
+      try {
+        const { installWorkerLoadGuard: installWithoutIsError } =
+          await import('../register.cjs')
+        // the registry really was reset, so the module saw `Error.isError` absent
+        expect(installWithoutIsError).not.toBe(installWorkerLoadGuard)
+
+        const { messages, port } = createPort(2)
+        const view = createSharedBufferView()
+        installWithoutIsError({ workerPort: port, sharedBufferView: view })
+
+        const guard = process
+          .listeners('uncaughtException')
+          .pop() as unknown as (error: unknown) => void
+        guard(new Error('boom'))
+
+        const [message] = messages as [{ error: Error }]
+        expect(message.error.message).toBe('Worker module failed to load: boom')
+      } finally {
+        if (descriptor) {
+          Object.defineProperty(Error, 'isError', descriptor)
+        }
+        jest.resetModules()
+      }
+    })
+
     test('marks a failure fatal unless the worker is left handled', () => {
       // never registered: nothing can serve a later call
       const first = createPort()
