@@ -619,21 +619,47 @@ process.stdout.write(JSON.stringify({ fatal: messages[0].fatal, exited }))
 `,
       )
 
-      const classify = (mode?: string) =>
+      const classify = ({
+        mode,
+        nodeOptions,
+      }: { mode?: string; nodeOptions?: string } = {}) =>
         JSON.parse(
           execFileSync(
             process.execPath,
             mode ? [`--unhandled-rejections=${mode}`, probe] : [probe],
-            { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } },
+            {
+              encoding: 'utf8',
+              env: { ...process.env, NODE_OPTIONS: nodeOptions ?? '' },
+            },
           ),
         ) as { fatal: boolean; exited: boolean }
 
       try {
         // Node 15+ defaults to `throw`; the flag overrides it either way
         expect(classify()).toEqual({ fatal: true, exited: true })
-        expect(classify('throw')).toEqual({ fatal: true, exited: true })
-        expect(classify('warn')).toEqual({ fatal: false, exited: false })
-        expect(classify('none')).toEqual({ fatal: false, exited: false })
+        expect(classify({ mode: 'throw' })).toEqual({
+          fatal: true,
+          exited: true,
+        })
+        expect(classify({ mode: 'strict' })).toEqual({
+          fatal: true,
+          exited: true,
+        })
+        expect(classify({ mode: 'warn' })).toEqual({
+          fatal: false,
+          exited: false,
+        })
+        expect(classify({ mode: 'none' })).toEqual({
+          fatal: false,
+          exited: false,
+        })
+        // `NODE_OPTIONS` carries the mode too, and a worker inherits it
+        expect(
+          classify({ nodeOptions: '--unhandled-rejections=warn' }),
+        ).toEqual({ fatal: false, exited: false })
+        expect(
+          classify({ nodeOptions: '--unhandled-rejections=throw' }),
+        ).toEqual({ fatal: true, exited: true })
       } finally {
         fs.rmSync(probe, { force: true })
       }

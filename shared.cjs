@@ -8,7 +8,7 @@
  * It is a plain CommonJS file at the package root, with no build step and no loader of its own,
  * so a test runner that maps the package to its source gets exactly what the published package
  * ships. `register.cjs` (the preload) and `src/helpers.ts` both import it rather than
- * reimplementing it, so the buffer below has a single source.
+ * reimplementing it, so the buffer below and the rejection-mode check have a single source.
  */
 
 // One SharedArrayBuffer per process, sliced per worker: a single buffer keeps the allocation off
@@ -71,8 +71,62 @@ const extractProperties = object => {
   }
 }
 
+// `NODE_OPTIONS` is inherited by workers and never appears in their `execArgv`, so the preload
+// and `src` read the one environment variable here rather than splitting it again. An unset
+// variable splits to `['']`, which no flag check matches.
+const NODE_OPTIONS = (process.env.NODE_OPTIONS ?? '').split(/\s+/)
+
+/**
+ * Splits a version into its numeric parts.
+ *
+ * @param {string} version The version to split.
+ * @returns {number[]} The parsed parts.
+ */
+const parseVersion = version =>
+  version.split('.').map(part => Number.parseFloat(part))
+
+// A naive implementation of semver comparison
+/**
+ * Compares two versions.
+ *
+ * @param {string} version1 The left version.
+ * @param {string} version2 The right version.
+ * @returns {number} `1`, `0` or `-1`, as the left version is greater, equal or lesser.
+ */
+const compareVersion = (version1, version2) => {
+  const versions1 = parseVersion(version1)
+  const versions2 = parseVersion(version2)
+  const length = Math.max(versions1.length, versions2.length)
+  for (let i = 0; i < length; i++) {
+    const v1 = versions1[i] || 0
+    const v2 = versions2[i] || 0
+    if (v1 > v2) {
+      return 1
+    }
+    if (v1 < v2) {
+      return -1
+    }
+  }
+  return 0
+}
+
+const NODE_VERSION = process.versions.node
+
+/**
+ * Compares a version against the running Node, which the preload needs as much as `src` does.
+ *
+ * @param {string} version The version to compare against.
+ * @returns {number} `1`, `0` or `-1`, as Node is greater, equal or lesser.
+ */
+const compareNodeVersion = version => compareVersion(NODE_VERSION, version)
+
 module.exports = {
+  NODE_OPTIONS,
+  NODE_VERSION,
   NOTIFY_INDEX,
+  compareNodeVersion,
+  compareVersion,
   createSharedBufferView,
   extractProperties,
+  parseVersion,
 }

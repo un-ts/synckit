@@ -26,7 +26,12 @@
 // type-coverage:ignore-next-line -- node types mark workerData as any
 const { isMainThread, workerData } = require('node:worker_threads')
 
-const { NOTIFY_INDEX, extractProperties } = require('./shared.cjs')
+const {
+  NODE_OPTIONS,
+  NOTIFY_INDEX,
+  compareNodeVersion,
+  extractProperties,
+} = require('./shared.cjs')
 
 // Both are keyed by the worker's slice: one slice is one worker, and one guard must be armed even
 // when the preload and the worker module's own import of synckit both reach this file.
@@ -54,6 +59,33 @@ const registered = new WeakSet()
  */
 const isError = value => Error.isError?.(value) ?? value instanceof Error
 
+// Node made `throw` the default for unhandled rejections in 15; 14 warns and carries on, and the
+// `--unhandled-rejections` value overrides that either way. The flag follows the naming of the
+// `*_FLAG` constants in `src/constants.ts`, but the guard is its only reader, so it lives here.
+const UNHANDLED_REJECTIONS_FLAG = '--unhandled-rejections'
+const UNHANDLED_REJECTIONS_THROW_NODE_VERSION = '15'
+const THROWING_REJECTION_MODES = new Set(['strict', 'throw'])
+
+/**
+ * Whether an unhandled rejection stops this worker rather than only warning.
+ *
+ * Read from the flag when it is set, and from the Node major's default otherwise. `NODE_OPTIONS`
+ * is split once in `shared.cjs`, because a worker inherits it and it never appears in
+ * `execArgv`. This is a best-effort match: the flag is not the only way a mode can be set.
+ *
+ * @returns {boolean} Whether a rejection is raised as an uncaught exception.
+ */
+const unhandledRejectionsThrow = () => {
+  const prefix = `${UNHANDLED_REJECTIONS_FLAG}=`
+  const flag = [...process.execArgv, ...NODE_OPTIONS].find(arg =>
+    arg.startsWith(prefix),
+  )
+  if (flag) {
+    return THROWING_REJECTION_MODES.has(flag.slice(prefix.length))
+  }
+  return compareNodeVersion(UNHANDLED_REJECTIONS_THROW_NODE_VERSION) >= 0
+}
+
 /**
  * Reports a failure to load the worker module, and wakes the main thread.
  *
@@ -73,23 +105,9 @@ const installWorkerLoadGuard = data => {
   // does not turn that one failure into a second message and a second notification
   let exiting = false
 
-  // Node made `throw` the default for unhandled rejections in 15; 14 warns and carries on, and a
-  // `--unhandled-rejections=…` flag overrides the default. Both the worker's own flags and
-  // `NODE_OPTIONS` can carry it. This is a best-effort match: an unusual embedding can still
-  // differ, and no other mode is looked for.
-  const rejectionMode = (() => {
-    const args = [
-      ...process.execArgv,
-      ...(process.env.NODE_OPTIONS ?? '').split(' '),
-    ]
-    const flag = args.find(arg => arg.startsWith('--unhandled-rejections='))
-    if (flag) {
-      return flag.slice('--unhandled-rejections='.length)
-    }
-    return Number(process.versions.node.split('.')[0]) >= 15 ? 'throw' : 'warn'
-  })()
-  const rejectionThrows =
-    rejectionMode === 'throw' || rejectionMode === 'strict'
+  // whether an unhandled rejection stops the runtime is the runtime's business: the flag and the
+  // Node default are read in `shared.cjs`, next to the rest of the state the preload shares
+  const rejectionThrows = unhandledRejectionsThrow()
 
   /**
    * Reports a failure to the main thread and wakes whoever waits for it.
