@@ -381,3 +381,82 @@ setTimeout(() => fs.writeFileSync(${JSON.stringify(marker)}, 'alive'), 500)
   await new Promise(resolve => setTimeout(resolve, 1000))
   expect(fs.existsSync(marker)).toBe(false)
 })
+
+test('an uncaught exception is fatal even with only a rejection listener', async () => {
+  // the worker's only listener is for the other event, which cannot handle an uncaught exception
+  const marker = path.join(tmpdir, 'rejection-listener-only.marker')
+  const syncFn = syncFnFor<(value: number) => number>(
+    'rejection-listener-only.cjs',
+    throwOnFirstCallWorker(
+      'cross-event boom',
+      `const fs = require('node:fs')
+process.on('unhandledRejection', () => {})
+setTimeout(() => fs.writeFileSync(${JSON.stringify(marker)}, 'alive'), 500)
+
+`,
+    ),
+  )
+
+  expect(failureOf(syncFn, 1)).toContain('cross-event boom')
+  // fatal, so the failure is cached and the worker is not reused
+  expect(failureOf(syncFn, 2)).toContain('cross-event boom')
+
+  await new Promise(resolve => setTimeout(resolve, 1000))
+  expect(fs.existsSync(marker)).toBe(false)
+})
+
+test('a worker that fails while no call is waiting stops itself', async () => {
+  const marker = path.join(tmpdir, 'idle-fatal.marker')
+  const syncFn = syncFnFor<() => unknown>(
+    'idle-fatal.cjs',
+    cjsWorker(`const fs = require('node:fs')
+setTimeout(() => fs.writeFileSync(${JSON.stringify(marker)}, 'alive'), 500)
+setTimeout(() => {
+  throw new Error('idle fatal boom')
+}, 20)
+${identityWorker}`),
+  )
+
+  // no caller is waiting to consume the report, so only the worker can stop itself
+  await new Promise(resolve => setTimeout(resolve, 1000))
+  expect(fs.existsSync(marker)).toBe(false)
+
+  // the report was queued anyway, so the next caller still receives it
+  expect(failureOf(syncFn)).toContain('idle fatal boom')
+})
+
+test('a reason that cannot be stringified still delivers a message', async () => {
+  const marker = path.join(tmpdir, 'unstringifiable.marker')
+  const syncFn = syncFnFor<() => unknown>(
+    'unstringifiable.cjs',
+    cjsWorker(`const fs = require('node:fs')
+const boom = {
+  // an enumerable function defeats cloning of both explicit payloads
+  fn: () => {},
+  get message() {
+    throw new Error('no message')
+  },
+  // and a throwing conversion defeats the synthetic one
+  toString() {
+    throw new Error('no string')
+  },
+}
+setTimeout(() => fs.writeFileSync(${JSON.stringify(marker)}, 'alive'), 500)
+
+runAsWorker(
+  () =>
+    new Promise(resolve => {
+      setTimeout(() => resolve('late'), 400)
+      setTimeout(() => {
+        throw boom
+      }, 20)
+    }),
+)`),
+  )
+
+  // the named synthetic cannot read the reason either, so the constant one is what crosses
+  expect(failureOf(syncFn)).toContain('Worker module failed to load')
+
+  await new Promise(resolve => setTimeout(resolve, 1000))
+  expect(fs.existsSync(marker)).toBe(false)
+})

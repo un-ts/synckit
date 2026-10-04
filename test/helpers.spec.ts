@@ -325,6 +325,18 @@ describe('helpers', () => {
 
     const listeners = () => process.listenerCount('uncaughtException')
 
+    beforeEach(() => {
+      // a fatal report stops the worker; jest-runner installs its own `process.exit` when the file
+      // runs, so spy on it here, after that replacement is in place
+      jest
+        .spyOn(process, 'exit')
+        .mockImplementation(((code?: number) => code) as never)
+    })
+
+    afterEach(() => {
+      jest.restoreAllMocks()
+    })
+
     test('reports the error with its properties and wakes the main thread', () => {
       const { messages, port } = createPort()
       const view = createSharedBufferView()
@@ -440,6 +452,26 @@ describe('helpers', () => {
           Object.defineProperty(Error, 'isError', descriptor)
         }
         jest.resetModules()
+      }
+    })
+
+    test('judges recovery per event, not across events', () => {
+      const handler = jest.fn()
+      process.on('unhandledRejection', handler)
+      try {
+        const { messages, port } = createPort()
+        const view = createSharedBufferView()
+        const guard = install(port, view)
+        markWorkerRegistered(view)
+
+        guard(new Error('uncaught boom'))
+
+        // a listener for the other event cannot handle an uncaught exception
+        const [message] = messages as [{ fatal: boolean }]
+        expect(message.fatal).toBe(true)
+        expect(jest.mocked(process.exit)).toHaveBeenCalledWith(1)
+      } finally {
+        process.off('unhandledRejection', handler)
       }
     })
 

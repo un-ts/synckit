@@ -68,6 +68,10 @@ const installWorkerLoadGuard = data => {
 
   armed.add(sharedBufferView)
 
+  // set while this worker is stopping itself after a fatal report, so the `exit` handler below
+  // does not turn that one failure into a second message and a second notification
+  let exiting = false
+
   /**
    * Reports a failure to the main thread and wakes whoever waits for it.
    *
@@ -76,8 +80,9 @@ const installWorkerLoadGuard = data => {
    */
   const report = (error, fatal) => {
     // the caller sees the reason exactly as it was thrown, even when it is falsy, with its own
-    // properties re-attached by `withProperties` on the other side; a reason that cannot cross
-    // falls back to the bare error, and only then to a synthetic message that names it. Building
+    // properties re-attached by `withProperties` on the other side. A reason that cannot cross
+    // falls back to the bare error, then to a synthetic message that names it, and finally to a
+    // constant message that never touches the reason, so a report is always delivered. Building
     // each payload inside the try catches a throwing property copy or getter like a failed post,
     // so the notification below is always reached
     const payloads = [
@@ -88,6 +93,11 @@ const installWorkerLoadGuard = data => {
           `Worker ${fatal ? 'module failed to load' : 'failed'}: ${
             isError(error) ? error.message : String(error)
           }`,
+        ),
+      }),
+      () => ({
+        error: new Error(
+          fatal ? 'Worker module failed to load' : 'Worker failed',
         ),
       }),
     ]
@@ -102,33 +112,61 @@ const installWorkerLoadGuard = data => {
     // this report is one notification: wake whoever waits for it
     Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
     Atomics.notify(sharedBufferView, NOTIFY_INDEX)
+
+    // a fatal failure leaves nothing to serve, and no caller may be waiting to consume the report
+    // (the main-side termination needs one), so stop the worker here as well. The exit is the one
+    // just reported, so the handler below stays quiet about it.
+    if (fatal && !exiting) {
+      exiting = true
+      // eslint-disable-next-line n/no-process-exit -- a fatal failure leaves nothing to serve
+      process.exit(1)
+    }
+  }
+
+  /**
+   * @param {unknown} error
+   * @param {'uncaughtException' | 'unhandledRejection'} event
+   */
+  const guard = (error, event) => {
+    // disarm: only the first failure is reported, anything after it behaves as it would
+    // without the guard
+    process.off('uncaughtException', onUncaughtException)
+    process.off('unhandledRejection', onUnhandledRejection)
+
+    // The failure is fatal unless the worker both reached `runAsWorker` and has something left to
+    // handle *this* event: only then would it have survived and kept serving without the guard,
+    // and only then can it be used for the next call. A listener for the other event cannot handle
+    // this one. A handler that exits or rethrows is caught by the exit report below, so a worker
+    // that dies is never waited on.
+    report(
+      error,
+      !registered.has(sharedBufferView) || process.listenerCount(event) === 0,
+    )
   }
 
   /** @param {unknown} error */
-  const guard = error => {
-    // disarm: only the first failure is reported, anything after it behaves as it would
-    // without the guard
-    process.off('uncaughtException', guard)
-    process.off('unhandledRejection', guard)
-
-    // The failure is fatal unless the worker both reached `runAsWorker` and has something left
-    // to handle these events: only then would it have survived and kept serving without the
-    // guard, and only then can it be used for the next call. A handler that exits or rethrows
-    // is caught by the exit report below, so a worker that dies is never waited on.
-    const handled =
-      process.listenerCount('uncaughtException') > 0 ||
-      process.listenerCount('unhandledRejection') > 0
-
-    report(error, !registered.has(sharedBufferView) || !handled)
+  function onUncaughtException(error) {
+    guard(error, 'uncaughtException')
   }
 
-  process.on('uncaughtException', guard)
-  process.on('unhandledRejection', guard)
+  /** @param {unknown} reason */
+  function onUnhandledRejection(reason) {
+    guard(reason, 'unhandledRejection')
+  }
+
+  process.on('uncaughtException', onUncaughtException)
+  process.on('unhandledRejection', onUnhandledRejection)
 
   // However this worker ends — a handler that calls `process.exit()`, the module exiting on its
   // own, or a clean shutdown — it cannot answer another call, and the guard may have been
-  // disarmed long before. This is the last chance to say so.
+  // disarmed long before. This is the last chance to say so, unless the exit is the fatal one just
+  // reported above.
   process.on('exit', code => {
+    if (exiting) {
+      return
+    }
+
+    exiting = true
     report(new Error(`Worker exited with code ${code}`), true)
   })
 }
