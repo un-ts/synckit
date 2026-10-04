@@ -85,7 +85,7 @@ const NODE_OPTIONS = (process.env.NODE_OPTIONS ?? '').split(/\s+/)
  */
 const unquote = value =>
   value.length > 1 &&
-  (value[0] === '"' || value[0] === "'") &&
+  (value.startsWith('"') || value.startsWith("'")) &&
   value.endsWith(value[0])
     ? value.slice(1, -1)
     : value
