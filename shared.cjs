@@ -77,17 +77,32 @@ const extractProperties = object => {
 const NODE_OPTIONS = (process.env.NODE_OPTIONS ?? '').split(/\s+/)
 
 /**
+ * Removes one pair of matching quotes around a value, which a caller can write by hand in
+ * `SYNCKIT_EXEC_ARGV` or pass in `execArgv`.
+ *
+ * @param {string} value The value to unquote.
+ * @returns {string} The value without its surrounding quotes.
+ */
+const unquote = value =>
+  value.length > 1 &&
+  (value[0] === '"' || value[0] === "'") &&
+  value.endsWith(value[0])
+    ? value.slice(1, -1)
+    : value
+
+/**
  * The value of a flag, or `undefined` when none of its names carries the accepted value.
  *
  * `flag` is one name, or a set of names when the same flag has aliases (`-r` and `--require`), so
- * one lookup covers them all. A name can carry its value joined with `=` or in the next argument.
- * When `accepted` is given, only a flag with that exact value counts, so a flag set more than once
- * is read until one of its values matches; every value is accepted by default. The sources are the
- * ones the runtime applies: the command line, where Node puts it in `execArgv` rather than `argv`
- * (a worker inherits it in its own `execArgv`), and `NODE_OPTIONS`. `argv` is not read: a flag
- * after the script path is an argument to the script, which Node does not apply. The first
- * accepted value wins. `''` is a flag that was set without a value, which is not the same as the
- * flag being absent.
+ * one lookup covers them all. A name can carry its value joined with `=` or in the next argument,
+ * and the value may be wrapped in matching quotes. When `accepted` is given, only a flag with that
+ * exact value counts, so a value that does not match is skipped. The sources are the ones the
+ * runtime applies: the command line, where Node puts flags in `execArgv` rather than `argv` (a
+ * worker inherits it in its own `execArgv`), and `NODE_OPTIONS`. `argv` is not read: a flag after
+ * the script path is an argument to the script, which Node does not apply. They are read as one
+ * list, `NODE_OPTIONS` first and `execArgv` last because the command line overrides it, from the
+ * end, because the last occurrence of a flag wins. `''` is a flag that was set without a value,
+ * which is not the same as the flag being absent.
  *
  * @param {Set<string> | string} flag The flag name, or the names it can have.
  * @param {string} [accepted] The value the flag must carry; any value counts by default.
@@ -95,25 +110,24 @@ const NODE_OPTIONS = (process.env.NODE_OPTIONS ?? '').split(/\s+/)
  */
 const getFlag = (flag, accepted) => {
   const flags = typeof flag === 'string' ? new Set([flag]) : flag
-  // read at call time: `execArgv` is the process's, and `NODE_OPTIONS` was split when this file
-  // was loaded
-  const args = [...process.execArgv, ...NODE_OPTIONS]
-  for (const [index, arg] of args.entries()) {
+  // backwards, so the first match is the one the runtime would use, and the scan can stop there
+  const args = [...NODE_OPTIONS, ...process.execArgv]
+  for (let index = args.length - 1; index >= 0; index--) {
+    const arg = args[index]
     const separator = arg.indexOf('=')
     const name = separator === -1 ? arg : arg.slice(0, separator)
     if (!flags.has(name)) {
       continue
     }
-    if (separator !== -1) {
-      const value = arg.slice(separator + 1)
-      if (accepted == null || value === accepted) {
-        return value
-      }
-      continue
+    /** @type {string} */
+    let value
+    if (separator === -1) {
+      const next = args[index + 1]
+      // a following flag is not this flag's value
+      value = next == null || next.startsWith('-') ? '' : unquote(next)
+    } else {
+      value = unquote(arg.slice(separator + 1))
     }
-    const next = args[index + 1]
-    // a following flag is not this flag's value
-    const value = next == null || next.startsWith('-') ? '' : next
     if (accepted == null || value === accepted) {
       return value
     }

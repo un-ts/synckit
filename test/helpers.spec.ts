@@ -117,9 +117,28 @@ describe('helpers', () => {
       withExecArgv(['--other', '--key=value'], () => {
         expect(getFlag('--key')).toBe('value')
       })
-      // the first value wins
+      // the last occurrence wins, as it does for Node itself
       withExecArgv(['--key=first', '--key=second'], () => {
-        expect(getFlag('--key')).toBe('first')
+        expect(getFlag('--key')).toBe('second')
+      })
+      withExecArgv(['--key', 'first', '--key=second'], () => {
+        expect(getFlag('--key')).toBe('second')
+      })
+    })
+
+    test('getFlag unquotes a value', () => {
+      withExecArgv(['--key', "'value'"], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      withExecArgv(['--key', '"value"'], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      withExecArgv(['--key="value"'], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      // only a matching pair is removed
+      withExecArgv(['--key', "'value"], () => {
+        expect(getFlag('--key')).toBe("'value")
       })
     })
 
@@ -153,18 +172,19 @@ describe('helpers', () => {
       withExecArgv(['--other', 'value'], () => {
         expect(getFlag(require)).toBeUndefined()
       })
-      // the first name found wins, whatever its form
+      // the last name found wins, whatever its form
       withExecArgv(['--require=first', '-r', 'second'], () => {
-        expect(getFlag(require)).toBe('first')
+        expect(getFlag(require)).toBe('second')
       })
     })
 
     test('getFlag skips the values that are not the accepted one', () => {
       const require = new Set(['-r', '--require'])
       withExecArgv(['--require', 'first', '-r', 'second'], () => {
-        expect(getFlag(require)).toBe('first')
+        expect(getFlag(require)).toBe('second')
         // a value that is not accepted does not end the scan
         expect(getFlag(require, 'second')).toBe('second')
+        expect(getFlag(require, 'first')).toBe('first')
         expect(getFlag(require, 'third')).toBeUndefined()
       })
     })
@@ -749,6 +769,45 @@ process.stdout.write(JSON.stringify({ fatal: messages[0].fatal, exited }))
         ).toEqual({ fatal: false, exited: false })
         expect(
           classify({ nodeOptions: '--unhandled-rejections=throw' }),
+        ).toEqual({ fatal: true, exited: true })
+        // the command line overrides `NODE_OPTIONS`, and the last flag wins, as Node does
+        expect(
+          classify({
+            args: ['--unhandled-rejections=throw'],
+            nodeOptions: '--unhandled-rejections=warn',
+          }),
+        ).toEqual({ fatal: true, exited: true })
+        expect(
+          classify({
+            args: ['--unhandled-rejections=warn'],
+            nodeOptions: '--unhandled-rejections=throw',
+          }),
+        ).toEqual({ fatal: false, exited: false })
+        expect(
+          classify({
+            args: [
+              '--unhandled-rejections=warn',
+              '--unhandled-rejections=throw',
+            ],
+          }),
+        ).toEqual({ fatal: true, exited: true })
+        expect(
+          classify({
+            args: [
+              '--unhandled-rejections=throw',
+              '--unhandled-rejections=warn',
+            ],
+          }),
+        ).toEqual({ fatal: false, exited: false })
+        // the last one in `execArgv` beats the earlier one there and the one in `NODE_OPTIONS`
+        expect(
+          classify({
+            args: [
+              '--unhandled-rejections=warn',
+              '--unhandled-rejections=throw',
+            ],
+            nodeOptions: '--unhandled-rejections=none',
+          }),
         ).toEqual({ fatal: true, exited: true })
       } finally {
         fs.rmSync(probe, { force: true })
