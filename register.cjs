@@ -64,29 +64,37 @@ const installWorkerLoadGuard = data => {
    * @param {boolean} fatal
    */
   const report = (error, fatal) => {
-    // the last resort, when there is no usable error to send: only a worker that never loaded
-    // can be described as a failure to load
-    const fallback = new Error(
-      fatal ? 'Worker module failed to load' : 'Worker failed',
-    )
+    // the message for a reason that cannot cross the port: only a worker that never loaded can
+    // be described as a failure to load
+    const message = fatal ? 'Worker module failed to load' : 'Worker failed'
 
     try {
+      // the caller sees the reason exactly as it was thrown, even when it is falsy
       workerPort.postMessage({
         workerFailure: true,
         fatal,
-        error: error ?? fallback,
+        error,
         properties: extractProperties(error),
       })
     } catch {
-      // the error is not cloneable; report something that always is
+      // the error or its properties are not cloneable: keep the original as the cause, and drop
+      // it only when it cannot be cloned at all
       try {
         workerPort.postMessage({
           workerFailure: true,
           fatal,
-          error: fallback,
+          error: new Error(message, { cause: error }),
         })
       } catch {
-        // the port itself is unusable: the notification below is all that is left
+        try {
+          workerPort.postMessage({
+            workerFailure: true,
+            fatal,
+            error: new Error(message),
+          })
+        } catch {
+          // the port itself is unusable: the notification below is all that is left
+        }
       }
     } finally {
       // whatever happens next, a caller must not be left waiting

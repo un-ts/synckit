@@ -119,13 +119,24 @@ test('worker with a syntax error throws instead of hanging', () => {
   expect(expectThrows(() => syncFn()).name).toBe('SyntaxError')
 })
 
-test('a falsy thrown load failure is still surfaced', () => {
+test('a falsy thrown load failure is surfaced as it is', () => {
   const syncFn = syncFnFor<() => unknown>(
     'throw-undefined.cjs',
     'throw undefined\n',
   )
 
-  expect(failureOf(syncFn)).toBe('Worker module failed to load')
+  let threw = false
+  let caught: unknown
+  try {
+    syncFn()
+  } catch (error) {
+    threw = true
+    caught = error
+  }
+
+  // a present-but-undefined reason is a failure, not a result
+  expect(threw).toBe(true)
+  expect(caught).toBeUndefined()
 })
 
 test('worker paths containing a quote are not broken by source generation', () => {

@@ -15,3 +15,5 @@ The timeout is now a single deadline for the whole call, and each wait receives 
 The unused `INT32_BYTES` export is gone.
 
 `DataMessage<T>` is now a discriminated union whose failure arm requires `error`, so a reason that is present but `undefined` is still a failure rather than a result.
+
+A reported failure carries the worker's reason exactly as it was thrown, even a falsy one; a reason that cannot cross the thread boundary becomes the synthetic error's `cause`, and only one that cannot be cloned at all is replaced outright.

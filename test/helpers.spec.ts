@@ -344,14 +344,14 @@ describe('helpers', () => {
       expect(listeners()).toBe(before)
     })
 
-    test('reports a falsy failure', () => {
+    test('reports a falsy failure as it is', () => {
       const { messages, port } = createPort()
       const view = createSharedBufferView()
 
       install(port, view)(null)
 
-      const [message] = messages as [{ error: Error }]
-      expect(message.error.message).toBe('Worker module failed to load')
+      const [message] = messages as [{ error: unknown }]
+      expect(message.error).toBeNull()
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
@@ -369,7 +369,9 @@ describe('helpers', () => {
       install(port, view)(error)
 
       const [message] = messages as [{ error: Error }]
+      // the properties could not be read, so the error is carried as the synthetic error's cause
       expect(message.error.message).toBe('Worker module failed to load')
+      expect(message.error).toHaveProperty('cause.message', 'boom')
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
@@ -381,7 +383,9 @@ describe('helpers', () => {
 
       expect(messages).toHaveLength(1)
       const [message] = messages as [{ error: Error }]
+      // the first post failed, so the original error is carried as the cause
       expect(message.error.message).toBe('Worker module failed to load')
+      expect(message.error).toHaveProperty('cause.message', 'boom')
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
