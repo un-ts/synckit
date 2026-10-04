@@ -654,6 +654,12 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       // its failure is cached; one that only reported a failure may well serve again
       if (msg.fatal) {
         workerFailure = msg
+        // Installing the guard disables the default print-and-exit for the dispatch it handled, so
+        // a worker that is left without a handler keeps its event loop — timers and in-flight side
+        // effects included — with nothing left to serve. Stop it; its rejection is irrelevant.
+        worker.terminate().catch(() => {
+          // the worker has already stopped: there is nothing left to do
+        })
       }
 
       throw withProperties(msg.error, msg.properties)

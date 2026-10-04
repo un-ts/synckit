@@ -360,3 +360,24 @@ test('a worker whose own handler exits is not waited on', () => {
   // and then the exit is, so the next call fails instead of waiting on a stopped worker
   expect(failureOf(syncFn, 2)).toContain('Worker exited with code 1')
 })
+
+test('a fatal failure stops the worker instead of letting it keep running', async () => {
+  // the marker timer fires only if the worker's event loop is still alive, so the file is proof
+  // that the worker was stopped rather than merely written off by the caller
+  const marker = path.join(tmpdir, 'fatally-alive.marker')
+  const syncFn = syncFnFor<(value: number) => number>(
+    'fatal-keeps-running.cjs',
+    throwOnFirstCallWorker(
+      'fatal boom',
+      `const fs = require('node:fs')
+setTimeout(() => fs.writeFileSync(${JSON.stringify(marker)}, 'alive'), 500)
+
+`,
+    ),
+  )
+
+  expect(failureOf(syncFn, 1)).toContain('fatal boom')
+
+  await new Promise(resolve => setTimeout(resolve, 1000))
+  expect(fs.existsSync(marker)).toBe(false)
+})
