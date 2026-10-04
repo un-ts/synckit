@@ -43,8 +43,10 @@ const registered = new WeakSet()
  */
 
 /**
- * `Error.isError` recognises an error from another realm, where `instanceof Error` does not; it is
- * not in every supported runtime, so feature-detect it
+ * Whether a value is an `Error`, including one from another realm.
+ *
+ * `Error.isError` recognises errors across realms, where `instanceof Error` fails; it is not
+ * available in every supported runtime, so fall back to `instanceof`.
  *
  * @param {unknown} value
  * @returns {value is Error} Whether the value is an error.
@@ -76,21 +78,24 @@ const installWorkerLoadGuard = data => {
     // the caller sees the reason exactly as it was thrown, even when it is falsy, with its own
     // properties re-attached by `withProperties` on the other side; a reason that cannot cross
     // falls back to the bare error, and only then to a synthetic message that names it
+    //
+    // each payload is built inside the try, so a throwing property copy or getter is caught and
+    // the notification below is still reached
     const payloads = [
-      { error, properties: extractProperties(error) },
-      { error },
-      {
+      () => ({ error, properties: extractProperties(error) }),
+      () => ({ error }),
+      () => ({
         error: new Error(
           `Worker ${fatal ? 'module failed to load' : 'failed'}: ${
             isError(error) ? error.message : String(error)
           }`,
         ),
-      },
+      }),
     ]
 
     for (const payload of payloads) {
       try {
-        workerPort.postMessage({ workerFailure: true, fatal, ...payload })
+        workerPort.postMessage({ workerFailure: true, fatal, ...payload() })
         break
       } catch {}
     }

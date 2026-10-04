@@ -355,7 +355,7 @@ describe('helpers', () => {
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
-    test('propagates a hostile property getter without reporting', () => {
+    test('wakes the main thread even when reading the properties throws', () => {
       const { messages, port } = createPort()
       const view = createSharedBufferView()
       const error = new Error('boom')
@@ -366,10 +366,13 @@ describe('helpers', () => {
         },
       })
 
-      // a hostile getter is out of scope: it throws before anything is posted or notified
-      expect(() => install(port, view)(error)).toThrow('nope')
-      expect(messages).toHaveLength(0)
-      expect(Atomics.load(view, 0)).toBe(0)
+      install(port, view)(error)
+
+      // the property copy threw, so the bare error was posted instead, and the caller is woken
+      expect(messages).toHaveLength(1)
+      const [message] = messages as [{ error: Error }]
+      expect(message.error).toBe(error)
+      expect(Atomics.load(view, 0)).toBe(1)
     })
 
     test('wakes the main thread when the error cannot be serialized', () => {
