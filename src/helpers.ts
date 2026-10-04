@@ -346,6 +346,12 @@ export const md5Hash = (text: string) =>
   // eslint-disable-next-line sonarjs/hashing
   createHash('md5').update(text).digest('hex')
 
+/** A single-quoted source string: backslashes and quotes escaped for the generated code. */
+const quoteForSource = (value: string) =>
+  value
+    // eslint-disable-next-line unicorn-x/prefer-string-replace-all -- compatibility
+    .replace(/[\\']/g, char => `\\${char}`)
+
 export const encodeImportModule = (
   moduleNameOrGlobalShim: GlobalShim | string,
   type: 'import' | 'require' = 'import',
@@ -367,18 +373,16 @@ export const encodeImportModule = (
                   : globalName) +
               ' from'
             : ''
-        } '${
+        } '${quoteForSource(
           path.isAbsolute(moduleName)
             ? String(pathToFileURL(moduleName))
-            : moduleName
-        }'`
+            : moduleName,
+        )}'`
       : `${
           globalName
             ? 'const ' + (named?.trim() ? `{${named}}` : globalName) + '='
             : ''
-        }require('${moduleName
-          // eslint-disable-next-line unicorn-x/prefer-string-replace-all -- compatibility
-          .replace(/\\/g, '\\\\')}')`
+        }require('${quoteForSource(moduleName)}')`
 
   if (!globalName) {
     return importStatement
@@ -575,7 +579,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
           `${generateGlobals(
             finalWorkerPath,
             finalGlobalShims,
-          )};import '${String(workerPathUrl)}'`,
+          )};import '${quoteForSource(String(workerPathUrl))}'`,
         )
       : useEval
         ? `${generateGlobals(

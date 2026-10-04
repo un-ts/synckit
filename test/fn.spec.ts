@@ -172,6 +172,24 @@ test('handling of outdated message from worker', async () => {
   expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
 })
 
+test('waits again when a notification arrives before its message', async () => {
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+
+  jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
+
+  // the soak hits this about once in a hundred thousand calls: the wait is woken but the message it
+  // announces is not readable yet, so the call has to wait again instead of failing
+  receiveMessageOnPortMock
+    // eslint-disable-next-line unicorn-x/no-useless-undefined -- returning nothing is the case here
+    .mockReturnValueOnce(undefined)
+    .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+  expect(syncFn(1)).toBe(1)
+  expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
+})
+
 test('never consumes a notification the counter does not show', async () => {
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
 

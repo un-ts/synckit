@@ -27,7 +27,9 @@ export const workerErrorPrimitivePath = path.resolve(
 export const testIf = (condition: boolean) => (condition ? it : it.skip)
 
 type ReceiveMessageOnPortMock = jest.Mock<
-  <T>(port: WorkerThreads.MessagePort) => { message: WorkerToMainMessage<T> }
+  <T>(
+    port: WorkerThreads.MessagePort,
+  ) => { message: WorkerToMainMessage<T> } | undefined
 >
 export const setupReceiveMessageOnPortMock =
   async (): Promise<ReceiveMessageOnPortMock> => {

@@ -140,15 +140,22 @@ test('a falsy thrown load failure is surfaced as it is', () => {
 })
 
 test('worker paths containing a quote are not broken by source generation', () => {
+  // a global shim forces the generated bootstrap, which embeds the worker path in source: the eval
+  // entry for CommonJS, the data URL for ESM. Without it the path is passed as a URL and nothing
+  // is generated, so the quote never reaches a parser
+  const globalShims = [{ moduleName: 'node:perf_hooks' }]
+
   const fromCjs = syncFnFor<(value: number) => number>(
     "worker-quote'.cjs",
     cjsWorker(identityWorker),
+    { globalShims },
   )
   expect(fromCjs(1)).toBe(1)
 
   const fromEsm = syncFnFor<(value: number) => number>(
     "worker-quote'.mjs",
     esmWorker(identityWorker),
+    { globalShims },
   )
   expect(fromEsm(2)).toBe(2)
 })
@@ -454,8 +461,9 @@ runAsWorker(
 )`),
   )
 
-  // the named synthetic cannot read the reason either, so the constant one is what crosses
-  expect(failureOf(syncFn)).toContain('Worker module failed to load')
+  // the named synthetic cannot read the reason either, so the constant one is what crosses. This
+  // worker did reach `runAsWorker`, so it failed while serving, not while loading
+  expect(failureOf(syncFn)).toBe('Worker failed')
 
   await new Promise(resolve => setTimeout(resolve, 1000))
   expect(fs.existsSync(marker)).toBe(false)

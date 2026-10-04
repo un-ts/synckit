@@ -28,6 +28,7 @@
     "index.d.cts",
     "lib",
     "register.cjs",
+    "register.d.cts",
     "shared.cjs",
     "shared.d.cts",
     "!**/*.tsbuildinfo"

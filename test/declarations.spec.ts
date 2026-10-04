@@ -4,6 +4,8 @@ import path from 'node:path'
 
 import { _dirname } from './helpers.js'
 
+import { extractProperties } from 'synckit'
+
 const require = createRequire(import.meta.url)
 
 /**
@@ -37,4 +39,16 @@ test('register.cjs declarations match its runtime exports', () => {
 
 test('shared.cjs declarations match its runtime exports', () => {
   expect(declaredExports('shared')).toEqual(runtimeExports('shared'))
+})
+
+test('extractProperties is declared as the property bag it returns', () => {
+  const copied = extractProperties(new Error('message'))
+  expect(copied).toEqual({})
+
+  // a generic `extractProperties<T extends object>(object: T): T` overload would type this as the
+  // error handed in, whose `message` is a string — while the runtime copy has no `message` at all.
+  // If that overload came back, this assignment would be legal and the directive would be unused
+  // @ts-expect-error -- a property bag is not the Error it was copied from
+  const asError: Error = copied
+  expect(asError).toEqual({})
 })

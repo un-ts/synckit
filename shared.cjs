@@ -72,10 +72,10 @@ const extractProperties = object => {
 }
 
 /**
- * Splits `NODE_OPTIONS` the way the runtime reads it: on whitespace, except inside double quotes,
- * and without the quotes themselves, so a quoted value keeps the spaces it contains. A backslash
- * inside the quotes escapes the next character, which is how the runtime reads it too — the value
- * it applies is the one this returns.
+ * Splits `NODE_OPTIONS` the way the runtime reads it: on the space character — not on every kind of
+ * whitespace — except inside double quotes, and without the quotes themselves, so a quoted value
+ * keeps the spaces it contains. A backslash inside the quotes escapes the next character, which is
+ * how the runtime reads it too — the value it applies is the one this returns.
  *
  * @param {string} value The `NODE_OPTIONS` value.
  * @returns {string[]} The arguments it holds.
@@ -94,7 +94,7 @@ const splitNodeOptions = value => {
       escaped = true
     } else if (char === '"') {
       quoted = !quoted
-    } else if (!quoted && /\s/.test(char)) {
+    } else if (!quoted && char === ' ') {
       if (current) {
         args.push(current)
         current = ''

@@ -7,7 +7,7 @@
  */
 export declare const NOTIFY_INDEX: number
 
-/** The whitespace-split `NODE_OPTIONS`, which workers inherit.
+/** The space-split `NODE_OPTIONS`, which workers inherit.
  *
  * @internal
  */
@@ -57,6 +57,6 @@ export declare const createSharedBufferView: () => Int32Array
 
 // MessagePort doesn't copy the properties of Error objects. We still want
 // error objects to have extra properties such as "warnings" so implement the
-// property copying manually.
-export function extractProperties<T extends object>(object: T): T
-export function extractProperties(object?: unknown): object | undefined
+// property copying manually. The copy is a plain property bag, never the object
+// it was made from, so the declaration does not pretend the input comes back.
+export declare const extractProperties: (object?: unknown) => object | undefined

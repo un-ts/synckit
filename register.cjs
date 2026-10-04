@@ -119,19 +119,25 @@ const installWorkerLoadGuard = data => {
     // constant message that never touches the reason, so a report is always delivered. Building
     // each payload inside the try catches a throwing property copy or getter like a failed post,
     // so the notification below is always reached
+    //
+    // a worker that never reached `runAsWorker` never loaded its module, and naming that is more
+    // useful than the reason it failed with; one that did register failed while serving, which must
+    // not be described as a load failure — `fatal` is true for both
+    const loadFailure = !registered.has(sharedBufferView)
+
     const payloads = [
       () => ({ error, properties: extractProperties(error) }),
       () => ({ error }),
       () => ({
         error: new Error(
-          `Worker ${fatal ? 'module failed to load' : 'failed'}: ${
+          `Worker ${loadFailure ? 'module failed to load' : 'failed'}: ${
             isError(error) ? error.message : String(error)
           }`,
         ),
       }),
       () => ({
         error: new Error(
-          fatal ? 'Worker module failed to load' : 'Worker failed',
+          loadFailure ? 'Worker module failed to load' : 'Worker failed',
         ),
       }),
     ]

@@ -364,7 +364,8 @@ describe('helpers', () => {
       const original = { a: 1, nested }
       const copy = extractProperties(original)
 
-      expect(copy.nested).toBe(original.nested) // Same nested object reference
+      // the declaration says property bag, so reaching into the copy takes a cast
+      expect((copy as { nested: unknown }).nested).toBe(original.nested) // Same nested object reference
       expect(copy).toEqual(original)
     })
 
@@ -551,11 +552,13 @@ describe('helpers', () => {
 
     const listeners = () => process.listenerCount('uncaughtException')
 
-    // the guard registers listeners on the process; snapshot them so a test that leaves the guard
-    // armed (a non-fatal report re-arms it) cannot leak into the next test
+    // the guard registers listeners on the process — `exit` included — so snapshot them all so a
+    // test that leaves the guard armed (a non-fatal report re-arms it) cannot leak into the next
+    // test, where enough leaked `exit` listeners make Node warn
     let beforeListeners: {
       uncaughtException: unknown[]
       unhandledRejection: unknown[]
+      exit: unknown[]
     }
 
     /** Drop any listener the guard added since the snapshot, such as a re-armed one. */
@@ -570,12 +573,18 @@ describe('helpers', () => {
           process.off('unhandledRejection', listener)
         }
       }
+      for (const listener of process.listeners('exit')) {
+        if (!beforeListeners.exit.includes(listener)) {
+          process.off('exit', listener)
+        }
+      }
     }
 
     beforeEach(() => {
       beforeListeners = {
         uncaughtException: process.listeners('uncaughtException'),
         unhandledRejection: process.listeners('unhandledRejection'),
+        exit: process.listeners('exit'),
       }
       // a fatal report stops the worker; jest-runner installs its own `process.exit` when the file
       // runs, so spy on it here, after that replacement is in place
