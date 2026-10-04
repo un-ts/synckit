@@ -52,8 +52,9 @@ import type {
 
 // The shared buffer and its notification byte live in `shared.cjs`, and the load guard that uses
 // them at the worker's end lives in `register.cjs` — both plain CommonJS files at the package
-// root, so that the very same files reach the worker with `-r` in development, where a test
-// runner maps the package to its source, and in the published package alike.
+// root, so that `register.cjs` reaches the worker unchanged with `-r` in development, where a
+// test runner maps the package to its source, and in the published package alike; `shared.cjs`
+// reaches it because `register.cjs` requires it.
 
 export const isFile = (path: string) => {
   try {
@@ -67,7 +68,7 @@ export const isFile = (path: string) => {
 export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
 
-// only `extractProperties` was part of the public surface before it moved into the preload;
+// only `extractProperties` was part of the public surface before it moved into `shared.cjs`;
 // the other internals stay internal
 export { extractProperties } from '../shared.cjs'
 
@@ -696,7 +697,9 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       process[type].write(chunk, encoding)
     }
 
-    if (error) {
+    // `error` is never `undefined` for a failure — the worker normalizes a nullish reason — and
+    // every other falsy reason (`0`, `''`) must still be thrown rather than read as a result
+    if (error !== undefined) {
       throw withProperties(error, properties)
     }
 

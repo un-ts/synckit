@@ -3,6 +3,8 @@ import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { _dirname } from './helpers.js'
+
 import { createSyncFn } from 'synckit'
 import type { AnyFn, SynckitOptions } from 'synckit'
 
@@ -11,8 +13,10 @@ import type { AnyFn, SynckitOptions } from 'synckit'
 // would block the test thread in `Atomics.wait()` forever instead of failing.
 const TIMEOUT = 5000
 
-const workerLibPath = path.resolve('lib/index.cjs')
-const workerLibUrl = pathToFileURL(path.resolve('lib/index.js')).href
+const workerLibPath = path.resolve(_dirname, '../lib/index.cjs')
+const workerLibUrl = pathToFileURL(
+  path.resolve(_dirname, '../lib/index.js'),
+).href
 
 let tmpdir: string
 
@@ -37,6 +41,25 @@ const cjsWorker = (body: string) =>
   `const { runAsWorker } = require(${JSON.stringify(workerLibPath)})\n${body}\n`
 
 const identityWorker = `runAsWorker(value => value)`
+
+/**
+ * A worker body whose first call throws at 20ms but which still answers at 100ms, so a handler
+ * left in place can decide whether it survives. `extra` is prepended, for such a handler.
+ */
+const throwOnFirstCallWorker = (message: string, extra = '') =>
+  cjsWorker(
+    `${extra}runAsWorker(
+  value =>
+    new Promise(resolve => {
+      if (value === 1) {
+        setTimeout(() => {
+          throw new Error(${JSON.stringify(message)})
+        }, 20)
+      }
+      setTimeout(() => resolve(value), 100)
+    }),
+)`,
+  )
 
 const expectThrows = (fn: () => unknown) => {
   let caught: unknown
@@ -273,20 +296,9 @@ setTimeout(() => {
 test('a worker that recovers through its own handler keeps serving', () => {
   const syncFn = syncFnFor<(value: number) => number>(
     'recovers.cjs',
-    cjsWorker(
-      `process.on('uncaughtException', () => {})
-
-runAsWorker(
-  value =>
-    new Promise(resolve => {
-      if (value === 1) {
-        setTimeout(() => {
-          throw new Error('recovered by the worker')
-        }, 20)
-      }
-      setTimeout(() => resolve(value), 100)
-    }),
-)`,
+    throwOnFirstCallWorker(
+      'recovered by the worker',
+      `process.on('uncaughtException', () => {})\n\n`,
     ),
   )
 
@@ -299,19 +311,7 @@ runAsWorker(
 test('a registered worker with nothing left to handle it is written off', () => {
   const syncFn = syncFnFor<(value: number) => number>(
     'unhandled-runtime-failure.cjs',
-    cjsWorker(
-      `runAsWorker(
-  value =>
-    new Promise(resolve => {
-      if (value === 1) {
-        setTimeout(() => {
-          throw new Error('unhandled runtime boom')
-        }, 20)
-      }
-      setTimeout(() => resolve(value), 100)
-    }),
-)`,
-    ),
+    throwOnFirstCallWorker('unhandled runtime boom'),
   )
 
   expect(failureOf(syncFn, 1)).toContain('unhandled runtime boom')
@@ -338,20 +338,9 @@ test('a worker that exits while a call is in flight is reported', () => {
 test('a worker whose own handler exits is not waited on', () => {
   const syncFn = syncFnFor<(value: number) => number>(
     'exits-in-its-own-handler.cjs',
-    cjsWorker(
-      `process.on('uncaughtException', () => process.exit(1))
-
-runAsWorker(
-  value =>
-    new Promise(resolve => {
-      if (value === 1) {
-        setTimeout(() => {
-          throw new Error('handled by exiting')
-        }, 20)
-      }
-      setTimeout(() => resolve(value), 100)
-    }),
-)`,
+    throwOnFirstCallWorker(
+      'handled by exiting',
+      `process.on('uncaughtException', () => process.exit(1))\n\n`,
     ),
   )
 

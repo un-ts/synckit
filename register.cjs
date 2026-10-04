@@ -8,10 +8,11 @@
  * If that module then fails to load — or raises any uncaught failure before the main thread
  * hears from it, including one that only surfaces after a top-level `await` — nothing would
  * ever tell the main thread: it is blocked in `Atomics.wait()` and cannot process the worker's
- * `error` event. This file reports the first such failure through `workerData` instead: the
- * transferred port carries the error and bumps the notification byte in this worker's slice of
- * the shared buffer (`shared.cjs`) to wake the wait. It disarms itself afterwards, so later
- * failures behave as they would without it.
+ * `error` event. This file reports the first such failure through the transferred port instead:
+ * it carries the error and bumps the notification byte in this worker's slice of the shared
+ * buffer (`shared.cjs`) to wake the wait. The failure guard disarms itself afterwards, so later
+ * failures behave as they would without it; the exit report below stays armed, because a worker
+ * that ends can never serve another call.
  *
  * It is a plain CommonJS file at the package root, with no build step and no loader of its
  * own, so a test runner that maps the package to its source preloads exactly what the
@@ -77,11 +78,15 @@ const installWorkerLoadGuard = data => {
       })
     } catch {
       // the error is not cloneable; report something that always is
-      workerPort.postMessage({
-        workerFailure: true,
-        fatal,
-        error: fallback(),
-      })
+      try {
+        workerPort.postMessage({
+          workerFailure: true,
+          fatal,
+          error: fallback(),
+        })
+      } catch {
+        // the port itself is unusable: the notification below is all that is left
+      }
     } finally {
       // whatever happens next, a caller must not be left waiting
       Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
@@ -125,6 +130,12 @@ const installWorkerLoadGuard = data => {
  * @param {Int32Array} sharedBufferView
  */
 const markWorkerRegistered = sharedBufferView => {
+  // mirror `installWorkerLoadGuard`: without a view there is no slice to mark, and a `WeakSet`
+  // rejects a non-object key
+  if (!sharedBufferView) {
+    return
+  }
+
   registered.add(sharedBufferView)
 }
 

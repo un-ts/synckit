@@ -90,16 +90,34 @@ test('createSyncFn', () => {
   expect(() => errSyncFn()).toThrowErrorMatchingInlineSnapshot(`"Worker Error"`)
 
   // a reason that is not an object is thrown as it came, not boxed by the property merge
-  const primitiveErrSyncFn = createSyncFn<() => Promise<void>>(
+  const primitiveErrSyncFn = createSyncFn<(reason: unknown) => Promise<void>>(
     workerErrorPrimitivePath,
   )
   let caught: unknown
   try {
-    primitiveErrSyncFn()
+    primitiveErrSyncFn('Worker primitive rejection')
   } catch (error) {
     caught = error
   }
   expect(caught).toBe('Worker primitive rejection')
+
+  // a falsy reason used to be indistinguishable from a successful `undefined` result: every one
+  // must still throw — `0` and `''` as they came, `undefined` normalized to an `Error`
+  const notThrown = Symbol('not thrown')
+  const thrownBy = (reason: unknown) => {
+    try {
+      primitiveErrSyncFn(reason)
+    } catch (error) {
+      return error
+    }
+    return notThrown
+  }
+  const [undefinedThrown, zeroThrown, emptyThrown] = [undefined, 0, ''].map(
+    thrownBy,
+  )
+  expect(undefinedThrown).toHaveProperty('message', expect.any(String))
+  expect(zeroThrown).toBe(0)
+  expect(emptyThrown).toBe('')
 
   const syncFn4 = createSyncFn<AsyncWorkerFn>(workerCjsPath)
 
