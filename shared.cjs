@@ -79,20 +79,18 @@ const NODE_OPTIONS = (process.env.NODE_OPTIONS ?? '').split(/\s+/)
 /**
  * The value of a flag, or `undefined` when the flag is not set at all.
  *
- * A flag can carry its value joined with `=` or in the next argument, and it can come from the
- * command line, where Node puts it in `execArgv` rather than `argv` (a worker inherits it in its
- * own `execArgv`), from `NODE_OPTIONS`, or from `argv` when a runner forwards one. The first
- * source that sets the flag wins. `''` is a flag that was set without a value, which is not the
- * same as the flag being absent.
+ * A flag can carry its value joined with `=` or in the next argument. The sources are the ones
+ * the runtime applies: the command line, where Node puts it in `execArgv` rather than `argv` (a
+ * worker inherits it in its own `execArgv`), and `NODE_OPTIONS`. `argv` is not read: a flag after
+ * the script path is an argument to the script, which Node does not apply. The first source that
+ * sets the flag wins. `''` is a flag that was set without a value, which is not the same as the
+ * flag being absent.
  *
  * @param {string} flag The flag to look for.
- * @param {string[]} [args] The arguments to read, defaulting to this process's.
+ * @param {string[]} [args] The arguments to read, defaulting to this process's runtime flags.
  * @returns {string | undefined} The value, `''` for a flag without one, or `undefined`.
  */
-const getFlag = (
-  flag,
-  args = [...process.execArgv, ...NODE_OPTIONS, ...process.argv],
-) => {
+const getFlag = (flag, args = [...process.execArgv, ...NODE_OPTIONS]) => {
   const prefix = `${flag}=`
   for (const [index, arg] of args.entries()) {
     if (arg.startsWith(prefix)) {

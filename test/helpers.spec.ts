@@ -112,6 +112,16 @@ describe('helpers', () => {
       expect(getFlag('--key', ['--other'])).toBeUndefined()
       expect(getFlag('--key', [])).toBeUndefined()
     })
+
+    test('getFlag does not read a script argument by default', () => {
+      // a flag after the script path reaches `argv`, which Node does not apply
+      process.argv.push('--key=value')
+      try {
+        expect(getFlag('--key')).toBeUndefined()
+      } finally {
+        process.argv.pop()
+      }
+    })
   })
 
   describe('dataUrl', () => {

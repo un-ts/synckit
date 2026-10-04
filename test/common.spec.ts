@@ -27,10 +27,12 @@ describe('common', () => {
       expect(hasFlag('--no-deprecation')).toBe(false)
     })
 
-    it('should return true if the flag is present in process.argv', async () => {
+    it('should ignore a flag that is only a script argument', async () => {
+      // Node applies its own flags from `execArgv` and `NODE_OPTIONS`; one written after the
+      // script path is an argument to the script, not a runtime flag
       process.argv.push('--experimental-modules')
       ;({ hasFlag } = await import('synckit'))
-      expect(hasFlag('--experimental-modules')).toBe(true)
+      expect(hasFlag('--experimental-modules')).toBe(false)
     })
 
     it('should return true if the flag is passed to the runtime', async () => {
@@ -49,24 +51,14 @@ describe('common', () => {
       expect(hasFlag('--experimental-modules')).toBe(true)
     })
 
-    it('should return false if the flag is not present in process.argv', async () => {
-      process.argv.push('--experimental-modules')
-      ;({ hasFlag } = await import('synckit'))
-      expect(hasFlag('--no-deprecation')).toBe(false)
-    })
-
-    it('should return false if NODE_OPTIONS and process.argv are not set', async () => {
+    it('should return false if the flag is not set', async () => {
       ;({ hasFlag } = await import('synckit'))
       expect(hasFlag('--experimental-modules')).toBe(false)
     })
 
-    it('should return false if NODE_OPTIONS and process.argv are empty', async () => {
-      ;({ hasFlag } = await import('synckit'))
-      expect(hasFlag('--experimental-modules')).toBe(false)
-    })
-
-    it('should return false if NODE_OPTIONS and process.argv are empty strings', async () => {
-      process.argv = ['']
+    it('should return false if NODE_OPTIONS and the runtime flags are empty', async () => {
+      process.env.NODE_OPTIONS = ''
+      process.execArgv = []
       ;({ hasFlag } = await import('synckit'))
       expect(hasFlag('--experimental-modules')).toBe(false)
     })
