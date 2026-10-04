@@ -4,21 +4,13 @@
     "isolatedModules": true,
     "rootDir": ".",
     "paths": {
-      "synckit": [
-        "./src/index.ts"
-      ]
+      "synckit": ["./src/index.ts"]
     },
     "target": "ES2020",
-    "types": [
-      "jest",
-      "node"
-    ],
+    "types": ["jest", "node"],
     "allowJs": true
   },
-  "files": [
-    "register.cjs",
-    "shared.cjs"
-  ],
+  "files": ["register.cjs", "shared.cjs"],
   "include": [
     "src",
     "test/**/*.ts",
