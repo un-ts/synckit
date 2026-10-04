@@ -77,10 +77,9 @@ const installWorkerLoadGuard = data => {
   const report = (error, fatal) => {
     // the caller sees the reason exactly as it was thrown, even when it is falsy, with its own
     // properties re-attached by `withProperties` on the other side; a reason that cannot cross
-    // falls back to the bare error, and only then to a synthetic message that names it
-    //
-    // each payload is built inside the try, so a throwing property copy or getter is caught and
-    // the notification below is still reached
+    // falls back to the bare error, and only then to a synthetic message that names it. Building
+    // each payload inside the try catches a throwing property copy or getter like a failed post,
+    // so the notification below is always reached
     const payloads = [
       () => ({ error, properties: extractProperties(error) }),
       () => ({ error }),
