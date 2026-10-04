@@ -64,38 +64,28 @@ const installWorkerLoadGuard = data => {
    * @param {boolean} fatal
    */
   const report = (error, fatal) => {
-    // the message for a reason that cannot cross the port: only a worker that never loaded can
-    // be described as a failure to load
-    const message = fatal ? 'Worker module failed to load' : 'Worker failed'
+    // a synthetic message for a reason that cannot cross the port at all: keep the load failure
+    // distinction and the reason it came with
+    const detail = error instanceof Error ? error.message : String(error)
+    const message = `Worker ${
+      fatal ? 'module failed to load' : 'failed'
+    }: ${detail}`
 
     try {
       // the caller sees the reason exactly as it was thrown, even when it is falsy, with its own
-      // properties re-attached by `withProperties` on the other side
-      workerPort.postMessage({
-        workerFailure: true,
-        fatal,
-        error,
-        properties: extractProperties(error),
-      })
-    } catch {
-      // the properties, or the error itself, are not cloneable: retry with the bare error, which
-      // keeps its name, message, stack and cause, and only then say something synthetic
-      try {
-        workerPort.postMessage({
-          workerFailure: true,
-          fatal,
-          error,
-        })
-      } catch {
+      // properties re-attached by `withProperties` on the other side; a reason that cannot cross
+      // falls back to the bare error, and only then to the synthetic message
+      const payloads = [
+        { error, properties: extractProperties(error) },
+        { error },
+        { error: new Error(message) },
+      ]
+
+      for (const payload of payloads) {
         try {
-          workerPort.postMessage({
-            workerFailure: true,
-            fatal,
-            error: new Error(message),
-          })
-        } catch {
-          // the port itself is unusable: the notification below is all that is left
-        }
+          workerPort.postMessage({ workerFailure: true, fatal, ...payload })
+          break
+        } catch {}
       }
     } finally {
       // whatever happens next, a caller must not be left waiting

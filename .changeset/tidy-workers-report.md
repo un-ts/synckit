@@ -16,4 +16,4 @@ The unused `INT32_BYTES` export is gone.
 
 `DataMessage<T>` is now a discriminated union whose failure arm requires `error`, so a reason that is present but `undefined` is still a failure rather than a result.
 
-A reported failure carries the worker's reason exactly as it was thrown, even a falsy one; when its properties cannot cross the thread boundary the error is sent bare, and only a reason that cannot be cloned at all is replaced by a synthetic error.
+A reported failure carries the worker's reason exactly as it was thrown, even a falsy one; when its properties cannot cross the thread boundary the error is sent bare, and only a reason that cannot be cloned at all is replaced by a synthetic error that still names it.

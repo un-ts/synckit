@@ -301,13 +301,13 @@ describe('helpers', () => {
   })
 
   describe('worker load guard', () => {
-    const createPort = (failFirst = false) => {
+    const createPort = (failCount = 0) => {
       const messages: unknown[] = []
       let calls = 0
       const port = {
         postMessage: (message: unknown) => {
           calls += 1
-          if (failFirst && calls === 1) {
+          if (calls <= failCount) {
             throw new Error('not cloneable')
           }
           messages.push(message)
@@ -355,7 +355,7 @@ describe('helpers', () => {
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
-    test('wakes the main thread when reading the properties throws', () => {
+    test('wakes the main thread even when reading the properties throws', () => {
       const { messages, port } = createPort()
       const view = createSharedBufferView()
       const error = new Error('boom')
@@ -366,16 +366,14 @@ describe('helpers', () => {
         },
       })
 
-      install(port, view)(error)
-
-      const [message] = messages as [{ error: Error }]
-      // the properties could not be read, so the bare error is sent instead
-      expect(message.error.message).toBe('boom')
+      // a hostile getter is out of scope, but the waiter must still be woken
+      expect(() => install(port, view)(error)).toThrow('nope')
+      expect(messages).toHaveLength(0)
       expect(Atomics.load(view, 0)).toBe(1)
     })
 
     test('wakes the main thread when the error cannot be serialized', () => {
-      const { messages, port } = createPort(true)
+      const { messages, port } = createPort(1)
       const view = createSharedBufferView()
 
       install(port, view)(new Error('boom'))
@@ -385,6 +383,32 @@ describe('helpers', () => {
       // the first post failed, so the bare original error is sent instead of a synthetic one
       expect(message.error.message).toBe('boom')
       expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('names the reason in the synthesized error', () => {
+      // the port refuses the full error and the bare one, so the synthetic error is what is left
+      const fatal = createPort(2)
+      install(fatal.port, createSharedBufferView())(new Error('boom'))
+
+      const [fatalMessage] = fatal.messages as [{ error: Error }]
+      expect(fatalMessage.error.message).toBe(
+        'Worker module failed to load: boom',
+      )
+
+      const handler = jest.fn()
+      process.on('uncaughtException', handler)
+      try {
+        const recovered = createPort(2)
+        const view = createSharedBufferView()
+        const guard = install(recovered.port, view)
+        markWorkerRegistered(view)
+        guard(new Error('boom'))
+
+        const [recoveredMessage] = recovered.messages as [{ error: Error }]
+        expect(recoveredMessage.error.message).toBe('Worker failed: boom')
+      } finally {
+        process.off('uncaughtException', handler)
+      }
     })
 
     test('marks a failure fatal unless the worker is left handled', () => {
