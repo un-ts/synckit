@@ -10,6 +10,8 @@ This changes the failure semantics, which is why it is a minor. A call that used
 
 A worker that reached `runAsWorker` and still has a handler for those events keeps serving later calls: the guard steps aside and lets that handler decide. Otherwise the failure is fatal for that synchronous function, and later calls keep throwing it rather than waiting on a worker that never registered, or that nothing is left to keep alive.
 
+A recoverable failure only tells the caller that the worker can still serve; it does not stop the request that was in flight. A worker whose own handler absorbs the failure may still be running that request, so a retry can overlap it — a worker module holding state across calls has to expect that.
+
 The timeout is now a single deadline for the whole call, and each wait receives only the time left of it. Previously every wait measured its own slice, so the time spent between waits was not counted and outdated responses could push the total wait past the timeout.
 
 The unused `INT32_BYTES` export is gone.

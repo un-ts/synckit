@@ -43,6 +43,93 @@ import {
   type StdioChunk,
 } from 'synckit'
 
+/** How the mode probe is started: the process's own flags, and/or the `NODE_OPTIONS` it inherits. */
+interface ProbeFlags {
+  args?: string[]
+  nodeOptions?: string
+}
+
+/**
+ * Writes a script that installs the load guard over a fake port, reports one listener-less
+ * rejection, and prints whether that report was fatal and whether it stopped the process.
+ */
+const writeRejectionModeProbe = () => {
+  const probe = path.join(
+    os.tmpdir(),
+    `synckit-rejection-mode-${process.pid}.cjs`,
+  )
+  fs.writeFileSync(
+    probe,
+    `const { installWorkerLoadGuard, markWorkerRegistered } = require(${JSON.stringify(
+      path.join(_dirname, '../register.cjs'),
+    )})
+const { createSharedBufferView } = require(${JSON.stringify(
+      path.join(_dirname, '../shared.cjs'),
+    )})
+const messages = []
+const port = { postMessage: message => messages.push(message) }
+const view = createSharedBufferView()
+installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+markWorkerRegistered(view)
+let exited = false
+process.exit = () => {
+  exited = true
+}
+process.listeners('unhandledRejection').pop()(new Error('mode probe'))
+process.stdout.write(JSON.stringify({ fatal: messages[0].fatal, exited }))
+`,
+  )
+  return probe
+}
+
+/** Each case is how the probe was started, and whether a listener-less rejection is fatal. */
+const REJECTION_MODE_CASES: Array<[ProbeFlags, boolean]> = [
+  // Node 15+ defaults to `throw`, and the flag overrides it either way
+  [{}, true],
+  [{ args: ['--unhandled-rejections=throw'] }, true],
+  [{ args: ['--unhandled-rejections=strict'] }, true],
+  [{ args: ['--unhandled-rejections=warn'] }, false],
+  [{ args: ['--unhandled-rejections=none'] }, false],
+  // Node also takes the value as the next argument
+  [{ args: ['--unhandled-rejections', 'throw'] }, true],
+  [{ args: ['--unhandled-rejections', 'warn'] }, false],
+  // `NODE_OPTIONS` carries the mode too, in either form, and a worker inherits it
+  [{ nodeOptions: '--unhandled-rejections=warn' }, false],
+  [{ nodeOptions: '--unhandled-rejections warn' }, false],
+  [{ nodeOptions: '--unhandled-rejections=throw' }, true],
+  // the command line overrides `NODE_OPTIONS`, and the last flag wins, as Node does
+  [
+    {
+      args: ['--unhandled-rejections=throw'],
+      nodeOptions: '--unhandled-rejections=warn',
+    },
+    true,
+  ],
+  [
+    {
+      args: ['--unhandled-rejections=warn'],
+      nodeOptions: '--unhandled-rejections=throw',
+    },
+    false,
+  ],
+  [
+    { args: ['--unhandled-rejections=warn', '--unhandled-rejections=throw'] },
+    true,
+  ],
+  [
+    { args: ['--unhandled-rejections=throw', '--unhandled-rejections=warn'] },
+    false,
+  ],
+  // the last one in `execArgv` beats the earlier one there and the one in `NODE_OPTIONS`
+  [
+    {
+      args: ['--unhandled-rejections=warn', '--unhandled-rejections=throw'],
+      nodeOptions: '--unhandled-rejections=none',
+    },
+    true,
+  ],
+]
+
 describe('helpers', () => {
   describe('flag detection utilities', () => {
     test('hasRequireFlag', () => {
@@ -196,6 +283,33 @@ describe('helpers', () => {
         expect(getFlag('--key')).toBeUndefined()
       } finally {
         process.argv.pop()
+      }
+    })
+
+    test('getFlag keeps a quoted value with spaces together', () => {
+      // `NODE_OPTIONS` is read the way the runtime reads it: double quotes group, and are removed
+      const required = path.join(
+        os.tmpdir(),
+        `synckit required ${process.pid}.cjs`,
+      )
+      const probe = path.join(os.tmpdir(), `synckit-flags-${process.pid}.cjs`)
+      fs.writeFileSync(required, '')
+      fs.writeFileSync(
+        probe,
+        `process.stdout.write(require(${JSON.stringify(
+          path.join(_dirname, '../shared.cjs'),
+        )}).getFlag('--require') ?? '')`,
+      )
+      try {
+        expect(
+          execFileSync(process.execPath, [probe], {
+            encoding: 'utf8',
+            env: { ...process.env, NODE_OPTIONS: `--require "${required}"` },
+          }),
+        ).toBe(required)
+      } finally {
+        fs.rmSync(probe, { force: true })
+        fs.rmSync(required, { force: true })
       }
     })
   })
@@ -696,36 +810,8 @@ describe('helpers', () => {
     })
 
     test('follows the runtime rejection mode for a listener-less rejection', () => {
-      const probe = path.join(
-        os.tmpdir(),
-        `synckit-rejection-mode-${process.pid}.cjs`,
-      )
-      fs.writeFileSync(
-        probe,
-        `const { installWorkerLoadGuard, markWorkerRegistered } = require(${JSON.stringify(
-          path.join(_dirname, '../register.cjs'),
-        )})
-const { createSharedBufferView } = require(${JSON.stringify(
-          path.join(_dirname, '../shared.cjs'),
-        )})
-const messages = []
-const port = { postMessage: message => messages.push(message) }
-const view = createSharedBufferView()
-installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
-markWorkerRegistered(view)
-let exited = false
-process.exit = () => {
-  exited = true
-}
-process.listeners('unhandledRejection').pop()(new Error('mode probe'))
-process.stdout.write(JSON.stringify({ fatal: messages[0].fatal, exited }))
-`,
-      )
-
-      const classify = ({
-        args,
-        nodeOptions,
-      }: { args?: string[]; nodeOptions?: string } = {}) =>
+      const probe = writeRejectionModeProbe()
+      const classify = ({ args, nodeOptions }: ProbeFlags = {}) =>
         JSON.parse(
           execFileSync(process.execPath, [...(args ?? []), probe], {
             encoding: 'utf8',
@@ -734,81 +820,9 @@ process.stdout.write(JSON.stringify({ fatal: messages[0].fatal, exited }))
         ) as { fatal: boolean; exited: boolean }
 
       try {
-        // Node 15+ defaults to `throw`; the flag overrides it either way
-        expect(classify()).toEqual({ fatal: true, exited: true })
-        expect(classify({ args: ['--unhandled-rejections=throw'] })).toEqual({
-          fatal: true,
-          exited: true,
-        })
-        expect(classify({ args: ['--unhandled-rejections=strict'] })).toEqual({
-          fatal: true,
-          exited: true,
-        })
-        expect(classify({ args: ['--unhandled-rejections=warn'] })).toEqual({
-          fatal: false,
-          exited: false,
-        })
-        expect(classify({ args: ['--unhandled-rejections=none'] })).toEqual({
-          fatal: false,
-          exited: false,
-        })
-        // Node also takes the value as the next argument
-        expect(classify({ args: ['--unhandled-rejections', 'throw'] })).toEqual(
-          { fatal: true, exited: true },
-        )
-        expect(classify({ args: ['--unhandled-rejections', 'warn'] })).toEqual({
-          fatal: false,
-          exited: false,
-        })
-        // `NODE_OPTIONS` carries the mode too, in either form, and a worker inherits it
-        expect(
-          classify({ nodeOptions: '--unhandled-rejections=warn' }),
-        ).toEqual({ fatal: false, exited: false })
-        expect(
-          classify({ nodeOptions: '--unhandled-rejections warn' }),
-        ).toEqual({ fatal: false, exited: false })
-        expect(
-          classify({ nodeOptions: '--unhandled-rejections=throw' }),
-        ).toEqual({ fatal: true, exited: true })
-        // the command line overrides `NODE_OPTIONS`, and the last flag wins, as Node does
-        expect(
-          classify({
-            args: ['--unhandled-rejections=throw'],
-            nodeOptions: '--unhandled-rejections=warn',
-          }),
-        ).toEqual({ fatal: true, exited: true })
-        expect(
-          classify({
-            args: ['--unhandled-rejections=warn'],
-            nodeOptions: '--unhandled-rejections=throw',
-          }),
-        ).toEqual({ fatal: false, exited: false })
-        expect(
-          classify({
-            args: [
-              '--unhandled-rejections=warn',
-              '--unhandled-rejections=throw',
-            ],
-          }),
-        ).toEqual({ fatal: true, exited: true })
-        expect(
-          classify({
-            args: [
-              '--unhandled-rejections=throw',
-              '--unhandled-rejections=warn',
-            ],
-          }),
-        ).toEqual({ fatal: false, exited: false })
-        // the last one in `execArgv` beats the earlier one there and the one in `NODE_OPTIONS`
-        expect(
-          classify({
-            args: [
-              '--unhandled-rejections=warn',
-              '--unhandled-rejections=throw',
-            ],
-            nodeOptions: '--unhandled-rejections=none',
-          }),
-        ).toEqual({ fatal: true, exited: true })
+        for (const [flags, fatal] of REJECTION_MODE_CASES) {
+          expect(classify(flags)).toEqual({ fatal, exited: fatal })
+        }
       } finally {
         fs.rmSync(probe, { force: true })
       }

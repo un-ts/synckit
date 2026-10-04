@@ -71,10 +71,39 @@ const extractProperties = object => {
   }
 }
 
+/**
+ * Splits `NODE_OPTIONS` the way the runtime reads it: on whitespace, except inside double quotes,
+ * and without the quotes themselves, so a quoted value keeps the spaces it contains.
+ *
+ * @param {string} value The `NODE_OPTIONS` value.
+ * @returns {string[]} The arguments it holds.
+ */
+const splitNodeOptions = value => {
+  /** @type {string[]} */
+  const args = []
+  let current = ''
+  let quoted = false
+  for (const char of value) {
+    if (char === '"') {
+      quoted = !quoted
+    } else if (!quoted && /\s/.test(char)) {
+      if (current) {
+        args.push(current)
+        current = ''
+      }
+    } else {
+      current += char
+    }
+  }
+  if (current) {
+    args.push(current)
+  }
+  return args
+}
+
 // `NODE_OPTIONS` is inherited by workers and never appears in their `execArgv`, so the preload
-// and `src` read the one environment variable here rather than splitting it again. An unset
-// variable splits to `['']`, which no flag check matches.
-const NODE_OPTIONS = (process.env.NODE_OPTIONS ?? '').split(/\s+/)
+// and `src` read the one environment variable here rather than splitting it again.
+const NODE_OPTIONS = splitNodeOptions(process.env.NODE_OPTIONS ?? '')
 
 /**
  * Removes one pair of matching quotes around a value, which a caller can write by hand in

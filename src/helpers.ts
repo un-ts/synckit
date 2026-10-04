@@ -642,6 +642,9 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     const msg = result?.message
 
     if (!msg) {
+      // a notification can reach this thread just before the message it announces is readable;
+      // the 1M-call soak hits that about once in a hundred thousand calls, and waiting again picks
+      // the message up, while the call's deadline still bounds the wait
       return
     }
 
