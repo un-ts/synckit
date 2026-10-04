@@ -706,9 +706,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
     const message = receiveMessageWithId(id, timeout)
 
-    const { stdio } = message
-
-    for (const { type, chunk, encoding } of stdio) {
+    for (const { type, chunk, encoding } of message.stdio) {
       process[type].write(chunk, encoding)
     }
 
