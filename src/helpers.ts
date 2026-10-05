@@ -151,24 +151,6 @@ const noteEmptyRead = (
   return reads
 }
 
-/**
- * Drops the leading `-r <guard>` pair from arguments a nested worker would inherit, where it is the
- * one this code put in front at the level above. The pair is only ever there because it was written
- * there — the positional check `inheritsGuard` makes on `NODE_OPTIONS`, over again — so anything a
- * caller wrote is left where it is. Keeping the pair out of the runner selection matters as much as
- * keeping it out of the worker: a register nobody asked for would stop `setupTsRunner` adding the
- * runner that loads the file, and the guard would be added again at the front, so it stays one pair
- * per level rather than one per nesting level.
- *
- * @param execArgv - The arguments to look at.
- * @param workerPreload - The guard's path.
- * @returns Those arguments without a leading guard preload.
- */
-const withoutGuardPreload = (execArgv: string[], workerPreload: string) =>
-  REQUIRE_FLAGS.has(execArgv[0]) && execArgv[1] === workerPreload
-    ? execArgv.slice(2)
-    : execArgv
-
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
 
@@ -599,8 +581,14 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
   // A nested worker can forward the arguments this code added at the level above, guard pair
   // included. That pair is not a register the caller asked for, and `setupTsRunner` reads exactly
-  // that to decide whether to add a TypeScript runner, so it goes before the runner is selected
-  execArgv = withoutGuardPreload(execArgv, workerPreload)
+  // that to decide whether to add a TypeScript runner, so it goes before the runner is selected. It
+  // only ever leads, because this code is what puts it there — the same positional test the
+  // `inheritsGuard` check makes on `NODE_OPTIONS` — and it is added again after the selection, so it
+  // stays one pair per level instead of one per nesting level
+  execArgv =
+    execArgv[0] === REQUIRE_ABBR_FLAG && execArgv[1] === workerPreload
+      ? execArgv.slice(2)
+      : execArgv
 
   const {
     isTs,
