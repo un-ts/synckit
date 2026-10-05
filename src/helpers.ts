@@ -361,6 +361,10 @@ export const encodeImportModule = (
     typeof moduleNameOrGlobalShim === 'string'
       ? { moduleName: moduleNameOrGlobalShim }
       : moduleNameOrGlobalShim
+  let specifier: URL | string = moduleName
+  if (type === 'import' && path.isAbsolute(moduleName)) {
+    specifier = pathToFileURL(moduleName)
+  }
   const importStatement =
     type === 'import'
       ? `import${
@@ -373,9 +377,7 @@ export const encodeImportModule = (
                   : globalName) +
               ' from'
             : ''
-        } ${JSON.stringify(
-          path.isAbsolute(moduleName) ? pathToFileURL(moduleName) : moduleName,
-        )}`
+        } ${JSON.stringify(specifier)}`
       : `${
           globalName
             ? 'const ' + (named?.trim() ? `{${named}}` : globalName) + '='
