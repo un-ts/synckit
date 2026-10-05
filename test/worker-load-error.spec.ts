@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -14,6 +15,7 @@ import type { AnyFn, SynckitOptions } from 'synckit'
 const TIMEOUT = 5000
 
 const workerLibPath = path.resolve(_dirname, '../lib/index.cjs')
+const workerPreloadPath = path.resolve(_dirname, '../register.cjs')
 const workerLibUrl = pathToFileURL(
   path.resolve(_dirname, '../lib/index.js'),
 ).href
@@ -312,6 +314,37 @@ runAsWorker(() => {
       process.env.NODE_OPTIONS = previousNodeOptions
     }
   }
+})
+
+test('a guard path that is another flag value does not count as preloaded', () => {
+  // `--conditions` carries the guard's path as its value. The check looks at the leading arguments,
+  // so it must not be satisfied and the prepend still has to happen: the worker's module then fails
+  // to load, and only the guard can report why. The variable is set when the child starts, which is
+  // when `NODE_OPTIONS` is fixed — a value set later would not reach the parsed array anyway
+  const loadFailingWorker = writeWorker(
+    'conditions-value.cjs',
+    `throw new Error('conditions value boom')`,
+  )
+  const probe = writeWorker(
+    'conditions-probe.cjs',
+    `const { createSyncFn } = require(${JSON.stringify(workerLibPath)})
+try {
+  createSyncFn(${JSON.stringify(loadFailingWorker)}, ${TIMEOUT})()
+  process.stdout.write('no failure')
+} catch (error) {
+  process.stdout.write(String(error && error.message))
+}`,
+  )
+
+  const output = execFileSync(process.execPath, [probe], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      NODE_OPTIONS: `--conditions ${JSON.stringify(workerPreloadPath)}`,
+    },
+  })
+
+  expect(output).toContain('conditions value boom')
 })
 
 test('a failing global shim throws instead of hanging', () => {

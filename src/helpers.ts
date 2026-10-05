@@ -33,7 +33,6 @@ import {
   NO_STRIP_TYPES,
   NO_STRIP_TYPES_FLAG,
   REQUIRE_ABBR_FLAG,
-  REQUIRE_FLAG,
   REQUIRE_FLAGS,
   STRIP_TYPES_FLAG,
   STRIP_TYPES_NODE_VERSION,
@@ -603,11 +602,15 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   // The guard has to load before any preload inherited through `NODE_OPTIONS` — which run first —
   // and before the worker module, so it leads the worker's own `NODE_OPTIONS`. A worker that already
   // inherits it keeps its environment untouched, so a synckit worker inside a worker cannot
-  // accumulate one preload flag per nesting level. Only the inherited `NODE_OPTIONS` counts: a guard
-  // in this process's own `execArgv` — which the fallback below writes — never reaches the worker
+  // accumulate one preload flag per nesting level. The check is the exact shape the prepend writes,
+  // with the same constant, so changing that flag moves the writer and this together: a guard that
+  // merely sits in this process's `execArgv` — the fallback below writes that — or that appears as
+  // another flag's value does not count, and a hand-written `--require <guard>` only costs a
+  // duplicate preload, which the module cache and the per-slice state absorb. It relies on
+  // `NODE_OPTIONS` being fixed when the process starts, which is what makes the array parsed then
+  // the value the environment below follows
   const inheritsGuard =
-    NODE_OPTIONS.includes(workerPreload) ||
-    NODE_OPTIONS.includes(`${REQUIRE_FLAG}=${workerPreload}`)
+    NODE_OPTIONS[0] === REQUIRE_ABBR_FLAG && NODE_OPTIONS[1] === workerPreload
 
   let worker: Worker
   try {
