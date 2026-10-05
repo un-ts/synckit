@@ -572,7 +572,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
   const useEval = isTs ? !tsUseEsm : !jsUseEsm && useGlobals
 
-  const worker = new Worker(
+  const workerEntry =
     (jsUseEsm && useGlobals) || (tsUseEsm && finalTsRunner === TsRunner.TsNode)
       ? dataUrl(
           `${generateGlobals(
@@ -586,29 +586,51 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
             finalGlobalShims,
             'require',
           )};${encodeImportModule(finalWorkerPath, 'require')}`
-        : workerPathUrl,
-    {
-      eval: useEval,
-      workerData: { sharedBufferView, workerPort, pnpLoaderPath },
-      transferList: [workerPort, ...transferList],
-      // The guard has to load before any preload inherited through `NODE_OPTIONS` — which run first
-      // — and before the worker module, so it leads the worker's own `NODE_OPTIONS`. A worker that
-      // already inherits it keeps its environment untouched, so a synckit worker inside a worker
-      // cannot accumulate one preload flag per nesting level (`splitNodeOptions` unquotes what we
-      // wrote, so the plain path matches)
-      env:
-        getFlag(REQUIRE_FLAGS, workerPreload) == null
-          ? {
-              ...process.env,
-              NODE_OPTIONS: `${REQUIRE_ABBR_FLAG} ${JSON.stringify(workerPreload)}${
-                process.env.NODE_OPTIONS ? ` ${process.env.NODE_OPTIONS}` : ''
-              }`,
-            }
-          : undefined,
-      // the TypeScript runner's own `-r` entries stay; the guard is no longer one of them
+        : workerPathUrl
+
+  const workerOptions = {
+    eval: useEval,
+    workerData: { sharedBufferView, workerPort, pnpLoaderPath },
+    transferList: [workerPort, ...transferList],
+  }
+
+  // The guard has to load before any preload inherited through `NODE_OPTIONS` — which run first —
+  // and before the worker module, so it leads the worker's own `NODE_OPTIONS`. A worker that already
+  // inherits it keeps its environment untouched, so a synckit worker inside a worker cannot
+  // accumulate one preload flag per nesting level (`splitNodeOptions` unquotes what we wrote, so the
+  // plain path matches)
+  const inheritsGuard = getFlag(REQUIRE_FLAGS, workerPreload) != null
+
+  let worker: Worker
+  try {
+    worker = new Worker(workerEntry, {
+      ...workerOptions,
+      env: inheritsGuard
+        ? undefined
+        : {
+            ...process.env,
+            NODE_OPTIONS: `${REQUIRE_ABBR_FLAG} ${JSON.stringify(workerPreload)}${
+              process.env.NODE_OPTIONS ? ` ${process.env.NODE_OPTIONS}` : ''
+            }`,
+          },
+      // the TypeScript runner's own `-r` entries stay; the guard is not one of them here
       execArgv: finalExecArgv,
-    },
-  )
+    })
+  } catch (error) {
+    // Node 18 refuses an option it inherited when the environment is passed explicitly to a worker
+    // (`--openssl-legacy-provider` among them) and there is no programmatic list of the options a
+    // worker rejects, so retry with the inherited environment and the guard back in `execArgv`,
+    // which every version takes. That path loses the preload ordering: the guard loads after a
+    // preload inherited through `NODE_OPTIONS`, so a failure there keeps its older behaviour
+    if ((error as { code?: string }).code !== 'ERR_WORKER_INVALID_EXEC_ARGV') {
+      throw error
+    }
+
+    worker = new Worker(workerEntry, {
+      ...workerOptions,
+      execArgv: [REQUIRE_ABBR_FLAG, workerPreload, ...finalExecArgv],
+    })
+  }
 
   let nextID = 0
 

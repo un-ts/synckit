@@ -254,6 +254,28 @@ runAsWorker(() => ({ outer: preloadCount(), inner: inner() }))`,
   expect(syncFn()).toEqual({ outer: 1, inner: 1 })
 })
 
+test('a worker starts when NODE_OPTIONS holds an option it rejects', () => {
+  // Node 18 refuses an inherited option like this one once the environment is passed explicitly to a
+  // worker (`ERR_WORKER_INVALID_EXEC_ARGV`), which the fallback covers; Node 20 and later accept it,
+  // so there the test passes on the primary path. `process.env` is read when the worker is created
+  const previousNodeOptions = process.env.NODE_OPTIONS
+  process.env.NODE_OPTIONS = '--openssl-legacy-provider'
+  try {
+    const syncFn = syncFnFor<(value: number) => number>(
+      'legacy-provider.cjs',
+      cjsWorker(identityWorker),
+    )
+
+    expect(syncFn(1)).toBe(1)
+  } finally {
+    if (previousNodeOptions == null) {
+      delete process.env.NODE_OPTIONS
+    } else {
+      process.env.NODE_OPTIONS = previousNodeOptions
+    }
+  }
+})
+
 test('a failing global shim throws instead of hanging', () => {
   const esmShim = writeWorker('boom-shim.mjs', `throw new Error('BOOM_ESM')\n`)
   const esmSyncFn = syncFnFor<(value: number) => number>(
