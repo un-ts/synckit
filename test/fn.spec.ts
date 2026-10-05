@@ -274,41 +274,6 @@ test('propagation of undefined timeout', async () => {
   expect(typeof secondAtomicsWaitCallTimeout).toBe('undefined')
 })
 
-test('reduction of waiting time', async () => {
-  const synckitTimeout = 60
-  process.env.SYNCKIT_TIMEOUT = synckitTimeout.toString()
-  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
-
-  const atomicsWaitSpy = jest.spyOn(Atomics, 'wait').mockImplementation(() => {
-    const start = Date.now()
-    // simulate waiting 10ms for worker to respond
-    while (Date.now() - start < 10) {
-      continue
-    }
-
-    return 'ok'
-  })
-
-  receiveMessageOnPortMock
-    .mockReturnValueOnce({ message: { id: -1, stdio, result: undefined } })
-    .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
-
-  const { createSyncFn } = await import('synckit')
-  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
-  expect(syncFn(1)).toBe(1)
-  expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
-
-  const [firstAtomicsWaitArgs, secondAtomicsWaitArgs] =
-    atomicsWaitSpy.mock.calls
-  const [, , , firstAtomicsWaitCallTimeout] = firstAtomicsWaitArgs
-  const [, , , secondAtomicsWaitCallTimeout] = secondAtomicsWaitArgs
-
-  expect(typeof firstAtomicsWaitCallTimeout).toBe('number')
-  expect(firstAtomicsWaitCallTimeout).toBe(synckitTimeout)
-  expect(typeof secondAtomicsWaitCallTimeout).toBe('number')
-  expect(secondAtomicsWaitCallTimeout).toBeLessThan(synckitTimeout)
-})
-
 test('a per-call deadline shrinks each successive wait across outdated messages', async () => {
   const synckitTimeout = 60
   process.env.SYNCKIT_TIMEOUT = synckitTimeout.toString()

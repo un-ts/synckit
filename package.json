@@ -28,7 +28,6 @@
     "index.d.cts",
     "lib",
     "register.cjs",
-    "register.d.cts",
     "shared.cjs",
     "shared.d.cts",
     "!**/*.tsbuildinfo"
@@ -53,7 +52,7 @@
     "benchmark:esm": "node benchmarks/benchmark.js",
     "build": "concurrently -r 'yarn:build:*'",
     "build:tsc": "tsc -p src",
-    "build:tsdown": "tsdown --no-clean -d lib -f cjs --external ../register.cjs --external ../shared.cjs src/index.ts",
+    "build:tsdown": "tsdown",
     "format": "prettier --write .",
     "lint": "concurrently -r 'yarn:lint:*'",
     "lint:es": "eslint . --cache --max-warnings 10",
@@ -137,6 +136,18 @@
     }
   },
   "prettier": "@1stg/prettier-config",
+  "tsdown": {
+    "clean": false,
+    "deps": {
+      "neverBundle": [
+        "../register.cjs",
+        "../shared.cjs"
+      ]
+    },
+    "entry": "src/index.ts",
+    "format": "cjs",
+    "outDir": "lib"
+  },
   "typeCoverage": {
     "atLeast": 100,
     "cache": true,

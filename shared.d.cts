@@ -7,7 +7,7 @@
  */
 export declare const NOTIFY_INDEX: number
 
-/** The space-split `NODE_OPTIONS`, which workers inherit.
+/** The `NODE_OPTIONS` workers inherit, split the way the runtime reads it.
  *
  * @internal
  */

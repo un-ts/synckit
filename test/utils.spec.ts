@@ -51,6 +51,18 @@ describe('utils', () => {
     ).toMatchSnapshot()
   })
 
+  test('encodeImportModule escapes what a quoted literal cannot hold', () => {
+    // a JavaScript literal cannot span lines, so a module name with a newline or a CR used to
+    // generate unparseable code (`Invalid or unexpected token`); one escaping routine covers all
+    expect(encodeImportModule('a\nb', 'require')).toBe(
+      String.raw`require("a\nb")`,
+    )
+    expect(encodeImportModule('a\rb', 'require')).toBe(
+      String.raw`require("a\rb")`,
+    )
+    expect(encodeImportModule("a'b", 'require')).toBe(`require("a'b")`)
+  })
+
   test('generateGlobals', () => {
     const _importGlobals = _generateGlobals(
       DEFAULT_GLOBAL_SHIMS_PRESET,

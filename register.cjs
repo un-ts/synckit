@@ -102,8 +102,8 @@ const installWorkerLoadGuard = data => {
   // does not turn that one failure into a second message and a second notification
   let exiting = false
 
-  // whether an unhandled rejection stops the runtime is the runtime's business: the flag and the
-  // Node default are read in `shared.cjs`, next to the rest of the state the preload shares
+  // whether an unhandled rejection stops the runtime is the runtime's business: the flag, the
+  // throwing modes and the Node default are read here, through the flag helpers `shared.cjs` lends
   const rejectionThrows = unhandledRejectionsThrow()
 
   /**

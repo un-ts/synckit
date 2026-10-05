@@ -8,7 +8,7 @@
  * It is a plain CommonJS file at the package root, with no build step and no loader of its own,
  * so a test runner that maps the package to its source gets exactly what the published package
  * ships. `register.cjs` (the preload) and `src/helpers.ts` both import it rather than
- * reimplementing it, so the buffer below and the rejection-mode check have a single source.
+ * reimplementing it, so the buffer below and the flag helpers have a single source.
  */
 
 // One SharedArrayBuffer per process, sliced per worker: a single buffer keeps the allocation off

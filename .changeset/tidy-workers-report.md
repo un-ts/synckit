@@ -16,7 +16,7 @@ A recoverable failure only tells the caller that the worker can still serve; it 
 
 The timeout is now a single deadline for the whole call, and each wait receives only the time left of it. Previously every wait measured its own slice, so the time spent between waits was not counted and outdated responses could push the total wait past the timeout.
 
-The unused `INT32_BYTES` export is gone.
+**Breaking:** the `INT32_BYTES` export is gone. It was reachable from the public entry point — `src/index.ts` re-exports the whole constants module — so an import of it that compiles on `main` no longer compiles here. Nothing in the package used it, and the release stays a `minor` under the 0.x convention rather than a `major`.
 
 The `hasFlag` utility now reads the flags the runtime applies — `execArgv` and `NODE_OPTIONS`, in either the `--flag=value` or `--flag value` form — and no longer counts a flag that is only a script argument, which Node does not apply. `NODE_OPTIONS` is now read the way the runtime reads it: split on spaces, with double quotes grouping and removed and a backslash escaping inside them, so a quoted value keeps its spaces and an unset variable is `[]` where a naive split gave `['']`.
 
