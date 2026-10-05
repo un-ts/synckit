@@ -4,9 +4,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { jest } from '@jest/globals'
+
 import { _dirname } from './helpers.js'
 
-import { createSyncFn } from 'synckit'
+import { REQUIRE_ABBR_FLAG, createSyncFn } from 'synckit'
 import type { AnyFn, SynckitOptions } from 'synckit'
 
 // The workers run in a real process, so they load the built `lib`, as the other
@@ -404,6 +406,57 @@ Atomics.notify(workerData.sharedBufferView, NOTIFY_INDEX)`,
   const started = Date.now()
   expect(failureOf(syncFn)).toContain('timed-out')
   expect(Date.now() - started).toBeLessThan(TIMEOUT)
+})
+
+test('a guard already in the inherited NODE_OPTIONS is not prepended twice', async () => {
+  // the check reads the array parsed when the module loads, so the variable has to be in place before
+  // that: this asserts the load-time case, not a re-read of the variable at call time
+  const previousNodeOptions = process.env.NODE_OPTIONS
+  process.env.NODE_OPTIONS = `${REQUIRE_ABBR_FLAG} ${JSON.stringify(workerPreloadPath)}`
+  jest.resetModules()
+  try {
+    const { createSyncFn: importedCreateSyncFn } = await import('synckit')
+    const syncFn = importedCreateSyncFn<() => number>(
+      writeWorker(
+        'inherited-guard.cjs',
+        `const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
+runAsWorker(() => (process.env.NODE_OPTIONS || '').split('register.cjs').length - 1)`,
+      ),
+      { timeout: TIMEOUT },
+    )
+
+    // one, not two. It can also be none: a variable set at runtime here is not what a spawned worker
+    // inherits, unlike one this process was started with — measured, and the reason the guard has to
+    // be prepended into a worker rather than merely inherited from the environment
+    expect(syncFn()).toBeLessThanOrEqual(1)
+  } finally {
+    process.env.NODE_OPTIONS = previousNodeOptions
+    jest.resetModules()
+  }
+})
+
+test('another preload first in NODE_OPTIONS does not hide the guard', async () => {
+  // only the prepend's own shape counts, so a leading `-r` of someone else's has to be looked past.
+  // The other preload has to exist, since Node resolves it before the guard
+  const otherPreload = writeWorker('other-preload.cjs', '')
+  const previousNodeOptions = process.env.NODE_OPTIONS
+  process.env.NODE_OPTIONS = `${REQUIRE_ABBR_FLAG} ${JSON.stringify(otherPreload)}`
+  jest.resetModules()
+  try {
+    const { createSyncFn: importedCreateSyncFn } = await import('synckit')
+    const syncFn = importedCreateSyncFn<() => unknown>(
+      writeWorker(
+        'other-preload-worker.cjs',
+        `throw new Error('other preload boom')`,
+      ),
+      { timeout: TIMEOUT },
+    )
+
+    expect(failureOf(syncFn)).toContain('other preload boom')
+  } finally {
+    process.env.NODE_OPTIONS = previousNodeOptions
+    jest.resetModules()
+  }
 })
 
 test('a failing global shim throws instead of hanging', () => {
