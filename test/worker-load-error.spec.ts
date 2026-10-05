@@ -201,6 +201,33 @@ test('a throwing userland preload is reported instead of hanging', () => {
   expect(failureOf(syncFn)).toContain('preload boom')
 })
 
+test('a failure in a preload inherited from NODE_OPTIONS is reported', () => {
+  // it throws off the main thread only, so it can be inherited by the test process itself without
+  // taking it down
+  const inheritedPreload = writeWorker(
+    'inherited-preload.cjs',
+    `if (!require('node:worker_threads').isMainThread) {
+  throw new Error('inherited preload boom')
+}`,
+  )
+  const previousNodeOptions = process.env.NODE_OPTIONS
+  process.env.NODE_OPTIONS = `--require ${JSON.stringify(inheritedPreload)}`
+  try {
+    const syncFn = syncFnFor<() => unknown>(
+      'unused-inherited-worker.cjs',
+      cjsWorker(identityWorker),
+    )
+
+    expect(failureOf(syncFn)).toContain('inherited preload boom')
+  } finally {
+    if (previousNodeOptions == null) {
+      delete process.env.NODE_OPTIONS
+    } else {
+      process.env.NODE_OPTIONS = previousNodeOptions
+    }
+  }
+})
+
 test('a failing global shim throws instead of hanging', () => {
   const esmShim = writeWorker('boom-shim.mjs', `throw new Error('BOOM_ESM')\n`)
   const esmSyncFn = syncFnFor<(value: number) => number>(

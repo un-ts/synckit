@@ -598,7 +598,19 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       eval: useEval,
       workerData: { sharedBufferView, workerPort, pnpLoaderPath },
       transferList: [workerPort, ...transferList],
-      execArgv: [REQUIRE_ABBR_FLAG, workerPreload, ...finalExecArgv],
+      // The guard has to load before any preload inherited through `NODE_OPTIONS` — which run first
+      // — and before the worker module, so it leads the worker's own `NODE_OPTIONS`.
+      // `JSON.stringify` is exactly the escaping the runtime's parser undoes: measured on 18.18, a
+      // path holding a literal backslash and a space loads when it is written that way, and the same
+      // path unescaped does not.
+      env: {
+        ...process.env,
+        NODE_OPTIONS: `--require ${JSON.stringify(workerPreload)}${
+          process.env.NODE_OPTIONS ? ` ${process.env.NODE_OPTIONS}` : ''
+        }`,
+      },
+      // the TypeScript runner's own `-r` entries stay; the guard is no longer one of them
+      execArgv: finalExecArgv,
     },
   )
 
