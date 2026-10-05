@@ -383,6 +383,29 @@ process.stdout.write(String(syncFn()))`,
   expect(output).toBe('late 0')
 })
 
+test('a notification that never brings a message fails at the deadline', () => {
+  // the spin bound is reached long before this deadline — each batch of empty reads ends in one
+  // slice sleep — but the pending notification keeps `Atomics.wait` from timing out, so the deadline
+  // has to be taken in the loop itself. The handler never settles, so nothing is ever posted: the
+  // worker stays registered and silent rather than exiting as a load failure
+  const silentWorker = writeWorker(
+    'silent-message.cjs',
+    `const { workerData } = require('node:worker_threads')
+const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
+const { NOTIFY_INDEX } = require(${JSON.stringify(path.resolve(_dirname, '../shared.cjs'))})
+runAsWorker(() => new Promise(() => {}))
+Atomics.add(workerData.sharedBufferView, NOTIFY_INDEX, 1)
+Atomics.notify(workerData.sharedBufferView, NOTIFY_INDEX)`,
+  )
+  // the budget has to outlast the spin, which instrumentation stretches well past the ~22ms it takes
+  // uninstrumented, or the deadline would fire before the bound is reached
+  const syncFn = createSyncFn<() => unknown>(silentWorker, { timeout: 1500 })
+
+  const started = Date.now()
+  expect(failureOf(syncFn)).toContain('timed-out')
+  expect(Date.now() - started).toBeLessThan(TIMEOUT)
+})
+
 test('a failing global shim throws instead of hanging', () => {
   const esmShim = writeWorker('boom-shim.mjs', `throw new Error('BOOM_ESM')\n`)
   const esmSyncFn = syncFnFor<(value: number) => number>(
