@@ -82,11 +82,54 @@ const withProperties = (error: unknown, properties?: object) =>
   error && typeof error === 'object' ? Object.assign(error, properties) : error
 
 // A tuning knob rather than a derived bound: how many consecutive empty port reads a still-pending
-// notification is retried for before it is spent. It covers the hand-off between the worker's post
-// and this thread seeing the message, and it also bounds a rare spin where a pending notification
-// keeps `Atomics.wait` returning at once instead of timing out. Lowering it spends the notification
-// sooner, which risks sleeping past a message that arrives late. See `receiveMessageWithId`.
+// notification is retried for before the loop stops spinning and sleeps a slice instead. It covers
+// the hand-off between the worker's post and this thread seeing the message. See
+// `receiveMessageWithId`.
 const EMPTY_PORT_READS = 100_000
+
+// How long that sleep lasts. The counter is non-zero at that point — which is why the loop cannot
+// simply wait on it — so this also bounds how late a message that arrives without a notification of
+// its own can be read. See `receiveMessageWithId`.
+const EMPTY_PORT_READ_SLICE = 10
+
+/**
+ * Handles one empty port read: reports a deadline that has passed, and once the spin bound is
+ * reached sleeps a bounded slice on the value the counter holds. Waiting on that value rather than
+ * on `0` keeps a pending notification — whose message may still arrive — from being spent before it
+ * does, and a new notification changes the value and returns early. Nothing here touches the
+ * counter, so it cannot drift.
+ *
+ * @param sharedBufferView - This worker's slice of the shared buffer.
+ * @param emptyReads - How many consecutive empty reads there have been.
+ * @param deadline - When the call's budget runs out, or `undefined` when it has none.
+ * @param remaining - Milliseconds left of that budget, or `undefined`.
+ * @returns The new count of consecutive empty reads.
+ */
+const noteEmptyRead = (
+  sharedBufferView: Int32Array,
+  emptyReads: number,
+  deadline: number | undefined,
+  remaining: number | undefined,
+) => {
+  // a pending notification keeps `Atomics.wait` returning at once, so the deadline has to be taken
+  // here as well: only a zero counter lets that wait time out by itself
+  if (deadline != null && Date.now() >= deadline) {
+    throw new Error('Internal error: Atomics.wait() failed: timed-out')
+  }
+
+  const reads = emptyReads + 1
+
+  if (reads % EMPTY_PORT_READS === 0) {
+    Atomics.wait(
+      sharedBufferView,
+      NOTIFY_INDEX,
+      Atomics.load(sharedBufferView, NOTIFY_INDEX),
+      Math.min(remaining ?? EMPTY_PORT_READ_SLICE, EMPTY_PORT_READ_SLICE),
+    )
+  }
+
+  return reads
+}
 
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
@@ -738,8 +781,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     // A pending notification whose message is not readable yet is retried at once, because it is
     // still unspent; this bounds that retrying. `Atomics.wait` cannot time out while the counter is
     // non-zero, so a notification that never brings a message — a report whose every post failed on
-    // a closed port — would spin past the deadline. After this many empty reads it is spent, and the
-    // wait sleeps to the deadline again.
+    // a closed port — would otherwise spin for ever.
     let emptyReads = 0
 
     for (;;) {
@@ -747,11 +789,14 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
       if (msg == null || msg.id < expectedId) {
         // an outdated or missing response: wait again with only the time this call has left, never
-        // a negative remainder. Every batch of empty reads past the cap spends one pending
-        // notification, so a notification that never brings a message lets the wait sleep to the
-        // deadline instead of spinning past it
-        if (msg == null && ++emptyReads % EMPTY_PORT_READS === 0) {
-          spendNotification()
+        // a negative remainder
+        if (msg == null) {
+          emptyReads = noteEmptyRead(
+            sharedBufferView,
+            emptyReads,
+            deadline,
+            remaining,
+          )
         }
 
         remaining =

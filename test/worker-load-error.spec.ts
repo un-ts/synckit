@@ -347,6 +347,42 @@ try {
   expect(output).toContain('conditions value boom')
 })
 
+test('a message delivered after its notification still wakes the caller', () => {
+  // the state the measured race produces, made deterministic: the notification is bumped at worker
+  // startup, and the message it announces is posted 300ms later with no notification of its own —
+  // longer than the spin bound, so the loop reaches its slice sleep before the message is readable
+  const lateWorker = writeWorker(
+    'late-message.cjs',
+    `const { parentPort, workerData } = require('node:worker_threads')
+const { NOTIFY_INDEX } = require(${JSON.stringify(path.resolve(_dirname, '../shared.cjs'))})
+const { sharedBufferView, workerPort } = workerData
+Atomics.add(sharedBufferView, NOTIFY_INDEX, 1)
+Atomics.notify(sharedBufferView, NOTIFY_INDEX)
+parentPort.on('message', ({ id }) => {
+  setTimeout(() => {
+    workerPort.postMessage({ id, stdio: [], result: 'late ' + id })
+  }, 300)
+})`,
+  )
+  const probe = writeWorker(
+    'late-message-probe.cjs',
+    `const { createSyncFn } = require(${JSON.stringify(workerLibPath)})
+const syncFn = createSyncFn(${JSON.stringify(lateWorker)})
+process.stdout.write(String(syncFn()))`,
+  )
+
+  // the child is what makes the no-timeout case safe to assert: a regression hangs it, and this
+  // kills it and fails the test instead of the whole run
+  const output = execFileSync(process.execPath, [probe], {
+    encoding: 'utf8',
+    // an empty value is what `DEFAULT_TIMEOUT` reads as no budget at all
+    env: { ...process.env, SYNCKIT_TIMEOUT: '' },
+    timeout: 10_000,
+  })
+
+  expect(output).toBe('late 0')
+})
+
 test('a failing global shim throws instead of hanging', () => {
   const esmShim = writeWorker('boom-shim.mjs', `throw new Error('BOOM_ESM')\n`)
   const esmSyncFn = syncFnFor<(value: number) => number>(
