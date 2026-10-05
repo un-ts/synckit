@@ -228,6 +228,32 @@ test('a failure in a preload inherited from NODE_OPTIONS is reported', () => {
   }
 })
 
+test('a synckit worker nested in a worker keeps one guard preload', () => {
+  const preloadCount = `const preloadCount = () =>
+  (process.env.NODE_OPTIONS || '').split('register.cjs').length - 1`
+
+  const inner = writeWorker(
+    'nested-inner.cjs',
+    cjsWorker(`${preloadCount}
+runAsWorker(preloadCount)`),
+  )
+  const outer = writeWorker(
+    'nested-outer.cjs',
+    `const { createSyncFn, runAsWorker } = require(${JSON.stringify(workerLibPath)})
+${preloadCount}
+const inner = createSyncFn(${JSON.stringify(inner)}, ${TIMEOUT})
+runAsWorker(() => ({ outer: preloadCount(), inner: inner() }))`,
+  )
+
+  const syncFn = createSyncFn<() => { outer: number; inner: number }>(outer, {
+    timeout: TIMEOUT,
+  })
+
+  // the guard leads the worker's `NODE_OPTIONS`, but only when that worker does not inherit it
+  // already: otherwise every nesting level would add another `--require`
+  expect(syncFn()).toEqual({ outer: 1, inner: 1 })
+})
+
 test('a failing global shim throws instead of hanging', () => {
   const esmShim = writeWorker('boom-shim.mjs', `throw new Error('BOOM_ESM')\n`)
   const esmSyncFn = syncFnFor<(value: number) => number>(

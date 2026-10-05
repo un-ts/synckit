@@ -76,10 +76,11 @@ export { extractProperties } from '../shared.cjs'
 const withProperties = (error: unknown, properties?: object) =>
   error && typeof error === 'object' ? Object.assign(error, properties) : error
 
-// How many consecutive empty port reads a still-pending notification is retried for before it is
-// spent. The window it covers is the hand-off between the worker's post and this thread seeing the
-// message, which is short; the cap only bounds a notification that never brings one, whose wait
-// could otherwise never time out. See `receiveMessageWithId`.
+// A tuning knob rather than a derived bound: how many consecutive empty port reads a still-pending
+// notification is retried for before it is spent. It covers the hand-off between the worker's post
+// and this thread seeing the message, and it also bounds a rare spin where a pending notification
+// keeps `Atomics.wait` returning at once instead of timing out. Lowering it spends the notification
+// sooner, which risks sleeping past a message that arrives late. See `receiveMessageWithId`.
 const EMPTY_PORT_READS = 100_000
 
 export const hasRequireFlag = (execArgv: string[]) =>
@@ -593,16 +594,19 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       workerData: { sharedBufferView, workerPort, pnpLoaderPath },
       transferList: [workerPort, ...transferList],
       // The guard has to load before any preload inherited through `NODE_OPTIONS` — which run first
-      // — and before the worker module, so it leads the worker's own `NODE_OPTIONS`.
-      // `JSON.stringify` is exactly the escaping the runtime's parser undoes: measured on 18.18, a
-      // path holding a literal backslash and a space loads when it is written that way, and the same
-      // path unescaped does not.
-      env: {
-        ...process.env,
-        NODE_OPTIONS: `--require ${JSON.stringify(workerPreload)}${
-          process.env.NODE_OPTIONS ? ` ${process.env.NODE_OPTIONS}` : ''
-        }`,
-      },
+      // — and before the worker module, so it leads the worker's own `NODE_OPTIONS`. A worker that
+      // already inherits it keeps its environment untouched, so a synckit worker inside a worker
+      // cannot accumulate one preload flag per nesting level (`splitNodeOptions` unquotes what we
+      // wrote, so the plain path matches)
+      env:
+        getFlag(REQUIRE_FLAGS, workerPreload) == null
+          ? {
+              ...process.env,
+              NODE_OPTIONS: `${REQUIRE_ABBR_FLAG} ${JSON.stringify(workerPreload)}${
+                process.env.NODE_OPTIONS ? ` ${process.env.NODE_OPTIONS}` : ''
+              }`,
+            }
+          : undefined,
       // the TypeScript runner's own `-r` entries stay; the guard is no longer one of them
       execArgv: finalExecArgv,
     },
@@ -710,7 +714,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     for (;;) {
       const msg = waitForMessage(expectedId, remaining)
 
-      if (msg?.id == null || msg.id < expectedId) {
+      if (msg == null || msg.id < expectedId) {
         // an outdated or missing response: wait again with only the time this call has left, never
         // a negative remainder. Every batch of empty reads past the cap spends one pending
         // notification, so a notification that never brings a message lets the wait sleep to the
