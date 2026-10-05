@@ -408,6 +408,62 @@ Atomics.notify(workerData.sharedBufferView, NOTIFY_INDEX)`,
   expect(Date.now() - started).toBeLessThan(TIMEOUT)
 })
 
+test('a call that times out at the spin bound aborts the worker', async () => {
+  // the deadline is taken inside the loop while a pending notification keeps `Atomics.wait` from
+  // timing out, so the abort that the wait's own timeout sends has to be sent from there too:
+  // without it the worker keeps working and posts a late answer nobody reads, which bumps the
+  // counter for the next call. The budget has to outlast the spin, which instrumentation stretches
+  const marker = path.join(tmpdir, 'aborted.json')
+  const abortWorker = writeWorker(
+    'abort-at-bound.cjs',
+    `const { workerData } = require('node:worker_threads')
+const fs = require('node:fs')
+const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
+const { NOTIFY_INDEX } = require(${JSON.stringify(path.resolve(_dirname, '../shared.cjs'))})
+const view = workerData.sharedBufferView
+// announce, so the caller's wait returns at once and its spin reaches the bound before the deadline
+Atomics.add(view, NOTIFY_INDEX, 1)
+Atomics.notify(view, NOTIFY_INDEX)
+runAsWorker(
+  () =>
+    new Promise(resolve => {
+      const finish = aborted => {
+        // 200ms after the answer would have been posted: the counter shows whether it was
+        setTimeout(() => {
+          fs.writeFileSync(
+            ${JSON.stringify(marker)},
+            JSON.stringify({ aborted, counter: Atomics.load(view, NOTIFY_INDEX) }),
+          )
+          resolve('late')
+        }, 200)
+      }
+      const timer = setTimeout(() => finish(false), 3000)
+      workerData.workerPort.on('message', message => {
+        if (message && message.cmd === 'abort') {
+          clearTimeout(timer)
+          finish(true)
+        }
+      })
+    }),
+)`,
+  )
+  const syncFn = createSyncFn<() => unknown>(abortWorker, { timeout: 1500 })
+
+  expect(failureOf(syncFn)).toContain('timed-out')
+
+  const deadline = Date.now() + TIMEOUT
+  while (!fs.existsSync(marker) && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+
+  expect(fs.existsSync(marker)).toBe(true)
+  // one, the announcement: no late answer was posted
+  expect(JSON.parse(fs.readFileSync(marker, 'utf8'))).toEqual({
+    aborted: true,
+    counter: 1,
+  })
+})
+
 test('a guard already in the inherited NODE_OPTIONS is not prepended twice', async () => {
   // the check reads the array parsed when the module loads, so the variable has to be in place before
   // that: this asserts the load-time case, not a re-read of the variable at call time

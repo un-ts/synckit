@@ -7,6 +7,7 @@ import {
   Worker,
   receiveMessageOnPort,
 } from 'node:worker_threads'
+import type { MessagePort } from 'node:worker_threads'
 
 import { tryExtensions, findUp, cjsRequire, isPkgAvailable } from '@pkgr/core'
 
@@ -93,6 +94,19 @@ const EMPTY_PORT_READS = 100_000
 const EMPTY_PORT_READ_SLICE = 10
 
 /**
+ * Tells a worker to stop working on a request this thread has given up waiting for, so that its
+ * late answer is not posted at all.
+ *
+ * @param mainPort - The port the worker answers on.
+ * @param id - The id of the abandoned request.
+ */
+const abortRequest = (mainPort: MessagePort, id: number) => {
+  const abortMsg: MainToWorkerCommandMessage = { id, cmd: 'abort' }
+
+  mainPort.postMessage(abortMsg)
+}
+
+/**
  * Handles one empty port read: reports a deadline that has passed, and once the spin bound is
  * reached sleeps a bounded slice on the value the counter holds. Waiting on that value rather than
  * on `0` keeps a pending notification — whose message may still arrive — from being spent before it
@@ -103,6 +117,8 @@ const EMPTY_PORT_READ_SLICE = 10
  * @param emptyReads - How many consecutive empty reads there have been.
  * @param deadline - When the call's budget runs out, or `undefined` when it has none.
  * @param remaining - Milliseconds left of that budget, or `undefined`.
+ * @param mainPort - The port the worker answers on, for the abort a passed deadline sends.
+ * @param expectedId - The id of the request this call is waiting for.
  * @returns The new count of consecutive empty reads.
  */
 const noteEmptyRead = (
@@ -110,10 +126,14 @@ const noteEmptyRead = (
   emptyReads: number,
   deadline: number | undefined,
   remaining: number | undefined,
+  mainPort: MessagePort,
+  expectedId: number,
 ) => {
   // a pending notification keeps `Atomics.wait` returning at once, so the deadline has to be taken
-  // here as well: only a zero counter lets that wait time out by itself
+  // here as well: only a zero counter lets that wait time out by itself. The worker is told to stop
+  // exactly as the wait's own timeout does, or it would answer a request nobody is waiting for
   if (deadline != null && Date.now() >= deadline) {
+    abortRequest(mainPort, expectedId)
     throw new Error('Internal error: Atomics.wait() failed: timed-out')
   }
 
@@ -726,11 +746,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     const status = Atomics.wait(sharedBufferView, NOTIFY_INDEX, 0, remaining)
 
     if (!['ok', 'not-equal'].includes(status)) {
-      const abortMsg: MainToWorkerCommandMessage = {
-        id: abortId,
-        cmd: 'abort',
-      }
-      mainPort.postMessage(abortMsg)
+      abortRequest(mainPort, abortId)
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
     }
 
@@ -796,6 +812,8 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
             emptyReads,
             deadline,
             remaining,
+            mainPort,
+            expectedId,
           )
         }
 
