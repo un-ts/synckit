@@ -464,6 +464,72 @@ runAsWorker(
   })
 })
 
+test('a worker still gets the guard when its parent clears NODE_OPTIONS', () => {
+  // the check trusts the variable the module was loaded with, so the child has to start with it and
+  // remove it inside: a value set at runtime in this process is not what a spawned worker inherits
+  // either way. The guard has to be preloaded through `execArgv` then, or the worker module's own
+  // failure is reported by nothing and the call waits for an answer that never comes
+  const loadFailingWorker = writeWorker(
+    'cleared-node-options.cjs',
+    `throw new Error('cleared node options boom')`,
+  )
+  const probe = writeWorker(
+    'cleared-probe.cjs',
+    `const { createSyncFn } = require(${JSON.stringify(workerLibPath)})
+delete process.env.NODE_OPTIONS
+try {
+  createSyncFn(${JSON.stringify(loadFailingWorker)}, 2000)()
+  process.stdout.write('no failure')
+} catch (error) {
+  process.stdout.write(String(error && error.message))
+}`,
+  )
+
+  const output = execFileSync(process.execPath, [probe], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      NODE_OPTIONS: `${REQUIRE_ABBR_FLAG} ${JSON.stringify(workerPreloadPath)}`,
+    },
+  })
+
+  expect(output).toContain('cleared node options boom')
+})
+
+test('a guard already in execArgv is not doubled when nesting', () => {
+  // the pair this code adds at each level turns up in that worker's own `process.execArgv`, so a
+  // nested creation that forwards them with `execArgv: process.execArgv` would otherwise grow one
+  // pair per level. The inner worker counts the pairs it was started with
+  const inner = writeWorker(
+    'exec-argv-inner.cjs',
+    `const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
+runAsWorker(
+  () =>
+    process.execArgv.filter(
+      (argument, index) =>
+        String(argument).includes('register.cjs') &&
+        process.execArgv[index - 1] === '-r',
+    ).length,
+)`,
+  )
+  const outer = writeWorker(
+    'exec-argv-outer.cjs',
+    `const { createSyncFn, runAsWorker } = require(${JSON.stringify(workerLibPath)})
+const inner = createSyncFn(${JSON.stringify(inner)}, {
+  timeout: 5000,
+  execArgv: process.execArgv,
+})
+runAsWorker(() => inner())`,
+  )
+  const syncFn = createSyncFn<() => number>(outer, {
+    timeout: TIMEOUT,
+    // what a process whose own arguments already carry the guard has to forward
+    execArgv: [REQUIRE_ABBR_FLAG, workerPreloadPath],
+  })
+
+  expect(syncFn()).toBe(1)
+})
+
 test('a guard already in the inherited NODE_OPTIONS is not prepended twice', async () => {
   // the check reads the array parsed when the module loads, so the variable has to be in place before
   // that: this asserts the load-time case, not a re-read of the variable at call time

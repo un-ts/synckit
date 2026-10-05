@@ -151,6 +151,32 @@ const noteEmptyRead = (
   return reads
 }
 
+/**
+ * Drops a `-r <guard>` pair from the arguments a nested worker would inherit, where it is the one
+ * this code put in front at the level above. The guard is added again there, so it stays one pair
+ * per level rather than one per nesting level — the `execArgv` half of what the `inheritsGuard`
+ * check already keeps from growing in `NODE_OPTIONS`.
+ *
+ * @param execArgv - The arguments the worker would otherwise inherit.
+ * @param workerPreload - The guard's path.
+ * @returns Those arguments without a guard preload.
+ */
+const withoutGuardPreload = (execArgv: string[], workerPreload: string) => {
+  const kept: string[] = []
+
+  for (let index = 0; index < execArgv.length; index++) {
+    const argument = execArgv[index]
+
+    if (REQUIRE_FLAGS.has(argument) && execArgv[index + 1] === workerPreload) {
+      index++
+    } else {
+      kept.push(argument)
+    }
+  }
+
+  return kept
+}
+
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
 
@@ -675,6 +701,17 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   const inheritsGuard =
     NODE_OPTIONS[0] === REQUIRE_ABBR_FLAG && NODE_OPTIONS[1] === workerPreload
 
+  // On that path the guard is put into `execArgv` as well. `NODE_OPTIONS` is what the check decided
+  // to trust, but a caller can clear the variable before creating a nested worker, and then nothing
+  // would preload the guard — the load failure it exists to report would go unreported instead. A
+  // duplicate preload is the worst case, which the module cache and the per-slice state absorb. The
+  // pair added at the level above is dropped first, so it stays one per level
+  const guardExecArgv = [
+    REQUIRE_ABBR_FLAG,
+    workerPreload,
+    ...withoutGuardPreload(finalExecArgv, workerPreload),
+  ]
+
   let worker: Worker
   try {
     worker = new Worker(workerEntry, {
@@ -688,7 +725,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
             }`,
           },
       // the TypeScript runner's own `-r` entries stay; the guard is not one of them here
-      execArgv: finalExecArgv,
+      execArgv: inheritsGuard ? guardExecArgv : finalExecArgv,
     })
   } catch (error) {
     // Node 18 refuses an option it inherited when the environment is passed explicitly to a worker
@@ -702,7 +739,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
     worker = new Worker(workerEntry, {
       ...workerOptions,
-      execArgv: [REQUIRE_ABBR_FLAG, workerPreload, ...finalExecArgv],
+      execArgv: guardExecArgv,
     })
   }
 
