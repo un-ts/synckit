@@ -152,30 +152,22 @@ const noteEmptyRead = (
 }
 
 /**
- * Drops a `-r <guard>` pair from the arguments a nested worker would inherit, where it is the one
- * this code put in front at the level above. The guard is added again there, so it stays one pair
- * per level rather than one per nesting level — the `execArgv` half of what the `inheritsGuard`
- * check already keeps from growing in `NODE_OPTIONS`.
+ * Drops the leading `-r <guard>` pair from arguments a nested worker would inherit, where it is the
+ * one this code put in front at the level above. The pair is only ever there because it was written
+ * there — the positional check `inheritsGuard` makes on `NODE_OPTIONS`, over again — so anything a
+ * caller wrote is left where it is. Keeping the pair out of the runner selection matters as much as
+ * keeping it out of the worker: a register nobody asked for would stop `setupTsRunner` adding the
+ * runner that loads the file, and the guard would be added again at the front, so it stays one pair
+ * per level rather than one per nesting level.
  *
- * @param execArgv - The arguments the worker would otherwise inherit.
+ * @param execArgv - The arguments to look at.
  * @param workerPreload - The guard's path.
- * @returns Those arguments without a guard preload.
+ * @returns Those arguments without a leading guard preload.
  */
-const withoutGuardPreload = (execArgv: string[], workerPreload: string) => {
-  const kept: string[] = []
-
-  for (let index = 0; index < execArgv.length; index++) {
-    const argument = execArgv[index]
-
-    if (REQUIRE_FLAGS.has(argument) && execArgv[index + 1] === workerPreload) {
-      index++
-    } else {
-      kept.push(argument)
-    }
-  }
-
-  return kept
-}
+const withoutGuardPreload = (execArgv: string[], workerPreload: string) =>
+  REQUIRE_FLAGS.has(execArgv[0]) && execArgv[1] === workerPreload
+    ? execArgv.slice(2)
+    : execArgv
 
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
@@ -605,6 +597,11 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 ) {
   const { port1: mainPort, port2: workerPort } = new MessageChannel()
 
+  // A nested worker can forward the arguments this code added at the level above, guard pair
+  // included. That pair is not a register the caller asked for, and `setupTsRunner` reads exactly
+  // that to decide whether to add a TypeScript runner, so it goes before the runner is selected
+  execArgv = withoutGuardPreload(execArgv, workerPreload)
+
   const {
     isTs,
     ext,
@@ -705,12 +702,8 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   // to trust, but a caller can clear the variable before creating a nested worker, and then nothing
   // would preload the guard — the load failure it exists to report would go unreported instead. A
   // duplicate preload is the worst case, which the module cache and the per-slice state absorb. The
-  // pair added at the level above is dropped first, so it stays one per level
-  const guardExecArgv = [
-    REQUIRE_ABBR_FLAG,
-    workerPreload,
-    ...withoutGuardPreload(finalExecArgv, workerPreload),
-  ]
+  // pair added at the level above was dropped before the runner selection, so this stays one per level
+  const guardExecArgv = [REQUIRE_ABBR_FLAG, workerPreload, ...finalExecArgv]
 
   let worker: Worker
   try {

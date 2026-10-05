@@ -8,7 +8,7 @@ import { jest } from '@jest/globals'
 
 import { _dirname } from './helpers.js'
 
-import { REQUIRE_ABBR_FLAG, createSyncFn } from 'synckit'
+import { REQUIRE_ABBR_FLAG, TsRunner, createSyncFn } from 'synckit'
 import type { AnyFn, SynckitOptions } from 'synckit'
 
 // The workers run in a real process, so they load the built `lib`, as the other
@@ -494,6 +494,31 @@ try {
   })
 
   expect(output).toContain('cleared node options boom')
+})
+
+test('a guard pair in execArgv does not hide the TypeScript runner', () => {
+  // the pair is not a register the caller asked for, so it must not reach the runner selection:
+  // otherwise the runner is skipped and a TypeScript worker is loaded as plain JavaScript. The
+  // worker counts the runner's own arguments, which is observable on every Node, not only the ones
+  // that cannot strip types at all
+  const runnerWorker = writeWorker(
+    'guard-with-runner.ts',
+    `const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
+runAsWorker(
+  () =>
+    process.execArgv.filter(argument =>
+      String(argument).includes('esbuild-register'),
+    ).length,
+)`,
+  )
+  const syncFn = createSyncFn<() => number>(runnerWorker, {
+    // what forwarding `process.execArgv` from a worker this code created looks like
+    execArgv: [REQUIRE_ABBR_FLAG, workerPreloadPath],
+    timeout: TIMEOUT,
+    tsRunner: TsRunner.EsbuildRegister,
+  })
+
+  expect(syncFn()).toBe(1)
 })
 
 test('a guard already in execArgv is not doubled when nesting', () => {
