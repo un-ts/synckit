@@ -10,7 +10,12 @@ import {
 
 import { tryExtensions, findUp, cjsRequire, isPkgAvailable } from '@pkgr/core'
 
-import { NOTIFY_INDEX, createSharedBufferView, getFlag } from '../shared.cjs'
+import {
+  NODE_OPTIONS,
+  NOTIFY_INDEX,
+  createSharedBufferView,
+  getFlag,
+} from '../shared.cjs'
 
 import { compareNodeVersion } from './common.js'
 import {
@@ -28,6 +33,7 @@ import {
   NO_STRIP_TYPES,
   NO_STRIP_TYPES_FLAG,
   REQUIRE_ABBR_FLAG,
+  REQUIRE_FLAG,
   REQUIRE_FLAGS,
   STRIP_TYPES_FLAG,
   STRIP_TYPES_NODE_VERSION,
@@ -597,9 +603,11 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   // The guard has to load before any preload inherited through `NODE_OPTIONS` — which run first —
   // and before the worker module, so it leads the worker's own `NODE_OPTIONS`. A worker that already
   // inherits it keeps its environment untouched, so a synckit worker inside a worker cannot
-  // accumulate one preload flag per nesting level (`splitNodeOptions` unquotes what we wrote, so the
-  // plain path matches)
-  const inheritsGuard = getFlag(REQUIRE_FLAGS, workerPreload) != null
+  // accumulate one preload flag per nesting level. Only the inherited `NODE_OPTIONS` counts: a guard
+  // in this process's own `execArgv` — which the fallback below writes — never reaches the worker
+  const inheritsGuard =
+    NODE_OPTIONS.includes(workerPreload) ||
+    NODE_OPTIONS.includes(`${REQUIRE_FLAG}=${workerPreload}`)
 
   let worker: Worker
   try {

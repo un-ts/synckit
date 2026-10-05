@@ -276,6 +276,44 @@ test('a worker starts when NODE_OPTIONS holds an option it rejects', () => {
   }
 })
 
+test('a nested worker still gets the guard when the outer took the fallback', () => {
+  // Node 18 only: the rejected option forces the fallback at level 1, and that guard lives in the
+  // outer worker's `execArgv`, which the inner worker does not inherit — so it has to be added
+  // again. Node 20 and later accept the option, where this passes on the primary path
+  const previousNodeOptions = process.env.NODE_OPTIONS
+  process.env.NODE_OPTIONS = '--openssl-legacy-provider'
+  try {
+    const inner = writeWorker(
+      'fallback-inner.cjs',
+      `throw new Error('fallback inner load boom')`,
+    )
+    const outer = writeWorker(
+      'fallback-outer.cjs',
+      `const { createSyncFn, runAsWorker } = require(${JSON.stringify(workerLibPath)})
+const inner = createSyncFn(${JSON.stringify(inner)}, ${TIMEOUT})
+runAsWorker(() => {
+  try {
+    inner()
+    return 'no failure'
+  } catch (error) {
+    return String(error && error.message)
+  }
+})`,
+    )
+
+    const syncFn = createSyncFn<() => string>(outer, { timeout: TIMEOUT })
+
+    // a module that throws before it can require synckit is only reported by the preload guard
+    expect(syncFn()).toContain('fallback inner load boom')
+  } finally {
+    if (previousNodeOptions == null) {
+      delete process.env.NODE_OPTIONS
+    } else {
+      process.env.NODE_OPTIONS = previousNodeOptions
+    }
+  }
+})
+
 test('a failing global shim throws instead of hanging', () => {
   const esmShim = writeWorker('boom-shim.mjs', `throw new Error('BOOM_ESM')\n`)
   const esmSyncFn = syncFnFor<(value: number) => number>(
