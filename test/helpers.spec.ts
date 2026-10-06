@@ -1,8 +1,18 @@
 /* eslint-disable @typescript-eslint/unbound-method, jest/no-standalone-expect */
 
+import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import type { MessagePort } from 'node:worker_threads'
+
 import { jest } from '@jest/globals'
 
+import { installWorkerLoadGuard, markWorkerRegistered } from '../register.cjs'
+import { createSharedBufferView, getFlag } from '../shared.cjs'
+
 import {
+  _dirname,
   testIf,
   workerCjsPath,
   workerCjsTsPath,
@@ -23,6 +33,7 @@ import {
   compareNodeVersion,
   dataUrl,
   extractProperties,
+  generateGlobals,
   hasImportFlag,
   hasLoaderFlag,
   hasRequireFlag,
@@ -31,6 +42,93 @@ import {
   setupTsRunner,
   type StdioChunk,
 } from 'synckit'
+
+/** How the mode probe is started: the process's own flags, and/or the `NODE_OPTIONS` it inherits. */
+interface ProbeFlags {
+  args?: string[]
+  nodeOptions?: string
+}
+
+/**
+ * Writes a script that installs the load guard over a fake port, reports one listener-less
+ * rejection, and prints whether that report was fatal and whether it stopped the process.
+ */
+const writeRejectionModeProbe = () => {
+  const probe = path.join(
+    os.tmpdir(),
+    `synckit-rejection-mode-${process.pid}.cjs`,
+  )
+  fs.writeFileSync(
+    probe,
+    `const { installWorkerLoadGuard, markWorkerRegistered } = require(${JSON.stringify(
+      path.join(_dirname, '../register.cjs'),
+    )})
+const { createSharedBufferView } = require(${JSON.stringify(
+      path.join(_dirname, '../shared.cjs'),
+    )})
+const messages = []
+const port = { postMessage: message => messages.push(message) }
+const view = createSharedBufferView()
+installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+markWorkerRegistered(view)
+let exited = false
+process.exit = () => {
+  exited = true
+}
+process.listeners('unhandledRejection').pop()(new Error('mode probe'))
+process.stdout.write(JSON.stringify({ fatal: messages[0].fatal, exited }))
+`,
+  )
+  return probe
+}
+
+/** Each case is how the probe was started, and whether a listener-less rejection is fatal. */
+const REJECTION_MODE_CASES: Array<[ProbeFlags, boolean]> = [
+  // Node 15+ defaults to `throw`, and the flag overrides it either way
+  [{}, true],
+  [{ args: ['--unhandled-rejections=throw'] }, true],
+  [{ args: ['--unhandled-rejections=strict'] }, true],
+  [{ args: ['--unhandled-rejections=warn'] }, false],
+  [{ args: ['--unhandled-rejections=none'] }, false],
+  // Node also takes the value as the next argument
+  [{ args: ['--unhandled-rejections', 'throw'] }, true],
+  [{ args: ['--unhandled-rejections', 'warn'] }, false],
+  // `NODE_OPTIONS` carries the mode too, in either form, and a worker inherits it
+  [{ nodeOptions: '--unhandled-rejections=warn' }, false],
+  [{ nodeOptions: '--unhandled-rejections warn' }, false],
+  [{ nodeOptions: '--unhandled-rejections=throw' }, true],
+  // the command line overrides `NODE_OPTIONS`, and the last flag wins, as Node does
+  [
+    {
+      args: ['--unhandled-rejections=throw'],
+      nodeOptions: '--unhandled-rejections=warn',
+    },
+    true,
+  ],
+  [
+    {
+      args: ['--unhandled-rejections=warn'],
+      nodeOptions: '--unhandled-rejections=throw',
+    },
+    false,
+  ],
+  [
+    { args: ['--unhandled-rejections=warn', '--unhandled-rejections=throw'] },
+    true,
+  ],
+  [
+    { args: ['--unhandled-rejections=throw', '--unhandled-rejections=warn'] },
+    false,
+  ],
+  // the last one in `execArgv` beats the earlier one there and the one in `NODE_OPTIONS`
+  [
+    {
+      args: ['--unhandled-rejections=warn', '--unhandled-rejections=throw'],
+      nodeOptions: '--unhandled-rejections=none',
+    },
+    true,
+  ],
+]
 
 describe('helpers', () => {
   describe('flag detection utilities', () => {
@@ -84,6 +182,140 @@ describe('helpers', () => {
       // Should return false for empty array
       expect(hasLoaderFlag([])).toBe(false)
     })
+
+    /** Runs `fn` with the process's runtime flags replaced, restoring them afterwards. */
+    const withExecArgv = (execArgv: string[], fn: () => void) => {
+      const previous = process.execArgv
+      process.execArgv = execArgv
+      try {
+        fn()
+      } finally {
+        process.execArgv = previous
+      }
+    }
+
+    test('getFlag reads a value joined with = or given as the next argument', () => {
+      withExecArgv(['--key=value'], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      withExecArgv(['--key', 'value'], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      withExecArgv(['--other', '--key=value'], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      // the last occurrence wins, as it does for Node itself
+      withExecArgv(['--key=first', '--key=second'], () => {
+        expect(getFlag('--key')).toBe('second')
+      })
+      withExecArgv(['--key', 'first', '--key=second'], () => {
+        expect(getFlag('--key')).toBe('second')
+      })
+    })
+
+    test('getFlag unquotes a value', () => {
+      withExecArgv(['--key', "'value'"], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      withExecArgv(['--key', '"value"'], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      withExecArgv(['--key="value"'], () => {
+        expect(getFlag('--key')).toBe('value')
+      })
+      // only a matching pair is removed
+      withExecArgv(['--key', "'value"], () => {
+        expect(getFlag('--key')).toBe("'value")
+      })
+    })
+
+    test('getFlag tells a flag without a value from an absent flag', () => {
+      withExecArgv(['--key'], () => {
+        expect(getFlag('--key')).toBe('')
+      })
+      withExecArgv(['--key='], () => {
+        expect(getFlag('--key')).toBe('')
+      })
+      // a following flag is not this flag's value
+      withExecArgv(['--key', '--other'], () => {
+        expect(getFlag('--key')).toBe('')
+      })
+      withExecArgv(['--other'], () => {
+        expect(getFlag('--key')).toBeUndefined()
+      })
+      withExecArgv([], () => {
+        expect(getFlag('--key')).toBeUndefined()
+      })
+    })
+
+    test('getFlag takes any of a set of names', () => {
+      const require = new Set(['-r', '--require'])
+      withExecArgv(['-r', 'value'], () => {
+        expect(getFlag(require)).toBe('value')
+      })
+      withExecArgv(['--require=value'], () => {
+        expect(getFlag(require)).toBe('value')
+      })
+      withExecArgv(['--other', 'value'], () => {
+        expect(getFlag(require)).toBeUndefined()
+      })
+      // the last name found wins, whatever its form
+      withExecArgv(['--require=first', '-r', 'second'], () => {
+        expect(getFlag(require)).toBe('second')
+      })
+    })
+
+    test('getFlag skips the values that are not the accepted one', () => {
+      const require = new Set(['-r', '--require'])
+      withExecArgv(['--require', 'first', '-r', 'second'], () => {
+        expect(getFlag(require)).toBe('second')
+        // a value that is not accepted does not end the scan
+        expect(getFlag(require, 'second')).toBe('second')
+        expect(getFlag(require, 'first')).toBe('first')
+        expect(getFlag(require, 'third')).toBeUndefined()
+      })
+    })
+
+    test('getFlag does not read a script argument', () => {
+      // a flag after the script path reaches `argv`, which Node does not apply
+      process.argv.push('--key=value')
+      try {
+        expect(getFlag('--key')).toBeUndefined()
+      } finally {
+        process.argv.pop()
+      }
+    })
+
+    test('getFlag reads a quoted NODE_OPTIONS value the way the runtime does', () => {
+      // double quotes group and are removed, and a backslash inside them escapes, so the value is
+      // the one the runtime applies. A relative path keeps platform separators out of the value
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'synckit-flags-'))
+      const probe = path.join(dir, 'probe.cjs')
+      fs.writeFileSync(path.join(dir, 'required file.cjs'), '')
+      fs.writeFileSync(path.join(dir, 'ab.cjs'), '')
+      fs.writeFileSync(
+        probe,
+        `process.stdout.write(require(${JSON.stringify(
+          path.join(_dirname, '../shared.cjs'),
+        )}).getFlag('--require') ?? '')`,
+      )
+      const read = (nodeOptions: string) =>
+        execFileSync(process.execPath, [probe], {
+          encoding: 'utf8',
+          cwd: dir,
+          env: { ...process.env, NODE_OPTIONS: nodeOptions },
+        })
+      try {
+        // a quoted value with a space stays one argument
+        expect(read('--require "./required file.cjs"')).toBe(
+          './required file.cjs',
+        )
+        // and the backslash escapes, as it does for the runtime
+        expect(read(String.raw`--require "./a\b.cjs"`)).toBe('./ab.cjs')
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true })
+      }
+    })
   })
 
   describe('dataUrl', () => {
@@ -132,7 +364,8 @@ describe('helpers', () => {
       const original = { a: 1, nested }
       const copy = extractProperties(original)
 
-      expect(copy.nested).toBe(original.nested) // Same nested object reference
+      // the declaration says property bag, so reaching into the copy takes a cast
+      expect((copy as { nested: unknown }).nested).toBe(original.nested) // Same nested object reference
       expect(copy).toEqual(original)
     })
 
@@ -267,7 +500,7 @@ describe('helpers', () => {
 
       process.stdout._writev!(chunks, callback)
 
-      expect(stdio.length).toBe(1)
+      expect(stdio).toHaveLength(1)
       expect(stdio[0].type).toBe('stdout')
       expect(stdio[0].chunk).toEqual(Buffer.from('test'))
       expect(callback).toHaveBeenCalled()
@@ -284,13 +517,350 @@ describe('helpers', () => {
 
       process.stderr._writev!(chunks, callback)
 
-      expect(stdio.length).toBe(1)
+      expect(stdio).toHaveLength(1)
       expect(stdio[0]).toEqual({
         type: 'stderr',
         chunk: Buffer.from('test error'),
         encoding: 'utf8',
       })
       expect(callback).toHaveBeenCalled()
+    })
+  })
+
+  describe('worker load guard', () => {
+    const createPort = (failCount = 0) => {
+      const messages: unknown[] = []
+      let calls = 0
+      const port = {
+        postMessage: (message: unknown) => {
+          calls += 1
+          if (calls <= failCount) {
+            throw new Error('not cloneable')
+          }
+          messages.push(message)
+        },
+      } as unknown as MessagePort
+      return { messages, port }
+    }
+
+    const install = (port: MessagePort, view: Int32Array) => {
+      installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+      return process.listeners('uncaughtException').pop() as unknown as (
+        error: unknown,
+      ) => void
+    }
+
+    const listeners = () => process.listenerCount('uncaughtException')
+
+    // the guard registers listeners on the process — `exit` included — so snapshot them all so a
+    // test that leaves the guard armed (a non-fatal report re-arms it) cannot leak into the next
+    // test, where enough leaked `exit` listeners make Node warn
+    let beforeListeners: {
+      uncaughtException: unknown[]
+      unhandledRejection: unknown[]
+      exit: unknown[]
+    }
+
+    /** Drop any listener the guard added since the snapshot, such as a re-armed one. */
+    const removeAddedListeners = () => {
+      for (const listener of process.listeners('uncaughtException')) {
+        if (!beforeListeners.uncaughtException.includes(listener)) {
+          process.off('uncaughtException', listener)
+        }
+      }
+      for (const listener of process.listeners('unhandledRejection')) {
+        if (!beforeListeners.unhandledRejection.includes(listener)) {
+          process.off('unhandledRejection', listener)
+        }
+      }
+      for (const listener of process.listeners('exit')) {
+        if (!beforeListeners.exit.includes(listener)) {
+          process.off('exit', listener)
+        }
+      }
+    }
+
+    beforeEach(() => {
+      beforeListeners = {
+        uncaughtException: process.listeners('uncaughtException'),
+        unhandledRejection: process.listeners('unhandledRejection'),
+        exit: process.listeners('exit'),
+      }
+      // a fatal report stops the worker; jest-runner installs its own `process.exit` when the file
+      // runs, so spy on it here, after that replacement is in place
+      jest
+        .spyOn(process, 'exit')
+        .mockImplementation(((code?: number) => code) as never)
+    })
+
+    afterEach(() => {
+      removeAddedListeners()
+      jest.restoreAllMocks()
+    })
+
+    test('reports the error with its properties and wakes the main thread', () => {
+      const { messages, port } = createPort()
+      const view = createSharedBufferView()
+      const before = listeners()
+
+      install(port, view)(Object.assign(new Error('boom'), { code: 'E_BOOM' }))
+
+      expect(messages).toHaveLength(1)
+      const [message] = messages as [
+        { error: Error; workerFailure: boolean; properties: unknown },
+      ]
+      expect(message.workerFailure).toBe(true)
+      expect(message.error.message).toBe('boom')
+      expect(message.properties).toEqual({ code: 'E_BOOM' })
+      expect(Atomics.load(view, 0)).toBe(1)
+      // invoking the guard disarmed it
+      expect(listeners()).toBe(before)
+    })
+
+    test('reports a falsy failure as it is', () => {
+      const { messages, port } = createPort()
+      const view = createSharedBufferView()
+
+      install(port, view)(null)
+
+      const [message] = messages as [{ error: unknown }]
+      expect(message.error).toBeNull()
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('wakes the main thread even when reading the properties throws', () => {
+      const { messages, port } = createPort()
+      const view = createSharedBufferView()
+      const error = new Error('boom')
+      Object.defineProperty(error, 'trap', {
+        enumerable: true,
+        get() {
+          throw new Error('nope')
+        },
+      })
+
+      install(port, view)(error)
+
+      // the property copy threw, so the bare error was posted instead, and the caller is woken
+      expect(messages).toHaveLength(1)
+      const [message] = messages as [{ error: Error }]
+      expect(message.error).toBe(error)
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('wakes the main thread when the error cannot be serialized', () => {
+      const { messages, port } = createPort(1)
+      const view = createSharedBufferView()
+
+      install(port, view)(new Error('boom'))
+
+      expect(messages).toHaveLength(1)
+      const [message] = messages as [{ error: Error }]
+      // the first post failed, so the bare original error is sent instead of a synthetic one
+      expect(message.error.message).toBe('boom')
+      expect(Atomics.load(view, 0)).toBe(1)
+    })
+
+    test('names the reason in the synthesized error', () => {
+      // the port refuses the full error and the bare one, so the synthetic error is what is left
+      const fatal = createPort(2)
+      install(fatal.port, createSharedBufferView())(new Error('boom'))
+
+      const [fatalMessage] = fatal.messages as [{ error: Error }]
+      expect(fatalMessage.error.message).toBe(
+        'Worker module failed to load: boom',
+      )
+
+      const handler = jest.fn()
+      process.on('uncaughtException', handler)
+      try {
+        const recovered = createPort(2)
+        const view = createSharedBufferView()
+        const guard = install(recovered.port, view)
+        markWorkerRegistered(view)
+        guard(new Error('boom'))
+
+        const [recoveredMessage] = recovered.messages as [{ error: Error }]
+        expect(recoveredMessage.error.message).toBe('Worker failed: boom')
+      } finally {
+        process.off('uncaughtException', handler)
+      }
+    })
+
+    test('falls back to `instanceof` when `Error.isError` is unavailable', async () => {
+      const descriptor = Object.getOwnPropertyDescriptor(Error, 'isError')
+      Reflect.deleteProperty(Error, 'isError')
+      jest.resetModules()
+      try {
+        const { installWorkerLoadGuard: installWithoutIsError } =
+          await import('../register.cjs')
+        // the registry really was reset, so the module saw `Error.isError` absent
+        expect(installWithoutIsError).not.toBe(installWorkerLoadGuard)
+
+        const { messages, port } = createPort(2)
+        const view = createSharedBufferView()
+        installWithoutIsError({ workerPort: port, sharedBufferView: view })
+
+        const guard = process
+          .listeners('uncaughtException')
+          .pop() as unknown as (error: unknown) => void
+        guard(new Error('boom'))
+
+        const [message] = messages as [{ error: Error }]
+        expect(message.error.message).toBe('Worker module failed to load: boom')
+      } finally {
+        if (descriptor) {
+          Object.defineProperty(Error, 'isError', descriptor)
+        }
+        jest.resetModules()
+      }
+    })
+
+    test('judges recovery per event, not across events', () => {
+      const handler = jest.fn()
+      process.on('unhandledRejection', handler)
+      try {
+        const { messages, port } = createPort()
+        const view = createSharedBufferView()
+        const guard = install(port, view)
+        markWorkerRegistered(view)
+
+        guard(new Error('uncaught boom'))
+
+        // a listener for the other event cannot handle an uncaught exception
+        const [message] = messages as [{ fatal: boolean }]
+        expect(message.fatal).toBe(true)
+        expect(jest.mocked(process.exit)).toHaveBeenCalledWith(1)
+      } finally {
+        process.off('unhandledRejection', handler)
+      }
+    })
+
+    test('an unhandled rejection is recoverable through an uncaughtException listener', () => {
+      const handler = jest.fn()
+      process.on('uncaughtException', handler)
+      try {
+        const { messages, port } = createPort()
+        const view = createSharedBufferView()
+        installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+        const rejectionGuard = process
+          .listeners('unhandledRejection')
+          .pop() as unknown as (reason: unknown) => void
+        markWorkerRegistered(view)
+
+        rejectionGuard(new Error('rejection boom'))
+
+        // Node promotes a rejection to the uncaughtException handler under the default mode
+        const [message] = messages as [{ fatal: boolean }]
+        expect(message.fatal).toBe(false)
+        expect(jest.mocked(process.exit)).not.toHaveBeenCalled()
+      } finally {
+        process.off('uncaughtException', handler)
+      }
+    })
+
+    test('marks a failure fatal unless the worker is left handled', () => {
+      // never registered: nothing can serve a later call
+      const first = createPort()
+      const firstView = createSharedBufferView()
+      install(first.port, firstView)(new Error('before registering'))
+      expect((first.messages[0] as { fatal: boolean }).fatal).toBe(true)
+
+      // registered, and another listener is left to handle the event
+      const handler = jest.fn()
+      process.on('uncaughtException', handler)
+      try {
+        const second = createPort()
+        const secondView = createSharedBufferView()
+        const guard = install(second.port, secondView)
+        markWorkerRegistered(secondView)
+        guard(new Error('after registering'))
+        expect((second.messages[0] as { fatal: boolean }).fatal).toBe(false)
+      } finally {
+        process.off('uncaughtException', handler)
+      }
+
+      // registered, but nothing is left to handle it: the worker would have died. The second case
+      // re-armed its own guard, so drop that before asking about this view on its own.
+      removeAddedListeners()
+      const third = createPort()
+      const thirdView = createSharedBufferView()
+      const guard = install(third.port, thirdView)
+      markWorkerRegistered(thirdView)
+      guard(new Error('unhandled after registering'))
+      expect((third.messages[0] as { fatal: boolean }).fatal).toBe(true)
+    })
+
+    test('arms again after a non-fatal report', () => {
+      const handler = jest.fn()
+      process.on('uncaughtException', handler)
+      try {
+        const { messages, port } = createPort()
+        const view = createSharedBufferView()
+        const before = listeners()
+        const guard = install(port, view)
+        markWorkerRegistered(view)
+
+        guard(new Error('first'))
+
+        // non-fatal, so the guard is armed again for the next failure
+        expect((messages[0] as { fatal: boolean }).fatal).toBe(false)
+        expect(messages).toHaveLength(1)
+        expect(listeners()).toBe(before + 1)
+
+        // the re-armed listener reports the second failure with its own reason
+        const second = process
+          .listeners('uncaughtException')
+          .pop() as unknown as (error: unknown) => void
+        second(new Error('second'))
+
+        expect(messages).toHaveLength(2)
+        expect((messages[1] as { error: Error }).error.message).toBe('second')
+        expect((messages[1] as { fatal: boolean }).fatal).toBe(false)
+      } finally {
+        process.off('uncaughtException', handler)
+      }
+    })
+
+    test('follows the runtime rejection mode for a listener-less rejection', () => {
+      const probe = writeRejectionModeProbe()
+      const classify = ({ args, nodeOptions }: ProbeFlags = {}) =>
+        JSON.parse(
+          execFileSync(process.execPath, [...(args ?? []), probe], {
+            encoding: 'utf8',
+            env: { ...process.env, NODE_OPTIONS: nodeOptions ?? '' },
+          }),
+        ) as { fatal: boolean; exited: boolean }
+
+      try {
+        for (const [flags, fatal] of REJECTION_MODE_CASES) {
+          expect(classify(flags)).toEqual({ fatal, exited: fatal })
+        }
+      } finally {
+        fs.rmSync(probe, { force: true })
+      }
+    })
+
+    test('arms once, and stays disarmed after a fatal report', () => {
+      const { messages, port } = createPort()
+      const view = createSharedBufferView()
+      const before = listeners()
+
+      const guard = install(port, view)
+      expect(listeners()).toBe(before + 1)
+
+      // arming again is a no-op
+      installWorkerLoadGuard({ workerPort: port, sharedBufferView: view })
+      expect(listeners()).toBe(before + 1)
+
+      // a fatal report stops the worker, so it is not armed again
+      guard(new Error('boom'))
+      expect(messages).toHaveLength(1)
+      expect(listeners()).toBe(before)
+    })
+
+    test('generateGlobals returns nothing without shims', () => {
+      expect(generateGlobals(workerCjsPath, [])).toBe('')
     })
   })
 })

@@ -19,11 +19,17 @@ export const workerMjsPath = path.resolve(_dirname, 'worker.mjs')
 export const workerMjsAsMtsPath = path.resolve(_dirname, 'worker-mts.mjs')
 export const workerMtsPath = path.resolve(_dirname, 'worker-mts.mts')
 export const workerErrorPath = path.resolve(_dirname, 'worker-error.cjs')
+export const workerErrorPrimitivePath = path.resolve(
+  _dirname,
+  'worker-error-primitive.cjs',
+)
 
 export const testIf = (condition: boolean) => (condition ? it : it.skip)
 
 type ReceiveMessageOnPortMock = jest.Mock<
-  <T>(port: WorkerThreads.MessagePort) => { message: WorkerToMainMessage<T> }
+  <T>(
+    port: WorkerThreads.MessagePort,
+  ) => { message: WorkerToMainMessage<T> } | undefined
 >
 export const setupReceiveMessageOnPortMock =
   async (): Promise<ReceiveMessageOnPortMock> => {

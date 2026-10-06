@@ -10,6 +10,7 @@ import {
   workerCjsPath,
   workerCjsTsPath,
   workerErrorPath,
+  workerErrorPrimitivePath,
   workerEsmTsPath,
   workerJsAsTsPath,
   workerMjsPath,
@@ -24,6 +25,10 @@ import {
 } from 'synckit'
 
 const { SYNCKIT_TIMEOUT } = process.env
+
+// a test that lets a deliberately unmatched notification reach the call's own deadline needs to
+// outlive that deadline before jest intervenes
+const BOUNDED_RETRY_TIMEOUT = 20_000
 
 beforeEach(() => {
   jest.resetModules()
@@ -88,6 +93,33 @@ test('createSyncFn', () => {
 
   expect(() => errSyncFn()).toThrowErrorMatchingInlineSnapshot(`"Worker Error"`)
 
+  // a reason that is not an object is thrown as it came, not boxed by the property merge
+  const primitiveErrSyncFn = createSyncFn<(reason: unknown) => Promise<void>>(
+    workerErrorPrimitivePath,
+  )
+  let caught: unknown
+  try {
+    primitiveErrSyncFn('Worker primitive rejection')
+  } catch (error) {
+    caught = error
+  }
+  expect(caught).toBe('Worker primitive rejection')
+
+  // a falsy reason used to be indistinguishable from a successful `undefined` result: every one
+  // must still throw exactly as it was thrown, `undefined` and `null` included
+  const notThrown = Symbol('not thrown')
+  const thrownBy = (reason: unknown) => {
+    try {
+      primitiveErrSyncFn(reason)
+    } catch (error) {
+      return error
+    }
+    return notThrown
+  }
+  for (const reason of [undefined, null, 0, '', false, Number.NaN]) {
+    expect(thrownBy(reason)).toBe(reason)
+  }
+
   const syncFn4 = createSyncFn<AsyncWorkerFn>(workerCjsPath)
 
   expect(syncFn4(1)).toBe(1)
@@ -135,13 +167,87 @@ test('handling of outdated message from worker', async () => {
   jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
 
   receiveMessageOnPortMock
-    .mockReturnValueOnce({ message: { id: -1, stdio } })
+    .mockReturnValueOnce({ message: { id: -1, stdio, result: undefined } })
     .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
   expect(syncFn(1)).toBe(1)
   expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
+})
+
+test('waits again when a notification arrives before its message', async () => {
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+  const executionTimeout = 1000
+
+  // the message really is announced while a port read finds nothing, and the real `Atomics.wait`
+  // runs here: the notification has to stay pending, or the next wait sleeps past the message and
+  // the call fails at its deadline however long that deadline is
+  // eslint-disable-next-line unicorn-x/no-useless-undefined -- the empty read is the case here
+  receiveMessageOnPortMock.mockReturnValueOnce(undefined)
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath, executionTimeout)
+  expect(syncFn(1)).toBe(1)
+  // the forced empty read, then one that found the message
+  expect(receiveMessageOnPortMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+})
+
+test(
+  'a notification that never brings a message still fails at the deadline',
+  async () => {
+    const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+    const executionTimeout = 300
+    const boundedWithin = 5000
+
+    // every read is empty while the worker keeps announcing its response, so the pending notification
+    // is never spent with a message in hand. `Atomics.wait` cannot time out while the counter is
+    // non-zero, so this only ends because the retries are bounded
+    // eslint-disable-next-line unicorn-x/no-useless-undefined -- the empty read is the case here
+    receiveMessageOnPortMock.mockReturnValue(undefined)
+
+    const { createSyncFn } = await import('synckit')
+    const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath, executionTimeout)
+    const started = Date.now()
+    expect(() => syncFn(1)).toThrow(/timed-out/)
+    expect(Date.now() - started).toBeLessThan(boundedWithin)
+  },
+  BOUNDED_RETRY_TIMEOUT,
+)
+
+test('never consumes a notification the counter does not show', async () => {
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+
+  jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
+
+  receiveMessageOnPortMock
+    .mockReturnValueOnce({ message: { id: -1, stdio, result: undefined } })
+    .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
+
+  // `Atomics.wait` here reports a notification the counter never received. Consuming it must not
+  // take the counter below zero: every later wait would then return at once, so the caller would
+  // spin instead of sleeping and starve the worker until its deadline expires.
+  const observed: number[] = []
+  const sub = Atomics.sub
+
+  const subSpy = jest.spyOn(Atomics, 'sub')
+
+  subSpy.mockImplementation(((
+    array: Int32Array,
+    index: number,
+    value: number,
+  ) => {
+    observed.push(Atomics.load(array, index))
+    return sub(array, index, value)
+  }) as unknown as typeof Atomics.sub)
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+  expect(syncFn(1)).toBe(1)
+
+  for (const counter of observed) {
+    expect(counter).toBeGreaterThan(0)
+  }
 })
 
 test('propagation of undefined timeout', async () => {
@@ -151,7 +257,7 @@ test('propagation of undefined timeout', async () => {
   const atomicsWaitSpy = jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
 
   receiveMessageOnPortMock
-    .mockReturnValueOnce({ message: { id: -1, stdio } })
+    .mockReturnValueOnce({ message: { id: -1, stdio, result: undefined } })
     .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
 
   const { createSyncFn } = await import('synckit')
@@ -168,7 +274,7 @@ test('propagation of undefined timeout', async () => {
   expect(typeof secondAtomicsWaitCallTimeout).toBe('undefined')
 })
 
-test('reduction of waiting time', async () => {
+test('a per-call deadline shrinks each successive wait across outdated messages', async () => {
   const synckitTimeout = 60
   process.env.SYNCKIT_TIMEOUT = synckitTimeout.toString()
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
@@ -184,30 +290,71 @@ test('reduction of waiting time', async () => {
   })
 
   receiveMessageOnPortMock
-    .mockReturnValueOnce({ message: { id: -1, stdio } })
+    .mockReturnValueOnce({ message: { id: -2, stdio, result: undefined } })
+    .mockReturnValueOnce({ message: { id: -1, stdio, result: undefined } })
     .mockReturnValueOnce({ message: { id: 0, stdio, result: 1 } })
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
   expect(syncFn(1)).toBe(1)
-  expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(2)
+  expect(receiveMessageOnPortMock).toHaveBeenCalledTimes(3)
 
-  const [firstAtomicsWaitArgs, secondAtomicsWaitArgs] =
+  const [firstWaitArgs, secondWaitArgs, thirdWaitArgs] =
     atomicsWaitSpy.mock.calls
-  const [, , , firstAtomicsWaitCallTimeout] = firstAtomicsWaitArgs
-  const [, , , secondAtomicsWaitCallTimeout] = secondAtomicsWaitArgs
+  const [, , , firstTimeout] = firstWaitArgs
+  const [, , , secondTimeout] = secondWaitArgs
+  const [, , , thirdTimeout] = thirdWaitArgs
 
-  expect(typeof firstAtomicsWaitCallTimeout).toBe('number')
-  expect(firstAtomicsWaitCallTimeout).toBe(synckitTimeout)
-  expect(typeof secondAtomicsWaitCallTimeout).toBe('number')
-  expect(secondAtomicsWaitCallTimeout).toBeLessThan(synckitTimeout)
+  // the budget belongs to the call, not to each wait: the first wait gets all of it and every wait
+  // after an outdated message gets what is left, never a negative remainder. A loaded or coarse
+  // clock can already have reached the deadline, where `0` means the deadline is due rather than a
+  // wrong value, so it is not required to stay above zero.
+  expect(firstTimeout).toBe(synckitTimeout)
+  expect(secondTimeout).toBeGreaterThanOrEqual(0)
+  expect(secondTimeout).toBeLessThan(firstTimeout!)
+  expect(thirdTimeout).toBeGreaterThanOrEqual(0)
+  expect(thirdTimeout).toBeLessThanOrEqual(secondTimeout!)
+})
+
+test('an exhausted budget waits with 0 and fails at the deadline', async () => {
+  process.env.SYNCKIT_TIMEOUT = '20'
+  const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
+
+  const atomicsWaitSpy = jest
+    .spyOn(Atomics, 'wait')
+    .mockImplementation((_typedArray, _index, _value, timeout) => {
+      const start = Date.now()
+      // each wait outlives what is left of the 20ms budget, so the remainder must be clamped
+      while (Date.now() - start < 15) {
+        continue
+      }
+
+      // like the real thing: a due deadline gives up now instead of waiting
+      return timeout !== undefined && timeout <= 0 ? 'timed-out' : 'ok'
+    })
+
+  receiveMessageOnPortMock.mockReturnValue({
+    message: { id: -1, stdio, result: undefined },
+  })
+
+  const { createSyncFn } = await import('synckit')
+  const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)
+
+  // the deadline is reached and reported, rather than the wait becoming indefinite
+  expect(() => syncFn(1)).toThrow('Atomics.wait() failed: timed-out')
+
+  const timeouts = atomicsWaitSpy.mock.calls.map(([, , , timeout]) => timeout)
+  expect(timeouts.every(timeout => timeout! >= 0)).toBe(true)
+  expect(timeouts).toContain(0)
 })
 
 test('unexpected message from worker', async () => {
   jest.spyOn(Atomics, 'wait').mockReturnValue('ok')
 
   const receiveMessageOnPortMock = await setupReceiveMessageOnPortMock()
-  receiveMessageOnPortMock.mockReturnValueOnce({ message: { id: 100, stdio } })
+  receiveMessageOnPortMock.mockReturnValueOnce({
+    message: { id: 100, stdio, result: undefined },
+  })
 
   const { createSyncFn } = await import('synckit')
   const syncFn = createSyncFn<AsyncWorkerFn>(workerCjsPath)

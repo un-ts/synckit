@@ -23,7 +23,6 @@ export const TsRunner = {
 export type TsRunner = ValueOf<typeof TsRunner>
 
 const {
-  NODE_OPTIONS: NODE_OPTIONS_ = '',
   SYNCKIT_EXEC_ARGV = '',
   SYNCKIT_GLOBAL_SHIMS,
   SYNCKIT_TIMEOUT,
@@ -62,8 +61,6 @@ export const STRIP_TYPES_FLAG = '--experimental-strip-types'
 export const TRANSFORM_TYPES_FLAG = '--experimental-transform-types'
 export const NO_STRIP_TYPES_FLAG = '--no-experimental-strip-types'
 
-export const NODE_OPTIONS = NODE_OPTIONS_.split(/\s+/)
-
 export const NO_STRIP_TYPES =
   // only consider `process.features.typescript` when `--no-experimental-strip-types` flag enabled
   hasFlag(NO_STRIP_TYPES_FLAG) && // >=
@@ -93,6 +90,9 @@ export const DEFAULT_GLOBAL_SHIMS_PRESET: GlobalShim[] = [
   },
 ]
 
+// `NODE_OPTIONS` is read where the preload can reach it too, in `shared.cjs`
+export { NODE_OPTIONS } from '../shared.cjs'
+
 export const IMPORT_FLAG = '--import'
 
 export const REQUIRE_FLAG = '--require'
@@ -109,5 +109,3 @@ export const LOADER_FLAGS = new Set([LOADER_FLAG, EXPERIMENTAL_LOADER_FLAG])
 
 // >=
 export const IMPORT_FLAG_SUPPORTED = compareNodeVersion('20.6') >= 0
-
-export const INT32_BYTES = 4

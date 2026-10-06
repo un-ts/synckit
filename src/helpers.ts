@@ -3,13 +3,20 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
-  type MessagePort,
   MessageChannel,
   Worker,
   receiveMessageOnPort,
 } from 'node:worker_threads'
+import type { MessagePort } from 'node:worker_threads'
 
 import { tryExtensions, findUp, cjsRequire, isPkgAvailable } from '@pkgr/core'
+
+import {
+  NODE_OPTIONS,
+  NOTIFY_INDEX,
+  createSharedBufferView,
+  getFlag,
+} from '../shared.cjs'
 
 import { compareNodeVersion } from './common.js'
 import {
@@ -21,13 +28,11 @@ import {
   DEFAULT_TYPES_NODE_VERSION,
   IMPORT_FLAG,
   IMPORT_FLAG_SUPPORTED,
-  INT32_BYTES,
   LOADER_FLAG,
   LOADER_FLAGS,
   MTS_SUPPORTED,
   NO_STRIP_TYPES,
   NO_STRIP_TYPES_FLAG,
-  NODE_OPTIONS,
   REQUIRE_ABBR_FLAG,
   REQUIRE_FLAGS,
   STRIP_TYPES_FLAG,
@@ -45,8 +50,15 @@ import type {
   PackageJson,
   StdioChunk,
   SynckitOptions,
+  WorkerFailureMessage,
   WorkerToMainMessage,
 } from './types.js'
+
+// The shared buffer and its notification byte live in `shared.cjs`, and the load guard that uses
+// them at the worker's end lives in `register.cjs` — both plain CommonJS files at the package
+// root, so that `register.cjs` reaches the worker unchanged with `-r` in development, where a
+// test runner maps the package to its source, and in the published package alike; `shared.cjs`
+// reaches it because `register.cjs` requires it.
 
 export const isFile = (path: string) => {
   try {
@@ -59,6 +71,90 @@ export const isFile = (path: string) => {
 
 export const dataUrl = (code: string) =>
   new URL(`data:text/javascript,${encodeURIComponent(code)}`)
+
+// only `extractProperties` was part of the public surface before it moved into `shared.cjs`;
+// the other internals stay internal
+export { extractProperties } from '../shared.cjs'
+
+// MessagePort does not copy an error's own properties, so they are merged back in on this
+// side. A reason that is not an object is thrown as it came: `Object.assign` would box a
+// primitive into a `String`/`Number` object with no `message`.
+const withProperties = (error: unknown, properties?: object) =>
+  error && typeof error === 'object' ? Object.assign(error, properties) : error
+
+// A tuning knob rather than a derived bound: how many consecutive empty port reads a still-pending
+// notification is retried for before the loop stops spinning and sleeps a slice instead. It covers
+// the hand-off between the worker's post and this thread seeing the message. See
+// `receiveMessageWithId`.
+const EMPTY_PORT_READS = 100_000
+
+// How long that sleep lasts. The counter is non-zero at that point — which is why the loop cannot
+// simply wait on it — so this also bounds how late a message that arrives without a notification of
+// its own can be read. See `receiveMessageWithId`.
+const EMPTY_PORT_READ_SLICE = 10
+
+// The code the warning about the relaxed guard ordering carries, so a project can silence exactly
+// this one. There is deliberately no deadline to go with it: any finite cap on that path would cap
+// legitimate work too, so the caller's own timeout stays the only bound. See `startWorkerThread`.
+const FALLBACK_WARNING_CODE = 'SYNCKIT_GUARD_ORDERING'
+
+/**
+ * Tells a worker to stop working on a request this thread has given up waiting for, so that its
+ * late answer is not posted at all.
+ *
+ * @param mainPort - The port the worker answers on.
+ * @param id - The id of the abandoned request.
+ */
+const abortRequest = (mainPort: MessagePort, id: number) => {
+  const abortMsg: MainToWorkerCommandMessage = { id, cmd: 'abort' }
+
+  mainPort.postMessage(abortMsg)
+}
+
+/**
+ * Handles one empty port read: reports a deadline that has passed, and once the spin bound is
+ * reached sleeps a bounded slice on the value the counter holds. Waiting on that value rather than
+ * on `0` keeps a pending notification — whose message may still arrive — from being spent before it
+ * does, and a new notification changes the value and returns early. Nothing here touches the
+ * counter, so it cannot drift.
+ *
+ * @param sharedBufferView - This worker's slice of the shared buffer.
+ * @param emptyReads - How many consecutive empty reads there have been.
+ * @param deadline - When the call's budget runs out, or `undefined` when it has none.
+ * @param remaining - Milliseconds left of that budget, or `undefined`.
+ * @param mainPort - The port the worker answers on, for the abort a passed deadline sends.
+ * @param expectedId - The id of the request this call is waiting for.
+ * @returns The new count of consecutive empty reads.
+ */
+const noteEmptyRead = (
+  sharedBufferView: Int32Array,
+  emptyReads: number,
+  deadline: number | undefined,
+  remaining: number | undefined,
+  mainPort: MessagePort,
+  expectedId: number,
+) => {
+  // a pending notification keeps `Atomics.wait` returning at once, so the deadline has to be taken
+  // here as well: only a zero counter lets that wait time out by itself. The worker is told to stop
+  // exactly as the wait's own timeout does, or it would answer a request nobody is waiting for
+  if (deadline != null && Date.now() >= deadline) {
+    abortRequest(mainPort, expectedId)
+    throw new Error('Internal error: Atomics.wait() failed: timed-out')
+  }
+
+  const reads = emptyReads + 1
+
+  if (reads % EMPTY_PORT_READS === 0) {
+    Atomics.wait(
+      sharedBufferView,
+      NOTIFY_INDEX,
+      Atomics.load(sharedBufferView, NOTIFY_INDEX),
+      Math.min(remaining ?? EMPTY_PORT_READ_SLICE, EMPTY_PORT_READ_SLICE),
+    )
+  }
+
+  return reads
+}
 
 export const hasRequireFlag = (execArgv: string[]) =>
   execArgv.some(execArg => REQUIRE_FLAGS.has(execArg))
@@ -296,13 +392,10 @@ export const setupTsRunner = (
       /** @see https://github.com/facebook/jest/issues/9543 */
       pnpApiPath = cjsRequire.resolve('pnpapi')
     } catch {}
+    // a `--require`/`-r` that already loads the pnp API is skipped; only a value equal to it counts
     if (
       pnpApiPath &&
-      !NODE_OPTIONS.some(
-        (option, index) =>
-          REQUIRE_FLAGS.has(option) &&
-          pnpApiPath === cjsRequire.resolve(NODE_OPTIONS[index + 1]),
-      ) &&
+      !getFlag(REQUIRE_FLAGS, pnpApiPath) &&
       !execArgv.includes(pnpApiPath)
     ) {
       execArgv = [REQUIRE_ABBR_FLAG, pnpApiPath, ...execArgv]
@@ -354,18 +447,14 @@ export const encodeImportModule = (
                   : globalName) +
               ' from'
             : ''
-        } '${
-          path.isAbsolute(moduleName)
-            ? String(pathToFileURL(moduleName))
-            : moduleName
-        }'`
+        } ${JSON.stringify(
+          path.isAbsolute(moduleName) ? pathToFileURL(moduleName) : moduleName,
+        )}`
       : `${
           globalName
             ? 'const ' + (named?.trim() ? `{${named}}` : globalName) + '='
             : ''
-        }require('${moduleName
-          // eslint-disable-next-line unicorn-x/prefer-string-replace-all -- compatibility
-          .replace(/\\/g, '\\\\')}')`
+        }require(${JSON.stringify(moduleName)})`
 
   if (!globalName) {
     return importStatement
@@ -446,31 +535,14 @@ export const generateGlobals = (
   return content
 }
 
-// MessagePort doesn't copy the properties of Error objects. We still want
-// error objects to have extra properties such as "warnings" so implement the
-// property copying manually.
-export function extractProperties<T extends object>(object: T): T
-export function extractProperties<T>(object?: T): T | undefined
-
 /**
- * Creates a shallow copy of the enumerable properties from the provided object.
+ * Absolute path of the module preloaded into every worker to arm the load guard.
  *
- * @param object - An optional object whose properties are to be extracted.
- * @returns A new object containing the enumerable properties of the input, or
- *   undefined if no valid object is provided.
+ * `register.cjs` ships with the package, next to the package root: `lib/../register.cjs` in
+ * the built package, `src/../register.cjs` in this repository, so the one relative path covers
+ * a test run and a release alike.
  */
-export function extractProperties<T>(object?: T) {
-  if (object && typeof object === 'object') {
-    const properties = {} as T
-    for (const key in object) {
-      properties[key as keyof T] = object[key]
-    }
-    return properties
-  }
-}
-
-let sharedBuffer: SharedArrayBuffer | undefined
-let sharedBufferView: Int32Array | undefined
+const workerPreload = path.resolve(_dirname, '../register.cjs')
 
 /**
  * Spawns a worker thread and returns a synchronous function to dispatch tasks.
@@ -511,6 +583,17 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   }: SynckitOptions = {},
 ) {
   const { port1: mainPort, port2: workerPort } = new MessageChannel()
+
+  // A nested worker can forward the arguments this code added at the level above, guard pair
+  // included. That pair is not a register the caller asked for, and `setupTsRunner` reads exactly
+  // that to decide whether to add a TypeScript runner, so it goes before the runner is selected. It
+  // only ever leads, because this code is what puts it there — the same positional test the
+  // `inheritsGuard` check makes on `NODE_OPTIONS` — and it is added again after the selection, so it
+  // stays one pair per level instead of one per nesting level
+  execArgv =
+    execArgv[0] === REQUIRE_ABBR_FLAG && execArgv[1] === workerPreload
+      ? execArgv.slice(2)
+      : execArgv
 
   const {
     isTs,
@@ -567,27 +650,19 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
         : []
   ).filter(({ moduleName }) => isPkgAvailable(moduleName))
 
-  // We store a single Byte in the SharedArrayBuffer
-  // for the notification, we can used a fixed size
-  sharedBufferView ??= new Int32Array(
-    /* istanbul ignore next */ (sharedBuffer ??= new SharedArrayBuffer(
-      INT32_BYTES,
-    )),
-    0,
-    1,
-  )
+  const sharedBufferView = createSharedBufferView()
 
   const useGlobals = finalGlobalShims.length > 0
 
   const useEval = isTs ? !tsUseEsm : !jsUseEsm && useGlobals
 
-  const worker = new Worker(
+  const workerEntry =
     (jsUseEsm && useGlobals) || (tsUseEsm && finalTsRunner === TsRunner.TsNode)
       ? dataUrl(
           `${generateGlobals(
             finalWorkerPath,
             finalGlobalShims,
-          )};import '${String(workerPathUrl)}'`,
+          )};import ${JSON.stringify(String(workerPathUrl))}`,
         )
       : useEval
         ? `${generateGlobals(
@@ -595,85 +670,224 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
             finalGlobalShims,
             'require',
           )};${encodeImportModule(finalWorkerPath, 'require')}`
-        : workerPathUrl,
-    {
-      eval: useEval,
-      workerData: { sharedBufferView, workerPort, pnpLoaderPath },
-      transferList: [workerPort, ...transferList],
-      execArgv: finalExecArgv,
-    },
-  )
+        : workerPathUrl
+
+  const workerOptions = {
+    eval: useEval,
+    workerData: { sharedBufferView, workerPort, pnpLoaderPath },
+    transferList: [workerPort, ...transferList],
+  }
+
+  // The guard has to load before any preload inherited through `NODE_OPTIONS` — which run first —
+  // and before the worker module, so it leads the worker's own `NODE_OPTIONS`. A worker that already
+  // inherits it keeps its environment untouched, so a synckit worker inside a worker cannot
+  // accumulate one preload flag per nesting level. The check is the exact shape the prepend writes,
+  // with the same constant, so changing that flag moves the writer and this together: a guard that
+  // merely sits in this process's `execArgv` — the fallback below writes that — or that appears as
+  // another flag's value does not count, and a hand-written `--require <guard>` only costs a
+  // duplicate preload, which the module cache and the per-slice state absorb. It relies on
+  // `NODE_OPTIONS` being fixed when the process starts, which is what makes the array parsed then
+  // the value the environment below follows
+  const inheritsGuard =
+    NODE_OPTIONS[0] === REQUIRE_ABBR_FLAG && NODE_OPTIONS[1] === workerPreload
+
+  // On that path the guard is put into `execArgv` as well. `NODE_OPTIONS` is what the check decided
+  // to trust, but a caller can clear the variable before creating a nested worker, and then nothing
+  // would preload the guard — the load failure it exists to report would go unreported instead. A
+  // duplicate preload is the worst case, which the module cache and the per-slice state absorb. The
+  // pair added at the level above was dropped before the runner selection, so this stays one per level
+  const guardExecArgv = [REQUIRE_ABBR_FLAG, workerPreload, ...finalExecArgv]
+
+  let worker: Worker
+  try {
+    worker = new Worker(workerEntry, {
+      ...workerOptions,
+      env: inheritsGuard
+        ? undefined
+        : {
+            ...process.env,
+            NODE_OPTIONS: `${REQUIRE_ABBR_FLAG} ${JSON.stringify(workerPreload)}${
+              process.env.NODE_OPTIONS ? ` ${process.env.NODE_OPTIONS}` : ''
+            }`,
+          },
+      // the TypeScript runner's own `-r` entries stay; the guard is not one of them here
+      execArgv: inheritsGuard ? guardExecArgv : finalExecArgv,
+    })
+  } catch (error) {
+    // A runtime refuses an option it inherited once the environment is passed explicitly to a worker
+    // (`--openssl-legacy-provider` on 18, `--title` on 24, the set varying by version) and there is
+    // no programmatic list of the options a worker rejects, so retry with the inherited environment
+    // and the guard back in `execArgv`, which every version takes. That path loses the preload
+    // ordering: the guard loads after a preload inherited through `NODE_OPTIONS`, so a failure there
+    // is reported by nothing. The call says so once, and the caller can bound the wait themselves —
+    // with `SYNCKIT_TIMEOUT`, or a per-call timeout — which is the only bound this path has
+    if ((error as { code?: string }).code !== 'ERR_WORKER_INVALID_EXEC_ARGV') {
+      throw error
+    }
+
+    process.emitWarning(
+      'synckit: this Node rejected the worker environment, so the failure guard loads after ' +
+        'inherited `NODE_OPTIONS` preloads; a failure in one of those cannot be reported. Set ' +
+        '`SYNCKIT_TIMEOUT` to bound the wait.',
+      { code: FALLBACK_WARNING_CODE },
+    )
+    worker = new Worker(workerEntry, {
+      ...workerOptions,
+      execArgv: guardExecArgv,
+    })
+  }
 
   let nextID = 0
 
-  const receiveMessageWithId = (
-    port: MessagePort,
-    expectedId: number,
-    waitingTimeout?: number,
-  ): WorkerToMainMessage<R> => {
-    const start = Date.now()
-    const status = Atomics.wait(sharedBufferView!, 0, 0, waitingTimeout)
-    Atomics.store(sharedBufferView!, 0, 0)
+  // Cached so that later calls keep throwing the original failure instead of posting to a
+  // worker which cannot answer
+  let workerFailure: WorkerFailureMessage | undefined
+
+  /**
+   * Spends one pending notification, never taking the counter below zero.
+   *
+   * The check is not redundant: an unconditional decrement can take the counter negative, and a
+   * negative counter makes every `Atomics.wait` return `'not-equal'` at once, so the caller spins
+   * instead of sleeping and starves the worker until the deadline expires. Measured on Node 18.18
+   * under the CI's load and timeout, restoring it took the `reliability` soak from three failures
+   * in four runs to none in six.
+   */
+  const spendNotification = () => {
+    if (Atomics.load(sharedBufferView, NOTIFY_INDEX) > 0) {
+      Atomics.sub(sharedBufferView, NOTIFY_INDEX, 1)
+    }
+  }
+
+  /**
+   * Waits once for a notification and returns the message it announced, if any. A failure the
+   * preload reported is thrown from here.
+   *
+   * The notification is spent only once its message is in hand. Spending it first would let a
+   * notification whose message is not readable yet be spent on nothing: the next wait, seeing a zero
+   * counter, would sleep past a message that never notifies again — measured with a real
+   * `Atomics.wait`, where the call failed at its deadline although the response was queued.
+   *
+   * @param abortId - The request to abort when the wait itself fails.
+   * @param remaining - Milliseconds left of the call's budget.
+   */
+  const waitForMessage = (
+    abortId: number,
+    remaining?: number,
+  ): WorkerToMainMessage<R> | undefined => {
+    const status = Atomics.wait(sharedBufferView, NOTIFY_INDEX, 0, remaining)
 
     if (!['ok', 'not-equal'].includes(status)) {
-      const abortMsg: MainToWorkerCommandMessage = {
-        id: expectedId,
-        cmd: 'abort',
-      }
-      port.postMessage(abortMsg)
+      abortRequest(mainPort, abortId)
       throw new Error('Internal error: Atomics.wait() failed: ' + status)
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const result = receiveMessageOnPort(mainPort) as
-      | { message: WorkerToMainMessage<R> }
+      | { message: WorkerFailureMessage | WorkerToMainMessage<R> }
       | undefined
 
     const msg = result?.message
 
-    if (msg?.id == null || msg.id < expectedId) {
-      const waitingTime = Date.now() - start
-      return receiveMessageWithId(
-        port,
-        expectedId,
-        waitingTimeout ? waitingTimeout - waitingTime : undefined,
-      )
+    if (!msg) {
+      // a notification can reach this thread just before the message it announces is readable; it
+      // stays pending, and the caller re-reads the port at once instead of sleeping past it
+      return
     }
 
-    const { id, ...message } = msg
+    spendNotification()
 
-    if (expectedId !== id) {
-      throw new Error(
-        `Internal error: Expected id ${expectedId} but got id ${id}`,
-      )
+    if ('workerFailure' in msg) {
+      // a worker that never registered a handler, or that is gone, cannot serve later calls, so
+      // its failure is cached; one that only reported a failure may well serve again
+      if (msg.fatal) {
+        workerFailure = msg
+      }
+
+      throw withProperties(msg.error, msg.properties)
     }
 
-    return { id, ...message }
+    return msg
+  }
+
+  const receiveMessageWithId = (
+    expectedId: number,
+    waitingTimeout?: number,
+  ): WorkerToMainMessage<R> => {
+    // One deadline for the whole call: the first wait gets the full budget and every later wait
+    // only what is left of it, so a stream of outdated messages cannot push the total wait past
+    // `waitingTimeout`.
+    const deadline =
+      waitingTimeout == null ? undefined : Date.now() + waitingTimeout
+
+    // Never negative: a coarse or loaded clock can overshoot the deadline, and a negative timeout
+    // is not a shorter wait. `0` means the deadline is due, so the wait returns `'timed-out'` and
+    // the call fails now, while `undefined` is what waits indefinitely.
+    let remaining =
+      waitingTimeout == null ? undefined : Math.max(0, waitingTimeout)
+
+    // A pending notification whose message is not readable yet is retried at once, because it is
+    // still unspent; this bounds that retrying. `Atomics.wait` cannot time out while the counter is
+    // non-zero, so a notification that never brings a message — a report whose every post failed on
+    // a closed port — would otherwise spin for ever.
+    let emptyReads = 0
+
+    for (;;) {
+      const msg = waitForMessage(expectedId, remaining)
+
+      if (msg == null || msg.id < expectedId) {
+        // an outdated or missing response: wait again with only the time this call has left, never
+        // a negative remainder
+        if (msg == null) {
+          emptyReads = noteEmptyRead(
+            sharedBufferView,
+            emptyReads,
+            deadline,
+            remaining,
+            mainPort,
+            expectedId,
+          )
+        }
+
+        remaining =
+          deadline == null ? undefined : Math.max(0, deadline - Date.now())
+        continue
+      }
+
+      if (expectedId !== msg.id) {
+        throw new Error(
+          `Internal error: Expected id ${expectedId} but got id ${msg.id}`,
+        )
+      }
+
+      return msg
+    }
   }
 
   const syncFn = (...args: Parameters<T>): R => {
+    if (workerFailure) {
+      throw withProperties(workerFailure.error, workerFailure.properties)
+    }
+
     const id = nextID++
 
     const msg: MainToWorkerMessage<Parameters<T>> = { id, args }
 
     worker.postMessage(msg)
 
-    const { result, error, properties, stdio } = receiveMessageWithId(
-      mainPort,
-      id,
-      timeout,
-    )
+    const message = receiveMessageWithId(id, timeout)
 
-    for (const { type, chunk, encoding } of stdio) {
+    for (const { type, chunk, encoding } of message.stdio) {
       process[type].write(chunk, encoding)
     }
 
-    if (error) {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw Object.assign(error, properties)
+    // a message that carries an `error` key is a failure, whatever the reason is. Key presence is
+    // the faithful test: a structured clone keeps an own key whose value is `undefined`, which is
+    // itself a legitimate reason, and truthiness or `!== undefined` would swallow it
+    if ('error' in message) {
+      throw withProperties(message.error, message.properties)
     }
 
-    return result!
+    return message.result
   }
 
   worker.unref()
