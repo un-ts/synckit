@@ -695,6 +695,94 @@ runAsWorker(() => inner())`,
   expect(syncFn()).toBe(1)
 })
 
+// Two probes for the paired report Node raises under `--unhandled-rejections=strict`: one drives the
+// real flow, the other the same pair through the emitter, since in a worker the guard's own
+// `unhandledRejection` listener keeps the runtime from promoting it (measured: the worker sees only
+// `unhandledRejection`, where a main-thread script sees both with the same reason object)
+const strictWorkerTemplate = (
+  raise: string,
+) => `const { workerData } = require('node:worker_threads')
+const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
+const { NOTIFY_INDEX } = require(${JSON.stringify(path.resolve(_dirname, '../shared.cjs'))})
+// a surviving handler keeps the guard's report non-fatal, so the failure it reports is the only one
+process.on('uncaughtException', () => {})
+runAsWorker(value => {
+  if (value === 'counter') {
+    return Atomics.load(workerData.sharedBufferView, NOTIFY_INDEX)
+  }
+  if (value === 1) {
+    ${raise}
+    // stay in flight, so the report lands while call 1 waits
+    return new Promise(resolve => setTimeout(() => resolve(1), 500))
+  }
+  return value
+})`
+
+const strictProbe = (
+  worker: string,
+) => `const { createSyncFn } = require(${JSON.stringify(workerLibPath)})
+const syncFn = createSyncFn(${JSON.stringify(worker)}, 5000)
+const out = []
+try {
+  syncFn(1)
+  out.push('call1 ok')
+} catch {
+  out.push('call1 threw')
+}
+try {
+  out.push('call2 ' + syncFn(2))
+} catch (error) {
+  out.push('call2 threw: ' + error.message)
+}
+try {
+  out.push('counter ' + syncFn('counter'))
+} catch (error) {
+  out.push('counter threw: ' + error.message)
+}
+process.stdout.write(out.join('; '))`
+
+test('a strict-mode rejection leaves the next call alone', () => {
+  // the real flow: a rejection raised while call 1 is in flight, with a surviving handler keeping the
+  // report non-fatal. Nothing may be left over for call 2 to be handed
+  const worker = writeWorker(
+    'strict-rejection.cjs',
+    strictWorkerTemplate("void Promise.reject(new Error('paired boom'))"),
+  )
+  const probe = writeWorker('strict-rejection-probe.cjs', strictProbe(worker))
+
+  const output = execFileSync(
+    process.execPath,
+    ['--unhandled-rejections=strict', probe],
+    {
+      encoding: 'utf8',
+      env: { ...process.env, SYNCKIT_TIMEOUT: '' },
+      timeout: 20_000,
+    },
+  )
+
+  expect(output).toBe('call1 threw; call2 2; counter 0')
+})
+
+test('the paired strict-mode report is not delivered twice', () => {
+  // one failure, both events, the same reason object — the pair Node raises in strict mode. It has to
+  // produce one report: otherwise the call after the one that consumes it is handed it again
+  const worker = writeWorker(
+    'paired-report.cjs',
+    strictWorkerTemplate(
+      "process.emit('uncaughtException', reason)\n    process.emit('unhandledRejection', reason)",
+    ),
+  )
+  const probe = writeWorker('paired-report-probe.cjs', strictProbe(worker))
+
+  const output = execFileSync(process.execPath, [probe], {
+    encoding: 'utf8',
+    env: { ...process.env, SYNCKIT_TIMEOUT: '' },
+    timeout: 20_000,
+  })
+
+  expect(output).toBe('call1 threw; call2 2; counter 0')
+})
+
 test('a guard already in the inherited NODE_OPTIONS is not prepended twice', async () => {
   // the check reads the array parsed when the module loads, so the variable has to be in place before
   // that: this asserts the load-time case, not a re-read of the variable at call time
@@ -712,12 +800,17 @@ runAsWorker(() => (process.env.NODE_OPTIONS || '').split('register.cjs').length 
       { timeout: TIMEOUT },
     )
 
-    // one, not two. It can also be none: a variable set at runtime here is not what a spawned worker
-    // inherits, unlike one this process was started with — measured, and the reason the guard has to
-    // be prepended into a worker rather than merely inherited from the environment
+    // never two. The count is of `NODE_OPTIONS`, which is what a second prepend would grow, and it
+    // can be zero here: a variable set at runtime is not what a spawned worker inherits in this
+    // environment (measured), unlike one the process was started with. The guard still loads — this
+    // path also carries it in `execArgv`, which the nesting test below covers
     expect(syncFn()).toBeLessThanOrEqual(1)
   } finally {
-    process.env.NODE_OPTIONS = previousNodeOptions
+    if (previousNodeOptions == null) {
+      delete process.env.NODE_OPTIONS
+    } else {
+      process.env.NODE_OPTIONS = previousNodeOptions
+    }
     jest.resetModules()
   }
 })
@@ -741,7 +834,11 @@ test('another preload first in NODE_OPTIONS does not hide the guard', async () =
 
     expect(failureOf(syncFn)).toContain('other preload boom')
   } finally {
-    process.env.NODE_OPTIONS = previousNodeOptions
+    if (previousNodeOptions == null) {
+      delete process.env.NODE_OPTIONS
+    } else {
+      process.env.NODE_OPTIONS = previousNodeOptions
+    }
     jest.resetModules()
   }
 })

@@ -106,6 +106,18 @@ const installWorkerLoadGuard = data => {
   // throwing modes and the Node default are read here, through the flag helpers `shared.cjs` lends
   const rejectionThrows = unhandledRejectionsThrow()
 
+  // A reason no failure can be, so that a reason which *is* `undefined` still reports the first time
+  const notReported = Symbol('synckit:not-reported')
+
+  // Under `--unhandled-rejections=strict` the runtime raises one rejection twice — as an uncaught
+  // exception and then as an unhandled rejection — with the same reason object (measured), and each
+  // event would otherwise post its own message and bump the notification counter. The call that
+  // consumed the first would leave the second for the next call, which would then be handed a
+  // failure from an earlier one. Identity tells the pair apart, and clearing on the next tick is
+  // enough: the second event arrives before it, a later failure after it
+  /** @type {unknown} */
+  let lastReported = notReported
+
   /**
    * Reports a failure to the main thread and wakes whoever waits for it.
    *
@@ -168,6 +180,16 @@ const installWorkerLoadGuard = data => {
    * @param {'uncaughtException' | 'unhandledRejection'} event
    */
   const guard = (error, event) => {
+    // the paired event for a failure already reported: dropping it here keeps one message and one
+    // notification per failure, and leaves nothing behind for the next call to trip over
+    if (error === lastReported) {
+      return
+    }
+    lastReported = error
+    process.nextTick(() => {
+      lastReported = notReported
+    })
+
     // disarm while reporting, so a throw from our own report cannot be caught right back here;
     // below they are put back unless this failure is stopping the worker
     process.off('uncaughtException', onUncaughtException)
