@@ -324,22 +324,24 @@ runAsWorker(() => {
 })
 
 test('a guard path that is another flag value does not count as preloaded', () => {
-  // `--conditions` carries the guard's path as its value. The check looks at the leading arguments,
-  // so it must not be satisfied and the prepend still has to happen: the worker's module then fails
-  // to load, and only the guard can report why. The variable is set when the child starts, which is
-  // when `NODE_OPTIONS` is fixed — a value set later would not reach the parsed array anyway
-  const loadFailingWorker = writeWorker(
+  // Two things a wrong check accepts: the guard's path as another flag's value (what a plain
+  // `includes` matched) and a leading `-r` of someone else's (what a flag-only check matched).
+  // Either way the prepend would be skipped, so this asserts the one thing the check controls — the
+  // worker's own `NODE_OPTIONS` begins with it. The variable is set when the child starts, which is
+  // when `NODE_OPTIONS` is fixed
+  const otherPreload = writeWorker('conditions-other-preload.cjs', '')
+  const worker = writeWorker(
     'conditions-value.cjs',
-    `throw new Error('conditions value boom')`,
+    `const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
+runAsWorker(() => process.env.NODE_OPTIONS || '')`,
   )
   const probe = writeWorker(
     'conditions-probe.cjs',
     `const { createSyncFn } = require(${JSON.stringify(workerLibPath)})
 try {
-  createSyncFn(${JSON.stringify(loadFailingWorker)}, ${TIMEOUT})()
-  process.stdout.write('no failure')
+  process.stdout.write(String(createSyncFn(${JSON.stringify(worker)}, ${TIMEOUT})()))
 } catch (error) {
-  process.stdout.write(String(error && error.message))
+  process.stdout.write('threw: ' + String(error && error.message))
 }`,
   )
 
@@ -347,11 +349,17 @@ try {
     encoding: 'utf8',
     env: {
       ...process.env,
-      NODE_OPTIONS: `--conditions ${JSON.stringify(workerPreloadPath)}`,
+      NODE_OPTIONS: `${REQUIRE_ABBR_FLAG} ${JSON.stringify(otherPreload)} --conditions ${JSON.stringify(workerPreloadPath)}`,
     },
   })
 
-  expect(output).toContain('conditions value boom')
+  expect(
+    output.startsWith(
+      `${REQUIRE_ABBR_FLAG} ${JSON.stringify(workerPreloadPath)}`,
+    ),
+  ).toBe(true)
+  // and the other preload survives, after the guard
+  expect(output).toContain(JSON.stringify(otherPreload))
 })
 
 test('a message delivered after its notification still wakes the caller', () => {
@@ -501,10 +509,10 @@ try {
   expect(output).toContain('cleared node options boom')
 })
 
-// The fallback these drive is taken where the runtime rejects the worker's environment. `--title`
-// is rejected on every Node measured — 18.18 with `--openssl-legacy-provider` is the original case —
-// while a runtime that accepted it would simply take the primary path, so each test asserts what holds
-// on the path it actually took rather than pretending it can force the other
+// The fallback these drive is taken where the runtime rejects the worker's environment. `--title` is
+// rejected on every Node measured — 18.18 with `--openssl-legacy-provider` is the original case — so
+// these tests assume the fallback is reached. The warning test below depends on it: a runtime that
+// accepted the option would take the primary path and fail that assertion
 const FALLBACK_NODE_OPTIONS = '--title=synckit-fallback-test'
 const FALLBACK_TEST_TIMEOUT = 60_000
 const silentFallbackWorker = `const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
@@ -579,8 +587,9 @@ test('nothing caps a wait on the fallback path', () => {
 })
 
 test('a healthy call on the fallback path still succeeds', () => {
-  // no timeout is configured here on purpose: the fallback's own deadline is what applies, and the
-  // child keeps a regression survivable, since an unbounded wait would take the jest run with it
+  // no timeout is configured on purpose: the caller's own is the only bound on this path. The child
+  // below, with its watchdog, is what keeps a regression survivable — there is no deadline in the
+  // library to fall back on, and an unbounded wait would take the jest run with it
   const healthyWorker = writeWorker(
     'fallback-healthy.cjs',
     cjsWorker(identityWorker),
@@ -768,8 +777,8 @@ test('a strict-mode rejection leaves the next call alone', () => {
 
 test('the paired strict-mode report is not delivered twice', () => {
   // one failure, both events, the same reason object — the pair Node raises in strict mode. It has to
-  // produce one report: two would leave the second for the next call, and the counter shows it — it
-  // reads 1 right after the raise, then 0 once the call that consumed it is done
+  // produce one report, and the counter shows it: read after the call that consumed the report has
+  // thrown it, one report leaves 0, and a second would leave 1 for the next call to be handed
   const worker = writeWorker(
     'paired-report.cjs',
     strictWorkerTemplate(
@@ -806,10 +815,10 @@ runAsWorker(() => (process.env.NODE_OPTIONS || '').split('register.cjs').length 
       { timeout: TIMEOUT },
     )
 
-    // never two. The count is of `NODE_OPTIONS`, which is what a second prepend would grow, and it
-    // can be zero here: a variable set at runtime is not what a spawned worker inherits in this
-    // environment (measured), unlike one the process was started with. The guard still loads — this
-    // path also carries it in `execArgv`, which the nesting test below covers
+    // never two. The count is of `NODE_OPTIONS`, which is what a second prepend would grow. It is 0
+    // here because this test sets the variable at runtime in the jest process, and that is not what a
+    // spawned worker inherits — measured, and 1 when a process is started with it outside jest. The
+    // guard still loads: this path also carries it in `execArgv`, covered by the nesting test below
     expect(syncFn()).toBeLessThanOrEqual(1)
   } finally {
     if (previousNodeOptions == null) {
@@ -821,32 +830,40 @@ runAsWorker(() => (process.env.NODE_OPTIONS || '').split('register.cjs').length 
   }
 })
 
-test('another preload first in NODE_OPTIONS does not hide the guard', async () => {
-  // only the prepend's own shape counts, so a leading `-r` of someone else's has to be looked past.
-  // The other preload has to exist, since Node resolves it before the guard
+test('another preload first in NODE_OPTIONS does not hide the guard', () => {
+  // a leading `-r` of someone else's must be looked past rather than counted as the guard, and the
+  // guard's path sitting in the same `NODE_OPTIONS` as a `--conditions` value must not satisfy the
+  // check either. What it controls is the prepend, so that is what this asserts
   const otherPreload = writeWorker('other-preload.cjs', '')
-  const previousNodeOptions = process.env.NODE_OPTIONS
-  process.env.NODE_OPTIONS = `${REQUIRE_ABBR_FLAG} ${JSON.stringify(otherPreload)}`
-  jest.resetModules()
-  try {
-    const { createSyncFn: importedCreateSyncFn } = await import('synckit')
-    const syncFn = importedCreateSyncFn<() => unknown>(
-      writeWorker(
-        'other-preload-worker.cjs',
-        `throw new Error('other preload boom')`,
-      ),
-      { timeout: TIMEOUT },
-    )
+  const worker = writeWorker(
+    'other-preload-worker.cjs',
+    `const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
+runAsWorker(() => process.env.NODE_OPTIONS || '')`,
+  )
+  const probe = writeWorker(
+    'other-preload-probe.cjs',
+    `const { createSyncFn } = require(${JSON.stringify(workerLibPath)})
+try {
+  process.stdout.write(String(createSyncFn(${JSON.stringify(worker)}, ${TIMEOUT})()))
+} catch (error) {
+  process.stdout.write('threw: ' + String(error && error.message))
+}`,
+  )
 
-    expect(failureOf(syncFn)).toContain('other preload boom')
-  } finally {
-    if (previousNodeOptions == null) {
-      delete process.env.NODE_OPTIONS
-    } else {
-      process.env.NODE_OPTIONS = previousNodeOptions
-    }
-    jest.resetModules()
-  }
+  const output = execFileSync(process.execPath, [probe], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      NODE_OPTIONS: `${REQUIRE_ABBR_FLAG} ${JSON.stringify(otherPreload)} --conditions ${JSON.stringify(workerPreloadPath)}`,
+    },
+  })
+
+  expect(
+    output.startsWith(
+      `${REQUIRE_ABBR_FLAG} ${JSON.stringify(workerPreloadPath)}`,
+    ),
+  ).toBe(true)
+  expect(output).toContain(JSON.stringify(otherPreload))
 })
 
 test('a failing global shim throws instead of hanging', () => {
