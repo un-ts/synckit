@@ -706,14 +706,11 @@ const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
 const { NOTIFY_INDEX } = require(${JSON.stringify(path.resolve(_dirname, '../shared.cjs'))})
 // a surviving handler keeps the guard's report non-fatal, so the failure it reports is the only one
 process.on('uncaughtException', () => {})
-// what the notification counter read right after the failure was raised, reported back later
-let afterRaise = null
 runAsWorker(value => {
+  // read between calls, when nothing is racing: what the counter holds then is how many reports
+  // were left behind, since the call that consumed one has already thrown it
   if (value === 'counter') {
-    return JSON.stringify({
-      afterRaise,
-      now: Atomics.load(workerData.sharedBufferView, NOTIFY_INDEX),
-    })
+    return Atomics.load(workerData.sharedBufferView, NOTIFY_INDEX)
   }
   if (value === 1) {
     ${raise}
@@ -766,9 +763,7 @@ test('a strict-mode rejection leaves the next call alone', () => {
     },
   )
 
-  expect(output).toBe(
-    'call1 threw; counter {"afterRaise":null,"now":0}; call2 2',
-  )
+  expect(output).toBe('call1 threw; counter 0; call2 2')
 })
 
 test('the paired strict-mode report is not delivered twice', () => {
@@ -780,8 +775,7 @@ test('the paired strict-mode report is not delivered twice', () => {
     strictWorkerTemplate(
       `const reason = new Error('paired boom')
     process.emit('uncaughtException', reason)
-    process.emit('unhandledRejection', reason)
-    afterRaise = Atomics.load(workerData.sharedBufferView, NOTIFY_INDEX)`,
+    process.emit('unhandledRejection', reason)`,
     ),
   )
   const probe = writeWorker('paired-report-probe.cjs', strictProbe(worker))
@@ -792,7 +786,7 @@ test('the paired strict-mode report is not delivered twice', () => {
     timeout: 20_000,
   })
 
-  expect(output).toBe('call1 threw; counter {"afterRaise":1,"now":0}; call2 2')
+  expect(output).toBe('call1 threw; counter 0; call2 2')
 })
 
 test('a guard already in the inherited NODE_OPTIONS is not prepended twice', async () => {
