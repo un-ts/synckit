@@ -706,9 +706,14 @@ const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
 const { NOTIFY_INDEX } = require(${JSON.stringify(path.resolve(_dirname, '../shared.cjs'))})
 // a surviving handler keeps the guard's report non-fatal, so the failure it reports is the only one
 process.on('uncaughtException', () => {})
+// what the notification counter read right after the failure was raised, reported back later
+let afterRaise = null
 runAsWorker(value => {
   if (value === 'counter') {
-    return Atomics.load(workerData.sharedBufferView, NOTIFY_INDEX)
+    return JSON.stringify({
+      afterRaise,
+      now: Atomics.load(workerData.sharedBufferView, NOTIFY_INDEX),
+    })
   }
   if (value === 1) {
     ${raise}
@@ -730,20 +735,21 @@ try {
   out.push('call1 threw')
 }
 try {
-  out.push('call2 ' + syncFn(2))
-} catch (error) {
-  out.push('call2 threw: ' + error.message)
-}
-try {
   out.push('counter ' + syncFn('counter'))
 } catch (error) {
   out.push('counter threw: ' + error.message)
 }
+try {
+  out.push('call2 ' + syncFn(2))
+} catch (error) {
+  out.push('call2 threw: ' + error.message)
+}
 process.stdout.write(out.join('; '))`
 
 test('a strict-mode rejection leaves the next call alone', () => {
-  // the real flow: a rejection raised while call 1 is in flight, with a surviving handler keeping the
-  // report non-fatal. Nothing may be left over for call 2 to be handed
+  // the realistic single-event flow: Node raises a rejection in the worker while call 1 is in flight,
+  // and a surviving handler keeps the report non-fatal. This one does not cover the dedupe — a worker
+  // emits only `unhandledRejection`, as measured — it covers the flow around it
   const worker = writeWorker(
     'strict-rejection.cjs',
     strictWorkerTemplate("void Promise.reject(new Error('paired boom'))"),
@@ -760,16 +766,22 @@ test('a strict-mode rejection leaves the next call alone', () => {
     },
   )
 
-  expect(output).toBe('call1 threw; call2 2; counter 0')
+  expect(output).toBe(
+    'call1 threw; counter {"afterRaise":null,"now":0}; call2 2',
+  )
 })
 
 test('the paired strict-mode report is not delivered twice', () => {
   // one failure, both events, the same reason object — the pair Node raises in strict mode. It has to
-  // produce one report: otherwise the call after the one that consumes it is handed it again
+  // produce one report: two would leave the second for the next call, and the counter shows it — it
+  // reads 1 right after the raise, then 0 once the call that consumed it is done
   const worker = writeWorker(
     'paired-report.cjs',
     strictWorkerTemplate(
-      "process.emit('uncaughtException', reason)\n    process.emit('unhandledRejection', reason)",
+      `const reason = new Error('paired boom')
+    process.emit('uncaughtException', reason)
+    process.emit('unhandledRejection', reason)
+    afterRaise = Atomics.load(workerData.sharedBufferView, NOTIFY_INDEX)`,
     ),
   )
   const probe = writeWorker('paired-report-probe.cjs', strictProbe(worker))
@@ -780,7 +792,7 @@ test('the paired strict-mode report is not delivered twice', () => {
     timeout: 20_000,
   })
 
-  expect(output).toBe('call1 threw; call2 2; counter 0')
+  expect(output).toBe('call1 threw; counter {"afterRaise":1,"now":0}; call2 2')
 })
 
 test('a guard already in the inherited NODE_OPTIONS is not prepended twice', async () => {
