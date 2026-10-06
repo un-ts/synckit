@@ -8,7 +8,12 @@ import { jest } from '@jest/globals'
 
 import { _dirname } from './helpers.js'
 
-import { REQUIRE_ABBR_FLAG, TsRunner, createSyncFn } from 'synckit'
+import {
+  DEFAULT_TIMEOUT,
+  REQUIRE_ABBR_FLAG,
+  TsRunner,
+  createSyncFn,
+} from 'synckit'
 import type { AnyFn, SynckitOptions } from 'synckit'
 
 // The workers run in a real process, so they load the built `lib`, as the other
@@ -496,7 +501,7 @@ try {
   expect(output).toContain('cleared node options boom')
 })
 
-// The fallback these four drive is taken where the runtime rejects the worker's environment. `--title`
+// The fallback these drive is taken where the runtime rejects the worker's environment. `--title`
 // is rejected on every Node measured — 18.18 with `--openssl-legacy-provider` is the original case —
 // while a runtime that accepted it would simply take the primary path, so each test asserts what holds
 // on the path it actually took rather than pretending it can force the other
@@ -545,6 +550,34 @@ test('a fallback worker warns about the relaxed guard ordering, once', () => {
   }
 })
 
+test('nothing caps a wait on the fallback path', () => {
+  // the only bound is the caller's, so with none configured the wait is handed `undefined`, which is
+  // what `Atomics.wait` reads as no timeout. Asserting the argument the spy saw proves there is no
+  // built-in cap without waiting one out
+  const previousNodeOptions = process.env.NODE_OPTIONS
+  const waitSpy = jest.spyOn(Atomics, 'wait').mockReturnValue('timed-out')
+  try {
+    process.env.NODE_OPTIONS = FALLBACK_NODE_OPTIONS
+    const syncFn = createSyncFn<() => unknown>(
+      writeWorker('fallback-no-cap.cjs', cjsWorker(identityWorker)),
+    )
+
+    // index from before the call: another spec may have spied on the same global first
+    const waitCallsBefore = waitSpy.mock.calls.length
+    expect(() => syncFn()).toThrow('timed-out')
+    // the configured default, not a built-in cap: the value a run sets through `SYNCKIT_TIMEOUT`,
+    // and `undefined` when it sets none
+    expect(waitSpy.mock.calls[waitCallsBefore][3]).toBe(DEFAULT_TIMEOUT)
+  } finally {
+    waitSpy.mockRestore()
+    if (previousNodeOptions == null) {
+      delete process.env.NODE_OPTIONS
+    } else {
+      process.env.NODE_OPTIONS = previousNodeOptions
+    }
+  }
+})
+
 test('a healthy call on the fallback path still succeeds', () => {
   // no timeout is configured here on purpose: the fallback's own deadline is what applies, and the
   // child keeps a regression survivable, since an unbounded wait would take the jest run with it
@@ -571,38 +604,6 @@ try {
 
   expect(output).toBe('7')
 })
-
-test(
-  'a silent fallback worker fails at the deadline the fallback fills in',
-  () => {
-    // the child is what makes an unbounded wait survivable: jest cannot preempt a synchronous hang,
-    // and this deadline is the 30s one, not one the caller asked for
-    const silentWorker = writeWorker(
-      'fallback-silent.cjs',
-      silentFallbackWorker,
-    )
-    const probe = writeWorker(
-      'fallback-silent-probe.cjs',
-      `process.env.NODE_OPTIONS = ${JSON.stringify(FALLBACK_NODE_OPTIONS)}
-const { createSyncFn } = require(${JSON.stringify(workerLibPath)})
-try {
-  createSyncFn(${JSON.stringify(silentWorker)})()
-  process.stdout.write('no failure')
-} catch (error) {
-  process.stdout.write(String(error && error.message))
-}`,
-    )
-
-    const output = execFileSync(process.execPath, [probe], {
-      encoding: 'utf8',
-      env: { ...process.env, SYNCKIT_TIMEOUT: '' },
-      timeout: 45_000,
-    })
-
-    expect(output).toContain('timed-out')
-  },
-  FALLBACK_TEST_TIMEOUT,
-)
 
 test(
   'a caller timeout still wins on the fallback path',
