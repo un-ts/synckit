@@ -93,6 +93,16 @@ const EMPTY_PORT_READS = 100_000
 // its own can be read. See `receiveMessageWithId`.
 const EMPTY_PORT_READ_SLICE = 10
 
+// What a call waits when the runtime made the worker take the guard through its `execArgv` instead of
+// its `NODE_OPTIONS`: the guard then loads after any preload inherited through `NODE_OPTIONS`, so a
+// failure in one of those is reported by nothing and waiting for ever would hang. It only fills in a
+// value the caller left unset — `SYNCKIT_TIMEOUT`, or a per-call `timeout`, always wins. See
+// `startWorkerThread`.
+const FALLBACK_TIMEOUT = 30_000
+
+// The code the warning about that fallback carries, so a project can silence exactly this one.
+const FALLBACK_WARNING_CODE = 'SYNCKIT_GUARD_ORDERING'
+
 /**
  * Tells a worker to stop working on a request this thread has given up waiting for, so that its
  * late answer is not posted at all.
@@ -693,6 +703,10 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   // pair added at the level above was dropped before the runner selection, so this stays one per level
   const guardExecArgv = [REQUIRE_ABBR_FLAG, workerPreload, ...finalExecArgv]
 
+  // Flipped when the environment the worker was given is rejected, which relaxes the guard's
+  // ordering and so needs a deadline even when the caller asked for none
+  let strictGuardOrdering = true
+
   let worker: Worker
   try {
     worker = new Worker(workerEntry, {
@@ -709,20 +723,36 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
       execArgv: inheritsGuard ? guardExecArgv : finalExecArgv,
     })
   } catch (error) {
-    // Node 18 refuses an option it inherited when the environment is passed explicitly to a worker
-    // (`--openssl-legacy-provider` among them) and there is no programmatic list of the options a
-    // worker rejects, so retry with the inherited environment and the guard back in `execArgv`,
-    // which every version takes. That path loses the preload ordering: the guard loads after a
-    // preload inherited through `NODE_OPTIONS`, so a failure there keeps its older behaviour
+    // A runtime refuses an option it inherited once the environment is passed explicitly to a worker
+    // (`--openssl-legacy-provider` on 18, `--title` on 24, the set varying by version) and there is
+    // no programmatic list of the options a worker rejects, so retry with the inherited environment
+    // and the guard back in `execArgv`, which every version takes. That path loses the preload
+    // ordering: the guard loads after a preload inherited through `NODE_OPTIONS`, so a failure there
+    // is reported by nothing. The call says so once, and gets a deadline below even when the caller
+    // configured none, so it cannot wait for ever for an answer that may never come
     if ((error as { code?: string }).code !== 'ERR_WORKER_INVALID_EXEC_ARGV') {
       throw error
     }
+
+    process.emitWarning(
+      'synckit: this Node rejected the worker environment, so the failure guard loads after ' +
+        'inherited `NODE_OPTIONS` preloads; a failure in one of those cannot be reported. Set ' +
+        '`SYNCKIT_TIMEOUT` to bound the wait.',
+      { code: FALLBACK_WARNING_CODE },
+    )
+    strictGuardOrdering = false
 
     worker = new Worker(workerEntry, {
       ...workerOptions,
       execArgv: guardExecArgv,
     })
   }
+
+  // The caller's own deadline always wins; one is only filled in where the fallback relaxed the guard
+  // ordering, since a failure it cannot report would otherwise leave the call waiting for ever
+  const callTimeout = strictGuardOrdering
+    ? timeout
+    : (timeout ?? FALLBACK_TIMEOUT)
 
   let nextID = 0
 
@@ -861,7 +891,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
     worker.postMessage(msg)
 
-    const message = receiveMessageWithId(id, timeout)
+    const message = receiveMessageWithId(id, callTimeout)
 
     for (const { type, chunk, encoding } of message.stdio) {
       process[type].write(chunk, encoding)

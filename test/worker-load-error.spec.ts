@@ -496,6 +496,145 @@ try {
   expect(output).toContain('cleared node options boom')
 })
 
+// The fallback these four drive is taken where the runtime rejects the worker's environment. `--title`
+// is rejected on every Node measured — 18.18 with `--openssl-legacy-provider` is the original case —
+// while a runtime that accepted it would simply take the primary path, so each test asserts what holds
+// on the path it actually took rather than pretending it can force the other
+const FALLBACK_NODE_OPTIONS = '--title=synckit-fallback-test'
+const FALLBACK_TEST_TIMEOUT = 60_000
+const silentFallbackWorker = `const { runAsWorker } = require(${JSON.stringify(workerLibPath)})
+runAsWorker(() => new Promise(() => {}))`
+
+test('a fallback worker warns about the relaxed guard ordering, once', () => {
+  const previousNodeOptions = process.env.NODE_OPTIONS
+  const warnSpy = jest.spyOn(process, 'emitWarning')
+  try {
+    process.env.NODE_OPTIONS = FALLBACK_NODE_OPTIONS
+    const fallbackSyncFn = syncFnFor<(value: number) => number>(
+      'fallback-warning.cjs',
+      cjsWorker(identityWorker),
+    )
+
+    expect(fallbackSyncFn(1)).toBe(1)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+
+    const [message, options] = warnSpy.mock.calls[0]
+    expect(message).toBe(
+      'synckit: this Node rejected the worker environment, so the failure guard loads after ' +
+        'inherited `NODE_OPTIONS` preloads; a failure in one of those cannot be reported. Set ' +
+        '`SYNCKIT_TIMEOUT` to bound the wait.',
+    )
+    expect(options).toEqual({ code: 'SYNCKIT_GUARD_ORDERING' })
+
+    // the primary path adds no second warning
+    delete process.env.NODE_OPTIONS
+    const primarySyncFn = syncFnFor<(value: number) => number>(
+      'primary-warning.cjs',
+      cjsWorker(identityWorker),
+    )
+
+    expect(primarySyncFn(2)).toBe(2)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+  } finally {
+    warnSpy.mockRestore()
+    if (previousNodeOptions == null) {
+      delete process.env.NODE_OPTIONS
+    } else {
+      process.env.NODE_OPTIONS = previousNodeOptions
+    }
+  }
+})
+
+test('a healthy call on the fallback path still succeeds', () => {
+  // no timeout is configured here on purpose: the fallback's own deadline is what applies, and the
+  // child keeps a regression survivable, since an unbounded wait would take the jest run with it
+  const healthyWorker = writeWorker(
+    'fallback-healthy.cjs',
+    cjsWorker(identityWorker),
+  )
+  const probe = writeWorker(
+    'fallback-healthy-probe.cjs',
+    `process.env.NODE_OPTIONS = ${JSON.stringify(FALLBACK_NODE_OPTIONS)}
+const { createSyncFn } = require(${JSON.stringify(workerLibPath)})
+try {
+  process.stdout.write(String(createSyncFn(${JSON.stringify(healthyWorker)})(7)))
+} catch (error) {
+  process.stdout.write('threw: ' + String(error && error.message))
+}`,
+  )
+
+  const output = execFileSync(process.execPath, [probe], {
+    encoding: 'utf8',
+    env: { ...process.env, SYNCKIT_TIMEOUT: '' },
+    timeout: 20_000,
+  })
+
+  expect(output).toBe('7')
+})
+
+test(
+  'a silent fallback worker fails at the deadline the fallback fills in',
+  () => {
+    // the child is what makes an unbounded wait survivable: jest cannot preempt a synchronous hang,
+    // and this deadline is the 30s one, not one the caller asked for
+    const silentWorker = writeWorker(
+      'fallback-silent.cjs',
+      silentFallbackWorker,
+    )
+    const probe = writeWorker(
+      'fallback-silent-probe.cjs',
+      `process.env.NODE_OPTIONS = ${JSON.stringify(FALLBACK_NODE_OPTIONS)}
+const { createSyncFn } = require(${JSON.stringify(workerLibPath)})
+try {
+  createSyncFn(${JSON.stringify(silentWorker)})()
+  process.stdout.write('no failure')
+} catch (error) {
+  process.stdout.write(String(error && error.message))
+}`,
+    )
+
+    const output = execFileSync(process.execPath, [probe], {
+      encoding: 'utf8',
+      env: { ...process.env, SYNCKIT_TIMEOUT: '' },
+      timeout: 45_000,
+    })
+
+    expect(output).toContain('timed-out')
+  },
+  FALLBACK_TEST_TIMEOUT,
+)
+
+test(
+  'a caller timeout still wins on the fallback path',
+  () => {
+    const silentWorker = writeWorker(
+      'fallback-caller-timeout-worker.cjs',
+      silentFallbackWorker,
+    )
+    const probe = writeWorker(
+      'fallback-caller-timeout-probe.cjs',
+      `process.env.NODE_OPTIONS = ${JSON.stringify(FALLBACK_NODE_OPTIONS)}
+process.env.SYNCKIT_TIMEOUT = '1500'
+const { createSyncFn } = require(${JSON.stringify(workerLibPath)})
+try {
+  createSyncFn(${JSON.stringify(silentWorker)})()
+  process.stdout.write('no failure')
+} catch (error) {
+  process.stdout.write(String(error && error.message))
+}`,
+    )
+
+    const output = execFileSync(process.execPath, [probe], {
+      encoding: 'utf8',
+      env: { ...process.env, SYNCKIT_TIMEOUT: '' },
+      timeout: 20_000,
+    })
+
+    expect(output).toContain('timed-out')
+  },
+  FALLBACK_TEST_TIMEOUT,
+)
+
 test('a guard pair in execArgv does not hide the TypeScript runner', () => {
   // the pair is not a register the caller asked for, so it must not reach the runner selection:
   // otherwise the runner is skipped and a TypeScript worker is loaded as plain JavaScript. The
