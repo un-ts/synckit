@@ -80,8 +80,10 @@ export const DEFAULT_GLOBAL_SHIMS = ['1', 'true'].includes(
 
 export const DEFAULT_GLOBAL_SHIMS_PRESET: GlobalShim[] = [
   {
-    moduleName: 'node-fetch',
+    moduleName: 'node-fetch-native',
     globalName: 'fetch',
+    // `require('node-fetch-native')` is the module namespace, not the function
+    named: 'fetch',
   },
   {
     moduleName: 'node:perf_hooks',
