@@ -7,11 +7,14 @@ on:
     # other and cancelled checks attached to the real commit
     branches-ignore:
       - 'changesets-ghcommit-temp/**'
+    # a push filter that only sets `branches-ignore` also stops running for tags
+    tags:
+      - '**'
   pull_request: {}
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  # never cancel a run for a main commit
+  # give each main commit its own group, so a later push can neither cancel nor replace its run
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
