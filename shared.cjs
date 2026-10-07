@@ -193,14 +193,14 @@ const flagValues = (flag, args) => {
  * @returns {string | undefined} The accepted value, `''` for a flag without one, or `undefined`.
  */
 const getFlag = (flag, accepted, execArgv = []) => {
-  /** @type {string | undefined} */
-  let result
-  for (const value of flagValues(flag, flagArgs(execArgv))) {
+  const values = flagValues(flag, flagArgs(execArgv))
+  // backwards, so the first match is the one the runtime would use, and the scan can stop there
+  for (let index = values.length - 1; index >= 0; index--) {
+    const value = values[index]
     if (accepted == null || value === accepted) {
-      result = value
+      return value
     }
   }
-  return result
 }
 
 /**
