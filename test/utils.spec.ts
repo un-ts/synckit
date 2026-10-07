@@ -1,7 +1,7 @@
+import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
-
-import { findUp } from '@pkgr/utils'
+import { fileURLToPath } from 'node:url'
 
 import { _dirname } from './helpers.js'
 
@@ -76,15 +76,16 @@ describe('utils', () => {
     )
     expect(_requireGlobals).toMatchSnapshot()
 
-    const tmpdir = String(
-      pathToFileURL(path.resolve(findUp(_dirname), '../node_modules/.synckit')),
-    )
     const importGlobals = generateGlobals(
       'fake.js',
       DEFAULT_GLOBAL_SHIMS_PRESET,
     )
     expect(importGlobals).not.toBe(_importGlobals)
-    expect(importGlobals).toMatch(tmpdir)
+    // each specifier is resolved against the worker's URL here, so nothing is left pointing at a
+    // generated file under the package's own `node_modules`
+    expect(importGlobals).toContain('node:perf_hooks')
+    expect(importGlobals).toMatch(/node_modules[\\/]node-fetch/)
+    expect(importGlobals).not.toContain('.synckit')
     expect(generateGlobals('fake.js', DEFAULT_GLOBAL_SHIMS_PRESET)).toBe(
       importGlobals,
     )
@@ -125,6 +126,129 @@ describe('utils', () => {
         'require',
       ),
     ).toMatchSnapshot()
+  })
+
+  test('generateGlobals resolves through pnpapi under PnP', () => {
+    const versions = process.versions as { pnp?: string }
+    const { pnp } = versions
+    const isolatedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'synckit-pnp-'))
+    const pnpDir = path.join(isolatedDir, 'node_modules', 'pnpapi')
+
+    try {
+      fs.mkdirSync(pnpDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(pnpDir, 'package.json'),
+        JSON.stringify({ name: 'pnpapi', version: '1.0.0', main: 'index.js' }),
+      )
+      // stands in for the PnP runtime, recording how it was asked and answering a path — or `null`
+      // for a builtin — the way `resolveRequest` does
+      fs.writeFileSync(
+        path.join(pnpDir, 'index.js'),
+        `const fs = require('node:fs')
+const path = require('node:path')
+
+exports.resolveRequest = (request, issuer, options) => {
+  fs.appendFileSync(
+    path.join(__dirname, 'calls.txt'),
+    [request, issuer, [...options.conditions].join(',')].join('\\t') + '\\n',
+  )
+  return request === 'node:perf_hooks' ? null : path.join(__dirname, 'resolved.js')
+}
+`,
+      )
+
+      const workerPath = path.join(isolatedDir, 'worker.js')
+      const shims = [
+        { moduleName: 'some-shim', globalName: '__someShim' },
+        { moduleName: 'node:perf_hooks', globalName: 'performance' },
+      ]
+      fs.writeFileSync(workerPath, '')
+      versions.pnp = '1.0.0'
+
+      const globals = generateGlobals(workerPath, shims)
+
+      process.execArgv.push('--no-addons')
+      try {
+        expect(generateGlobals(workerPath, shims)).toContain('resolved.js')
+      } finally {
+        process.execArgv.pop()
+      }
+
+      const calls = fs
+        .readFileSync(path.join(pnpDir, 'calls.txt'), 'utf8')
+        .trim()
+        .split('\n')
+        .map(line => line.split('\t'))
+
+      // each specifier is resolved against the worker, with the conditions its own `import` uses
+      expect(calls.map(([request, issuer]) => [request, issuer])).toEqual([
+        ['some-shim', workerPath],
+        ['node:perf_hooks', workerPath],
+        ['some-shim', workerPath],
+        ['node:perf_hooks', workerPath],
+      ])
+      expect(calls[0][2].split(',')).toEqual(
+        expect.arrayContaining(['node', 'import', 'node-addons']),
+      )
+      // `--no-addons` takes the condition away, so the resolver must not see it
+      expect(calls[2][2].split(',')).not.toContain('node-addons')
+
+      expect(globals).toContain('file://')
+      expect(globals).toContain('resolved.js')
+      expect(globals).toContain('node:perf_hooks')
+    } finally {
+      if (pnp === undefined) {
+        delete versions.pnp
+      } else {
+        versions.pnp = pnp
+      }
+      fs.rmSync(isolatedDir, { force: true, recursive: true })
+    }
+  })
+
+  test('generateGlobals resolves with the worker ESM conditions', () => {
+    const isolatedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'synckit-cond-'))
+    const pkgDir = path.join(isolatedDir, 'node_modules', 'cond-shim')
+
+    try {
+      fs.mkdirSync(pkgDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(pkgDir, 'package.json'),
+        JSON.stringify({
+          name: 'cond-shim',
+          version: '1.0.0',
+          exports: {
+            'node-addons': './addons.js',
+            import: './import.js',
+            default: './default.js',
+          },
+        }),
+      )
+      for (const [file, value] of [
+        ['addons.js', 'addons'],
+        ['import.js', 'import'],
+        ['default.js', 'default'],
+      ]) {
+        fs.writeFileSync(path.join(pkgDir, file), `export default '${value}'\n`)
+      }
+
+      const workerPath = path.join(isolatedDir, 'worker.js')
+      const shims = [{ moduleName: 'cond-shim', globalName: '__condShim' }]
+      fs.writeFileSync(workerPath, '')
+
+      // the loader enables `node-addons`, so that is the entry the worker would import
+      expect(generateGlobals(workerPath, shims)).toContain('addons.js')
+
+      process.execArgv.push('--no-addons')
+      try {
+        // without it, the loader would take the `import` entry instead
+        expect(generateGlobals(workerPath, shims)).toContain('import.js')
+      } finally {
+        process.execArgv.pop()
+      }
+    } finally {
+      fs.rmSync(isolatedDir, { force: true, recursive: true })
+    }
   })
 
   test('extractProperties', () => {
