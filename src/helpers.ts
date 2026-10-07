@@ -962,8 +962,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
 
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
     const result = receiveMessageOnPort(mainPort) as
-      | { message: WorkerFailureMessage | WorkerToMainMessage<R> }
-      | undefined
+      { message: WorkerFailureMessage | WorkerToMainMessage<R> } | undefined
 
     const msg = result?.message
 
