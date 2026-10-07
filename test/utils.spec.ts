@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -13,6 +14,14 @@ import {
   generateGlobals,
   isFile,
 } from 'synckit'
+
+// Jest 30 overrides `process.features.require_module` inside its sandbox — its runtime cannot
+// `require()` ESM — so the flag is no longer the host's answer. Ask a real Node process instead,
+// which is what the worker actually gets.
+const requireModuleOnHost =
+  execFileSync(process.execPath, ['-p', 'process.features.require_module'], {
+    encoding: 'utf8',
+  }).trim() === 'true'
 
 describe('utils', () => {
   test('isFile', () => {
@@ -193,9 +202,7 @@ exports.resolveRequest = (request, issuer, options) => {
         expect.arrayContaining(['node', 'import', 'node-addons']),
       )
       // `module-sync` follows the Node default unless the worker's argv turns `require(esm)` off
-      expect(conditionsOf([]).includes('module-sync')).toBe(
-        Boolean(process.features.require_module),
-      )
+      expect(conditionsOf([]).includes('module-sync')).toBe(requireModuleOnHost)
       expect(conditionsOf(['--no-addons'])).not.toContain('node-addons')
       expect(conditionsOf(['--conditions=foo'])).toContain('foo')
       expect(conditionsOf(['--no-experimental-require-module'])).not.toContain(
