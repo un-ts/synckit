@@ -1,12 +1,18 @@
 name: Publish Any Commit
 
 on:
-  - push
-  - pull_request
+  push:
+    # `changesets/action` v2 pushes through the GitHub API, which first creates a transient
+    # `changesets-ghcommit-temp/<branch>` ref; CI on that ref only produces runs that cancel each
+    # other and cancelled checks attached to the real commit
+    branches-ignore:
+      - 'changesets-ghcommit-temp/**'
+  pull_request: {}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # never cancel a run for a main commit
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   publish:
