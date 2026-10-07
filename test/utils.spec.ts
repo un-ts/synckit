@@ -165,37 +165,47 @@ exports.resolveRequest = (request, issuer, options) => {
       fs.writeFileSync(workerPath, '')
       versions.pnp = '1.0.0'
 
-      const globals = generateGlobals(workerPath, shims)
+      const calls = () =>
+        fs
+          .readFileSync(path.join(pnpDir, 'calls.txt'), 'utf8')
+          .trim()
+          .split('\n')
+          .map(line => line.split('\t'))
 
-      process.execArgv.push('--no-addons')
-      try {
-        expect(generateGlobals(workerPath, shims)).toContain('resolved.js')
-      } finally {
-        process.execArgv.pop()
+      const conditionsOf = (execArgv: string[]) => {
+        generateGlobals(workerPath, shims, 'import', execArgv)
+        const recorded = calls()
+        return recorded.at(-1)![2].split(',')
       }
 
-      const calls = fs
-        .readFileSync(path.join(pnpDir, 'calls.txt'), 'utf8')
-        .trim()
-        .split('\n')
-        .map(line => line.split('\t'))
-
-      // each specifier is resolved against the worker, with the conditions its own `import` uses
-      expect(calls.map(([request, issuer]) => [request, issuer])).toEqual([
-        ['some-shim', workerPath],
-        ['node:perf_hooks', workerPath],
-        ['some-shim', workerPath],
-        ['node:perf_hooks', workerPath],
-      ])
-      expect(calls[0][2].split(',')).toEqual(
-        expect.arrayContaining(['node', 'import', 'node-addons']),
-      )
-      // `--no-addons` takes the condition away, so the resolver must not see it
-      expect(calls[2][2].split(',')).not.toContain('node-addons')
+      const globals = generateGlobals(workerPath, shims)
 
       expect(globals).toContain('file://')
       expect(globals).toContain('resolved.js')
       expect(globals).toContain('node:perf_hooks')
+
+      // each specifier is resolved against the worker, with the conditions its own `import` uses
+      expect(calls().map(([request, issuer]) => [request, issuer])).toEqual([
+        ['some-shim', workerPath],
+        ['node:perf_hooks', workerPath],
+      ])
+      expect(conditionsOf([])).toEqual(
+        expect.arrayContaining(['node', 'import', 'node-addons']),
+      )
+      expect(conditionsOf(['--no-addons'])).not.toContain('node-addons')
+      expect(conditionsOf(['--conditions=foo'])).toContain('foo')
+      expect(conditionsOf(['--no-experimental-require-module'])).not.toContain(
+        'module-sync',
+      )
+
+      // this thread's argv is always in play, and the worker's is merged on top of it
+      process.execArgv.push('--no-addons')
+      try {
+        expect(conditionsOf([])).not.toContain('node-addons')
+        expect(conditionsOf(['--conditions=bar'])).toContain('bar')
+      } finally {
+        process.execArgv.pop()
+      }
     } finally {
       if (pnp === undefined) {
         delete versions.pnp
@@ -218,6 +228,7 @@ exports.resolveRequest = (request, issuer, options) => {
           name: 'cond-shim',
           version: '1.0.0',
           exports: {
+            foo: './foo.js',
             'node-addons': './addons.js',
             import: './import.js',
             default: './default.js',
@@ -225,6 +236,7 @@ exports.resolveRequest = (request, issuer, options) => {
         }),
       )
       for (const [file, value] of [
+        ['foo.js', 'foo'],
         ['addons.js', 'addons'],
         ['import.js', 'import'],
         ['default.js', 'default'],
@@ -238,14 +250,13 @@ exports.resolveRequest = (request, issuer, options) => {
 
       // the loader enables `node-addons`, so that is the entry the worker would import
       expect(generateGlobals(workerPath, shims)).toContain('addons.js')
-
-      process.execArgv.push('--no-addons')
-      try {
-        // without it, the loader would take the `import` entry instead
-        expect(generateGlobals(workerPath, shims)).toContain('import.js')
-      } finally {
-        process.execArgv.pop()
-      }
+      // without it, the loader would take the `import` entry, and `--conditions` adds its own
+      expect(
+        generateGlobals(workerPath, shims, 'import', ['--no-addons']),
+      ).toContain('import.js')
+      expect(
+        generateGlobals(workerPath, shims, 'import', ['--conditions=foo']),
+      ).toContain('foo.js')
     } finally {
       fs.rmSync(isolatedDir, { force: true, recursive: true })
     }

@@ -18,6 +18,7 @@ import {
   NOTIFY_INDEX,
   createSharedBufferView,
   getFlag,
+  getFlagValues,
 } from '../shared.cjs'
 
 import { compareNodeVersion } from './common.js'
@@ -92,38 +93,63 @@ const isPkgAvailableFrom = (pkg: string, base: string) => {
   }
 }
 
+// `--conditions` accumulates, so every occurrence counts, and `-C` is its short form
+const CONDITIONS_FLAGS = new Set(['--conditions', '-C'])
+
+/**
+ * Whether `require(esm)` is on for the worker, which is what enables the `module-sync` condition.
+ *
+ * It follows the worker's argv merged over this thread's, and otherwise Node's default, which is on
+ * from 22.12.
+ *
+ * @param execArgv - The argv the worker is started with.
+ */
+const hasRequireModule = (execArgv: string[]) =>
+  getFlag('--no-experimental-require-module', undefined, execArgv) == null &&
+  (getFlag('--experimental-require-module', undefined, execArgv) != null ||
+    // `require(esm)` is on by default from Node 22.12
+    compareNodeVersion('22.12.0') >= 0)
+
 /**
  * The export conditions the worker's own `import` resolves with.
  *
- * `node` and `import` are always there, `node-addons` unless `--no-addons` is set, and
- * `module-sync` once `require(esm)` is available. Resolving the shims with a different set would
- * pick an entry the worker would not load — for an addons build, one it could not.
+ * `node` and `import` are always there, `node-addons` unless `--no-addons` is set, `module-sync`
+ * once `require(esm)` is on, and whatever `--conditions` adds. They are read from this thread's argv
+ * and the argv the worker is started with, which is merged on top of it.
+ *
+ * @param execArgv - The argv the worker is started with.
  */
-const esmConditions = () =>
+const esmConditions = (execArgv: string[]) =>
   new Set([
     'node',
     'import',
-    ...(getFlag('--no-addons') === undefined ? ['node-addons'] : []),
-    ...(process.features.require_module ? ['module-sync'] : []),
+    ...(getFlag('--no-addons', undefined, execArgv) == null
+      ? ['node-addons']
+      : []),
+    ...(hasRequireModule(execArgv) ? ['module-sync'] : []),
+    ...getFlagValues(CONDITIONS_FLAGS, execArgv),
   ])
 
 /**
  * Resolves an ESM specifier the way the worker's own `import` would.
  *
  * `import` resolves against the importing module, and the generated entry is a `data:` URL with no
- * directory of its own, so this has to answer from the worker's path, with the conditions above.
+ * directory of its own, so this has to answer from the worker's path, with the worker's conditions.
  * Node grew a resolver that takes a parent in 20.16, and Yarn PnP replaces resolution outright, so
  * neither can be used: the ponyfill covers `node_modules` and `pnpapi` covers PnP, both with the
  * worker as the parent.
  *
  * @param specifier - The module name to resolve.
  * @param workerPath - The absolute path of the worker module.
+ * @param conditions - The export conditions the worker resolves with.
  * @returns The absolute URL to import, or the specifier itself for a builtin.
  * @throws When the specifier cannot be resolved from the worker.
  */
-const resolveEsmImport = (specifier: string, workerPath: string) => {
-  const conditions = esmConditions()
-
+const resolveEsmImport = (
+  specifier: string,
+  workerPath: string,
+  conditions: Set<string>,
+) => {
   if (process.versions.pnp) {
     // `pnpapi` is only resolvable from inside the PnP project, so it is asked for from the worker's
     // own path rather than the package's, which may sit in a `node_modules` fallback
@@ -138,7 +164,7 @@ const resolveEsmImport = (specifier: string, workerPath: string) => {
     const resolved = pnp.resolveRequest(specifier, workerPath, { conditions })
 
     // PnP answers `null` for a builtin, which is already an importable specifier
-    return resolved === null ? specifier : pathToFileURL(resolved).href
+    return resolved == null ? specifier : pathToFileURL(resolved).href
   }
 
   return moduleResolve(specifier, pathToFileURL(workerPath), conditions, false)
@@ -153,10 +179,15 @@ const resolveEsmImport = (specifier: string, workerPath: string) => {
  *
  * @param pkg - The module name to resolve.
  * @param workerPath - The absolute path of the worker module.
+ * @param conditions - The export conditions the worker resolves with.
  */
-const isPkgImportableFrom = (pkg: string, workerPath: string) => {
+const isPkgImportableFrom = (
+  pkg: string,
+  workerPath: string,
+  conditions: Set<string>,
+) => {
   try {
-    resolveEsmImport(pkg, workerPath)
+    resolveEsmImport(pkg, workerPath, conditions)
     return true
   } catch {
     return false
@@ -597,12 +628,15 @@ const _dirname =
  * @param workerPath - The absolute path of the worker module.
  * @param globalShims - The shims to apply.
  * @param type - Whether the caller loads them with `import` or `require`.
+ * @param execArgv - The argv the worker is started with, merged over this thread's for the ESM
+ *   conditions.
  * @returns The statements, or an empty string when there are no shims.
  */
 export const generateGlobals = (
   workerPath: string,
   globalShims: GlobalShim[],
   type: 'import' | 'require' = 'import',
+  execArgv: string[] = [],
 ) => {
   if (globalShims.length === 0) {
     return ''
@@ -615,7 +649,11 @@ export const generateGlobals = (
   return _generateGlobals(
     globalShims.map(shim => ({
       ...shim,
-      moduleName: resolveEsmImport(shim.moduleName, workerPath),
+      moduleName: resolveEsmImport(
+        shim.moduleName,
+        workerPath,
+        esmConditions(execArgv),
+      ),
     })),
     'import',
   )
@@ -765,6 +803,8 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   // to `workerPath`, the ESM one against the worker's URL. Judging availability anywhere else could
   // keep a shim the entry cannot load, or drop one it could
   const isCjsWorker = isTs ? !tsUseEsm : !jsUseEsm
+  // the worker does not run with this thread's flags, so its own argv decides the conditions
+  const esmWorkerConditions = esmConditions(finalExecArgv)
 
   const finalGlobalShims = (
     globalShims === true
@@ -775,7 +815,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   ).filter(({ moduleName }) =>
     isCjsWorker
       ? isPkgAvailableFrom(moduleName, finalWorkerPath)
-      : isPkgImportableFrom(moduleName, finalWorkerPath),
+      : isPkgImportableFrom(moduleName, finalWorkerPath, esmWorkerConditions),
   )
 
   const sharedBufferView = createSharedBufferView()
@@ -790,6 +830,8 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
           `${generateGlobals(
             finalWorkerPath,
             finalGlobalShims,
+            'import',
+            finalExecArgv,
           )};import ${JSON.stringify(String(workerPathUrl))}`,
         )
       : useEval

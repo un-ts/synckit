@@ -15,12 +15,26 @@ export declare const NODE_OPTIONS: string[]
 
 /** The value of a flag, `''` when it is set without one, or `undefined` when it is not set.
  *
+ * `execArgv` is read in addition to the process's own argv, which is always in play — a worker's
+ * argv is merged on top of it.
+ *
  * @internal
  */
 export declare const getFlag: (
   flag: Set<string> | string,
   accepted?: string,
+  execArgv?: string[],
 ) => string | undefined
+
+/** Every value a flag carries, in the order the runtime applies them, which is what a flag whose
+ * occurrences accumulate needs.
+ *
+ * @internal
+ */
+export declare const getFlagValues: (
+  flag: Set<string> | string,
+  execArgv?: string[],
+) => string[]
 
 /** The running Node version.
  *

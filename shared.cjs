@@ -128,6 +128,23 @@ const unquote = value =>
     : value
 
 /**
+ * The value an argument carries for a flag, `''` when the following argument is not its value.
+ *
+ * @param {string[]} args The arguments, `NODE_OPTIONS` first.
+ * @param {number} index The flag's index.
+ * @param {number} separator The index of `=` in the flag, or `-1`.
+ * @returns {string} The value, unquoted.
+ */
+const flagValue = (args, index, separator) => {
+  if (separator !== -1) {
+    return unquote(args[index].slice(separator + 1))
+  }
+  const next = args[index + 1]
+  // a following flag is not this flag's value
+  return next == null || next.startsWith('-') ? '' : unquote(next)
+}
+
+/**
  * The value of a flag, or `undefined` when none of its names carries the accepted value.
  *
  * `flag` is one name, or a set of names when the same flag has aliases (`-r` and `--require`), so
@@ -143,12 +160,14 @@ const unquote = value =>
  *
  * @param {Set<string> | string} flag The flag name, or the names it can have.
  * @param {string} [accepted] The value the flag must carry; any value counts by default.
+ * @param {string[]} [execArgv] The argv to read in addition to the process's own, `[]` by default —
+ *   a worker's argv is merged on top of it.
  * @returns {string | undefined} The accepted value, `''` for a flag without one, or `undefined`.
  */
-const getFlag = (flag, accepted) => {
+const getFlag = (flag, accepted, execArgv = []) => {
   const flags = typeof flag === 'string' ? new Set([flag]) : flag
   // backwards, so the first match is the one the runtime would use, and the scan can stop there
-  const args = [...NODE_OPTIONS, ...process.execArgv]
+  const args = [...NODE_OPTIONS, ...process.execArgv, ...execArgv]
   for (let index = args.length - 1; index >= 0; index--) {
     const arg = args[index]
     const separator = arg.indexOf('=')
@@ -156,19 +175,45 @@ const getFlag = (flag, accepted) => {
     if (!flags.has(name)) {
       continue
     }
-    /** @type {string} */
-    let value
-    if (separator === -1) {
-      const next = args[index + 1]
-      // a following flag is not this flag's value
-      value = next == null || next.startsWith('-') ? '' : unquote(next)
-    } else {
-      value = unquote(arg.slice(separator + 1))
-    }
+    const value = flagValue(args, index, separator)
     if (accepted == null || value === accepted) {
       return value
     }
   }
+}
+
+/**
+ * Every value a flag carries, in the order the runtime applies them.
+ *
+ * {@link getFlag} keeps only the last occurrence, because that one wins; this keeps them all, which
+ * is what a flag whose occurrences accumulate — `--conditions` — needs.
+ *
+ * @param {Set<string> | string} flag The flag name, or the names it can have.
+ * @param {string[]} [execArgv] The argv to read in addition to the process's own, `[]` by default.
+ * @returns {string[]} The values, without the empty ones a valueless flag contributes.
+ */
+const getFlagValues = (flag, execArgv = []) => {
+  const flags = typeof flag === 'string' ? new Set([flag]) : flag
+  const args = [...NODE_OPTIONS, ...process.execArgv, ...execArgv]
+  /** @type {string[]} */
+  const values = []
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    const separator = arg.indexOf('=')
+    const name = separator === -1 ? arg : arg.slice(0, separator)
+    if (!flags.has(name)) {
+      continue
+    }
+    const value = flagValue(args, index, separator)
+    if (value) {
+      values.push(value)
+    }
+    // a value taken from the next argument is not a flag of its own
+    if (separator === -1 && value) {
+      index++
+    }
+  }
+  return values
 }
 
 /**
@@ -224,5 +269,6 @@ module.exports = {
   createSharedBufferView,
   extractProperties,
   getFlag,
+  getFlagValues,
   parseVersion,
 }
