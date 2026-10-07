@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
@@ -9,6 +10,7 @@ import {
 } from 'node:worker_threads'
 import type { MessagePort } from 'node:worker_threads'
 
+import { moduleResolve } from '@dual-bundle/import-meta-resolve'
 import { tryExtensions, findUp, cjsRequire, isPkgAvailable } from '@pkgr/core'
 
 import {
@@ -65,6 +67,98 @@ export const isFile = (path: string) => {
     return !!fs.statSync(path, { throwIfNoEntry: false })?.isFile()
   } catch {
     /* istanbul ignore next */
+    return false
+  }
+}
+
+/**
+ * Whether a package can be resolved from a file the way a `require` would.
+ *
+ * `isPkgAvailable` resolves from `@pkgr/core`'s own location, which is only one of the places a
+ * global shim may live. The CommonJS eval path loads the shims with a `require` bound to the
+ * worker, so availability has to be judged from there or a shim which only exists beside the worker
+ * is filtered out before it can be loaded, and one that `require` cannot reach is kept and then
+ * fails.
+ *
+ * @param pkg - The module name to resolve.
+ * @param base - The absolute path of the file the resolution starts from.
+ */
+const isPkgAvailableFrom = (pkg: string, base: string) => {
+  try {
+    createRequire(base).resolve(pkg)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The export conditions the worker's own `import` resolves with.
+ *
+ * `node` and `import` are always there, `node-addons` unless `--no-addons` is set, and
+ * `module-sync` once `require(esm)` is available. Resolving the shims with a different set would
+ * pick an entry the worker would not load — for an addons build, one it could not.
+ */
+const esmConditions = () =>
+  new Set([
+    'node',
+    'import',
+    ...(getFlag('--no-addons') === undefined ? ['node-addons'] : []),
+    ...(process.features.require_module ? ['module-sync'] : []),
+  ])
+
+/**
+ * Resolves an ESM specifier the way the worker's own `import` would.
+ *
+ * `import` resolves against the importing module, and the generated entry is a `data:` URL with no
+ * directory of its own, so this has to answer from the worker's path, with the conditions above.
+ * Node grew a resolver that takes a parent in 20.16, and Yarn PnP replaces resolution outright, so
+ * neither can be used: the ponyfill covers `node_modules` and `pnpapi` covers PnP, both with the
+ * worker as the parent.
+ *
+ * @param specifier - The module name to resolve.
+ * @param workerPath - The absolute path of the worker module.
+ * @returns The absolute URL to import, or the specifier itself for a builtin.
+ * @throws When the specifier cannot be resolved from the worker.
+ */
+const resolveEsmImport = (specifier: string, workerPath: string) => {
+  const conditions = esmConditions()
+
+  if (process.versions.pnp) {
+    // `pnpapi` is only resolvable from inside the PnP project, so it is asked for from the worker's
+    // own path rather than the package's, which may sit in a `node_modules` fallback
+    const pnp = createRequire(workerPath)('pnpapi') as unknown as {
+      resolveRequest: (
+        request: string,
+        issuer: string,
+        options?: { conditions?: Set<string> },
+      ) => string | null
+    }
+
+    const resolved = pnp.resolveRequest(specifier, workerPath, { conditions })
+
+    // PnP answers `null` for a builtin, which is already an importable specifier
+    return resolved === null ? specifier : pathToFileURL(resolved).href
+  }
+
+  return moduleResolve(specifier, pathToFileURL(workerPath), conditions, false)
+    .href
+}
+
+/**
+ * Whether a package can be resolved from a file the way an `import` would.
+ *
+ * Judged with {@link resolveEsmImport}, so the check cannot keep a shim the generated statements
+ * cannot import, or drop one they could.
+ *
+ * @param pkg - The module name to resolve.
+ * @param workerPath - The absolute path of the worker module.
+ */
+const isPkgImportableFrom = (pkg: string, workerPath: string) => {
+  try {
+    resolveEsmImport(pkg, workerPath)
+    return true
+  } catch {
     return false
   }
 }
@@ -482,15 +576,29 @@ export const _generateGlobals = (
     '',
   )
 
-let globalsCache: Map<string, [content: string, filepath?: string]> | undefined
-
-let tmpdir: string
-
 const _dirname =
   typeof __dirname === 'undefined'
     ? path.dirname(fileURLToPath(import.meta.url))
     : /* istanbul ignore next */ __dirname
 
+/**
+ * Generates the global shim statements loaded before a worker module.
+ *
+ * A CommonJS worker can rebind `require` where the statements run, so they keep the bare module
+ * names and the caller wraps them. An ESM worker cannot: `import` resolves against the importing
+ * module, and the generated entry is a `data:` URL with no directory of its own, so each specifier
+ * is resolved against `workerPath` here and emitted as an absolute `file:`/`node:` URL. That is what
+ * makes a shim resolvable beside the worker — but not from the package's own `node_modules` — work,
+ * rather than a generated file under `node_modules/.synckit` deciding where it resolves.
+ *
+ * Yarn PnP resolves through a map rather than `node_modules`, so {@link resolveEsmImport} uses
+ * `pnpapi` there instead of the ponyfill; both answer from `workerPath`.
+ *
+ * @param workerPath - The absolute path of the worker module.
+ * @param globalShims - The shims to apply.
+ * @param type - Whether the caller loads them with `import` or `require`.
+ * @returns The statements, or an empty string when there are no shims.
+ */
 export const generateGlobals = (
   workerPath: string,
   globalShims: GlobalShim[],
@@ -500,40 +608,51 @@ export const generateGlobals = (
     return ''
   }
 
-  globalsCache ??= new Map()
-
-  const cached = globalsCache.get(workerPath)
-
-  if (cached) {
-    const [content, filepath] = cached
-
-    if (
-      (type === 'require' && !filepath) ||
-      (type === 'import' && filepath && isFile(filepath))
-    ) {
-      return content
-    }
+  if (type === 'require') {
+    return _generateGlobals(globalShims, 'require')
   }
 
-  const globals = _generateGlobals(globalShims, type)
-
-  let content = globals
-  let filepath: string | undefined
-
-  if (type === 'import') {
-    if (!tmpdir) {
-      tmpdir = path.resolve(findUp(_dirname), '../node_modules/.synckit')
-    }
-    fs.mkdirSync(tmpdir, { recursive: true })
-    filepath = path.resolve(tmpdir, md5Hash(workerPath) + '.mjs')
-    content = encodeImportModule(filepath)
-    fs.writeFileSync(filepath, globals)
-  }
-
-  globalsCache.set(workerPath, [content, filepath])
-
-  return content
+  return _generateGlobals(
+    globalShims.map(shim => ({
+      ...shim,
+      moduleName: resolveEsmImport(shim.moduleName, workerPath),
+    })),
+    'import',
+  )
 }
+
+/**
+ * Binds the `require` of generated CommonJS global shim statements to the worker's own path.
+ *
+ * A worker started with `eval: true` runs its entry as a top-level script, and `require` there is a
+ * property of the global object resolved from the process working directory, so a bare
+ * `require('<shim>')` reaches the wrong location. A shim which is resolvable beside the worker but
+ * not from there then fails with `MODULE_NOT_FOUND`.
+ *
+ * The statements are wrapped in a block which rebinds `require` itself to
+ * `createRequire(workerPath)`, so they resolve where the worker is while the entry's global
+ * `require` — which loads the worker module by absolute path afterwards, outside the block — is left
+ * untouched. The block-scoped `const` shadows that global, so its own initializer cannot name
+ * `require` directly: that is a temporal dead zone error, and reading it back through
+ * `globalThis.require` is the same binding the statements would otherwise call.
+ * `process.getBuiltinModule` is not an option, because it only exists from Node 20.16 and this
+ * package supports far older ones.
+ *
+ * It is a block-scoped `const` inside a block statement rather than a generated function or arrow
+ * literal, which code scanning reads as constructed code (`js/bad-code-sanitization`).
+ *
+ * The worker path is embedded with `JSON.stringify`, so quotes, backslashes and line terminators
+ * cannot break out of the literal.
+ *
+ * @param workerPath - The absolute path of the worker module.
+ * @param globals - The generated CommonJS shim statements, possibly empty.
+ */
+const requireGlobalsFromWorker = (workerPath: string, globals: string) =>
+  globals
+    ? `{const require=globalThis.require('node:module').createRequire(${JSON.stringify(
+        workerPath,
+      )});${globals}}`
+    : globals
 
 /**
  * Absolute path of the module preloaded into every worker to arm the load guard.
@@ -642,13 +761,22 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     }
   }
 
+  // Both entries resolve the shims from the worker itself: the CommonJS one with a `require` bound
+  // to `workerPath`, the ESM one against the worker's URL. Judging availability anywhere else could
+  // keep a shim the entry cannot load, or drop one it could
+  const isCjsWorker = isTs ? !tsUseEsm : !jsUseEsm
+
   const finalGlobalShims = (
     globalShims === true
       ? DEFAULT_GLOBAL_SHIMS_PRESET
       : Array.isArray(globalShims)
         ? globalShims
         : []
-  ).filter(({ moduleName }) => isPkgAvailable(moduleName))
+  ).filter(({ moduleName }) =>
+    isCjsWorker
+      ? isPkgAvailableFrom(moduleName, finalWorkerPath)
+      : isPkgImportableFrom(moduleName, finalWorkerPath),
+  )
 
   const sharedBufferView = createSharedBufferView()
 
@@ -665,10 +793,9 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
           )};import ${JSON.stringify(String(workerPathUrl))}`,
         )
       : useEval
-        ? `${generateGlobals(
+        ? `${requireGlobalsFromWorker(
             finalWorkerPath,
-            finalGlobalShims,
-            'require',
+            generateGlobals(finalWorkerPath, finalGlobalShims, 'require'),
           )};${encodeImportModule(finalWorkerPath, 'require')}`
         : workerPathUrl
 
