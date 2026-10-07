@@ -3,6 +3,7 @@
     "github>1stG/configs"
   ],
   "ignoreDeps": [
-    "jest"
+    "jest",
+    "node-fetch"
   ]
 }
