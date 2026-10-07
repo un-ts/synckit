@@ -130,14 +130,22 @@ const esmConditions = (execArgv: string[]) =>
     ...getFlagValues(CONDITIONS_FLAGS, execArgv),
   ])
 
+/** The part of Yarn's PnP API shim resolution uses. */
+interface PnpApi {
+  resolveRequest: (
+    request: string,
+    issuer: string,
+    options?: { conditions?: Set<string> },
+  ) => string | null
+}
+
 /**
  * Resolves an ESM specifier the way the worker's own `import` would.
  *
  * `import` resolves against the importing module, and the generated entry is a `data:` URL with no
  * directory of its own, so this has to answer from the worker's path, with the worker's conditions.
- * Node grew a resolver that takes a parent in 20.16, and Yarn PnP replaces resolution outright, so
- * neither can be used: the ponyfill covers `node_modules` and `pnpapi` covers PnP, both with the
- * worker as the parent.
+ * Node's own resolver did not take a parent before 20.16 and cannot see the PnP map, so the ponyfill
+ * covers `node_modules` and `pnpapi` covers PnP, both with the worker as the parent.
  *
  * @param specifier - The module name to resolve.
  * @param workerPath - The absolute path of the worker module.
@@ -153,13 +161,7 @@ const resolveEsmImport = (
   if (process.versions.pnp) {
     // `pnpapi` is only resolvable from inside the PnP project, so it is asked for from the worker's
     // own path rather than the package's, which may sit in a `node_modules` fallback
-    const pnp = createRequire(workerPath)('pnpapi') as unknown as {
-      resolveRequest: (
-        request: string,
-        issuer: string,
-        options?: { conditions?: Set<string> },
-      ) => string | null
-    }
+    const pnp = createRequire(workerPath)('pnpapi') as unknown as PnpApi
 
     const resolved = pnp.resolveRequest(specifier, workerPath, { conditions })
 
@@ -646,14 +648,12 @@ export const generateGlobals = (
     return _generateGlobals(globalShims, 'require')
   }
 
+  const conditions = esmConditions(execArgv)
+
   return _generateGlobals(
     globalShims.map(shim => ({
       ...shim,
-      moduleName: resolveEsmImport(
-        shim.moduleName,
-        workerPath,
-        esmConditions(execArgv),
-      ),
+      moduleName: resolveEsmImport(shim.moduleName, workerPath, conditions),
     })),
     'import',
   )
@@ -803,7 +803,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   // to `workerPath`, the ESM one against the worker's URL. Judging availability anywhere else could
   // keep a shim the entry cannot load, or drop one it could
   const isCjsWorker = isTs ? !tsUseEsm : !jsUseEsm
-  // the worker does not run with this thread's flags, so its own argv decides the conditions
+  // what the shims are resolved with: this thread's argv and the argv the worker is started with
   const esmWorkerConditions = esmConditions(finalExecArgv)
 
   const finalGlobalShims = (
