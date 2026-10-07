@@ -192,6 +192,10 @@ exports.resolveRequest = (request, issuer, options) => {
       expect(conditionsOf([])).toEqual(
         expect.arrayContaining(['node', 'import', 'node-addons']),
       )
+      // `module-sync` follows the Node default unless the worker's argv turns `require(esm)` off
+      expect(conditionsOf([]).includes('module-sync')).toBe(
+        Boolean(process.features.require_module),
+      )
       expect(conditionsOf(['--no-addons'])).not.toContain('node-addons')
       expect(conditionsOf(['--conditions=foo'])).toContain('foo')
       expect(conditionsOf(['--no-experimental-require-module'])).not.toContain(

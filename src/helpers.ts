@@ -97,18 +97,28 @@ const isPkgAvailableFrom = (pkg: string, base: string) => {
 const CONDITIONS_FLAGS = new Set(['--conditions', '-C'])
 
 /**
+ * Whether `require(esm)` — and with it the `module-sync` condition — is on by default for this
+ * Node.
+ *
+ * The 20.x line got the backport in 20.19, the 22.x line in 22.12, and 23 and later started with it.
+ * 21.x never had it, and 22.0–22.11 needed `--experimental-require-module`.
+ */
+const requireModuleByDefault =
+  compareNodeVersion('22.12.0') >= 0 ||
+  // 20.19 alone would also match 21.x and 22.0–22.11, where it is off, so the range ends at 21
+  (compareNodeVersion('20.19.0') >= 0 && compareNodeVersion('21') < 0)
+
+/**
  * Whether `require(esm)` is on for the worker, which is what enables the `module-sync` condition.
  *
- * It follows the worker's argv merged over this thread's, and otherwise Node's default, which is on
- * from 22.12.
+ * It follows the worker's argv merged over this thread's and otherwise the default above.
  *
  * @param execArgv - The argv the worker is started with.
  */
 const hasRequireModule = (execArgv: string[]) =>
   getFlag('--no-experimental-require-module', undefined, execArgv) == null &&
   (getFlag('--experimental-require-module', undefined, execArgv) != null ||
-    // `require(esm)` is on by default from Node 22.12
-    compareNodeVersion('22.12.0') >= 0)
+    requireModuleByDefault)
 
 /**
  * The export conditions the worker's own `import` resolves with.
