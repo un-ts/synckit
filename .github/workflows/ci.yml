@@ -30,10 +30,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node }}
           cache: yarn
@@ -51,9 +51,31 @@ jobs:
           cd ../bun
           bun i --frozen-lockfile
 
-      - name: Downgrade dependencies for Node.js < 20
-        if: ${{ matrix.node < 20 }}
+      - name: Park the prepare script for the downgrade
+        if: ${{ matrix.node < 22 }}
+        # bash keeps the jq redirect byte-exact; PowerShell would rewrite the line endings
+        shell: bash
+        run: |
+          # `yarn add` below fires the `prepare` lifecycle, and `yarn-berry-deduplicate` then rewrites
+          # `resolutions` in package.json with its own serializer: it cannot spawn `yarn` on Windows
+          # and it loops on CI's immutable installs. Park the script under another name, keeping its
+          # position, so the lifecycle is skipped; the next step restores it after the downgrade.
+          jq -b '.scripts |= with_entries(if .key == "prepare" then .key = "x-synckit-prepare" else . end)' package.json > package.json.next
+          mv package.json.next package.json
+
+      - name: Downgrade dependencies for Node.js < 22
+        if: ${{ matrix.node < 22 }}
         run: yarn add -D concurrently@9 tsdown@0.12.0
+
+      - name: Restore the prepare script
+        if: ${{ matrix.node < 22 }}
+        # bash keeps the jq redirect byte-exact; PowerShell would rewrite the line endings
+        shell: bash
+        run: |
+          # the native `tsc` bin is an extensionless ES module entry that Node.js < 18.19 cannot run,
+          # so build with the 6.x CLI there; the same pass restores `prepare` in place
+          jq -b --argjson older "$(node -p 'const [a,b]=process.versions.node.split(".").map(Number); a<18||(a===18&&b<19)')" 'if $older then .scripts["build:tsc"]="tsc6 -p src" | .scripts["lint:tsc"]="tsc6 --noEmit" else . end | .scripts |= with_entries(if .key == "x-synckit-prepare" then .key = "prepare" else . end)' package.json > package.json.next
+          mv package.json.next package.json
 
       - name: Build and Test
         run: |
@@ -72,7 +94,7 @@ jobs:
         run: yarn benchmark
 
       - name: Codecov
-        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
