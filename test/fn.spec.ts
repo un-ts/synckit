@@ -1,10 +1,14 @@
 /* eslint-disable jest/no-standalone-expect */
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { jest } from '@jest/globals'
 import { cjsRequire } from '@pkgr/core'
 
 import {
+  _dirname,
   setupReceiveMessageOnPortMock,
   testIf,
   workerCjsPath,
@@ -388,6 +392,101 @@ test('globalShims options', async () => {
   expect(syncFn(1)).toBe(1)
   expect(syncFn(2)).toBe(2)
   expect(syncFn(5, 0)).toBe(5)
+})
+
+test('globalShims resolve from the worker path', async () => {
+  const { createSyncFn } = await import('synckit')
+
+  // a shim package which exists only beside the worker: the eval entry used to resolve the shim
+  // `require` from the process working directory, where this package does not exist
+  const isolatedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'synckit-shim-'))
+  const shimDir = path.join(isolatedDir, 'node_modules', 'worker-shim')
+  fs.mkdirSync(shimDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(shimDir, 'package.json'),
+    JSON.stringify({ name: 'worker-shim', version: '1.0.0', main: 'index.js' }),
+  )
+  fs.writeFileSync(
+    path.join(shimDir, 'index.js'),
+    'module.exports = { shimmed: true }\n',
+  )
+  const isolatedWorkerPath = path.join(isolatedDir, 'worker.cjs')
+  fs.writeFileSync(
+    isolatedWorkerPath,
+    `const { runAsWorker } = require(${JSON.stringify(
+      path.resolve(_dirname, '../lib/index.cjs'),
+    )})\nrunAsWorker(() => globalThis.__shimProbe?.shimmed)\n`,
+  )
+
+  try {
+    const syncFn = createSyncFn<() => boolean | undefined>(isolatedWorkerPath, {
+      timeout: 10_000,
+      globalShims: [
+        {
+          moduleName: 'worker-shim',
+          globalName: '__shimProbe',
+        },
+      ],
+    })
+
+    expect(syncFn()).toBe(true)
+  } finally {
+    fs.rmSync(isolatedDir, { force: true, recursive: true })
+  }
+})
+
+test('globalShims resolve from the worker path for an ESM worker', async () => {
+  const { createSyncFn } = await import('synckit')
+
+  // the same shape as the CommonJS case, but the shim is ESM and only `import` can load it: its
+  // specifier has to be resolved against the worker's URL, because the generated entry is a `data:`
+  // URL with no directory of its own
+  const isolatedDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'synckit-esm-shim-'),
+  )
+  const shimDir = path.join(isolatedDir, 'node_modules', 'worker-esm-shim')
+  fs.mkdirSync(shimDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(shimDir, 'package.json'),
+    JSON.stringify({
+      name: 'worker-esm-shim',
+      version: '1.0.0',
+      type: 'module',
+      main: 'index.js',
+    }),
+  )
+  fs.writeFileSync(
+    path.join(shimDir, 'index.js'),
+    'export default { shimmed: true }\n',
+  )
+  const isolatedWorkerPath = path.join(isolatedDir, 'worker.mjs')
+  fs.writeFileSync(
+    isolatedWorkerPath,
+    `import { runAsWorker } from ${JSON.stringify(
+      pathToFileURL(path.resolve(_dirname, '../lib/index.js')).href,
+    )}\nrunAsWorker(() => globalThis.__shimProbe?.shimmed)\n`,
+  )
+
+  try {
+    const syncFn = createSyncFn<() => boolean | undefined>(isolatedWorkerPath, {
+      timeout: 10_000,
+      globalShims: [
+        {
+          moduleName: 'worker-esm-shim',
+          globalName: '__shimProbe',
+        },
+        // unresolvable from the worker, so the availability check drops it and the worker still runs
+        {
+          moduleName: 'worker-esm-missing-shim',
+          globalName: '__missingShimProbe',
+        },
+      ],
+    })
+
+    expect(syncFn()).toBe(true)
+  } finally {
+    fs.rmSync(isolatedDir, { force: true, recursive: true })
+  }
 })
 
 test('support file url', async () => {

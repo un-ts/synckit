@@ -128,48 +128,93 @@ const unquote = value =>
     : value
 
 /**
- * The value of a flag, or `undefined` when none of its names carries the accepted value.
+ * The arguments a flag is read from: `NODE_OPTIONS`, this thread's own argv, and the extra argv —
+ * a worker's — merged last, because the command line overrides the environment.
+ *
+ * @param {string[]} execArgv The extra argv.
+ * @returns {string[]} The arguments, as one list.
+ */
+const flagArgs = execArgv => [...NODE_OPTIONS, ...process.execArgv, ...execArgv]
+
+/**
+ * Every value a flag carries, in the order the runtime applies them, `''` for one set without a
+ * value.
  *
  * `flag` is one name, or a set of names when the same flag has aliases (`-r` and `--require`), so
  * one lookup covers them all. A name can carry its value joined with `=` or in the next argument,
- * and the value may be wrapped in matching quotes. When `accepted` is given, only a flag with that
- * exact value counts, so a value that does not match is skipped. The sources are the ones the
- * runtime applies: the command line, where Node puts flags in `execArgv` rather than `argv` (a
- * worker inherits it in its own `execArgv`), and `NODE_OPTIONS`. `argv` is not read: a flag after
- * the script path is an argument to the script, which Node does not apply. They are read as one
- * list, `NODE_OPTIONS` first and `execArgv` last because the command line overrides it, from the
- * end, because the last occurrence of a flag wins. `''` is a flag that was set without a value,
- * which is not the same as the flag being absent.
+ * and the value may be wrapped in matching quotes; a following flag is not this flag's value.
  *
  * @param {Set<string> | string} flag The flag name, or the names it can have.
- * @param {string} [accepted] The value the flag must carry; any value counts by default.
- * @returns {string | undefined} The accepted value, `''` for a flag without one, or `undefined`.
+ * @param {string[]} args The arguments to read.
+ * @returns {string[]} The values.
  */
-const getFlag = (flag, accepted) => {
+const flagValues = (flag, args) => {
   const flags = typeof flag === 'string' ? new Set([flag]) : flag
-  // backwards, so the first match is the one the runtime would use, and the scan can stop there
-  const args = [...NODE_OPTIONS, ...process.execArgv]
-  for (let index = args.length - 1; index >= 0; index--) {
+  /** @type {string[]} */
+  const values = []
+  for (let index = 0; index < args.length; index++) {
     const arg = args[index]
     const separator = arg.indexOf('=')
     const name = separator === -1 ? arg : arg.slice(0, separator)
     if (!flags.has(name)) {
       continue
     }
-    /** @type {string} */
-    let value
-    if (separator === -1) {
-      const next = args[index + 1]
-      // a following flag is not this flag's value
-      value = next == null || next.startsWith('-') ? '' : unquote(next)
-    } else {
-      value = unquote(arg.slice(separator + 1))
+    const next = args[index + 1]
+    const hasNextValue =
+      separator === -1 && next != null && !next.startsWith('-')
+    values.push(
+      separator === -1
+        ? hasNextValue
+          ? unquote(next)
+          : ''
+        : unquote(arg.slice(separator + 1)),
+    )
+    // a value taken from the next argument is not a flag of its own
+    if (hasNextValue) {
+      index++
     }
+  }
+  return values
+}
+
+/**
+ * The value of a flag, or `undefined` when none of its names carries the accepted value.
+ *
+ * The sources are the ones the runtime applies: the command line, where Node puts flags in
+ * `execArgv` rather than `argv`, and `NODE_OPTIONS`. `argv` is not read: a flag after the script
+ * path is an argument to the script, which Node does not apply. When `accepted` is given, only a
+ * flag carrying that exact value counts. The last occurrence wins, and `''` is a flag that was set
+ * without a value, which is not the same as the flag being absent.
+ *
+ * @param {Set<string> | string} flag The flag name, or the names it can have.
+ * @param {string} [accepted] The value the flag must carry; any value counts by default.
+ * @param {string[]} [execArgv] The argv to read in addition to the process's own, `[]` by default —
+ *   a worker's argv is merged on top of it.
+ * @returns {string | undefined} The accepted value, `''` for a flag without one, or `undefined`.
+ */
+const getFlag = (flag, accepted, execArgv = []) => {
+  const values = flagValues(flag, flagArgs(execArgv))
+  // backwards, so the first match is the one the runtime would use, and the scan can stop there
+  for (let index = values.length - 1; index >= 0; index--) {
+    const value = values[index]
     if (accepted == null || value === accepted) {
       return value
     }
   }
 }
+
+/**
+ * Every value a flag carries, in the order the runtime applies them.
+ *
+ * {@link getFlag} keeps only the last occurrence, because that one wins; this keeps them all, which
+ * is what a flag whose occurrences accumulate — `--conditions` — needs.
+ *
+ * @param {Set<string> | string} flag The flag name, or the names it can have.
+ * @param {string[]} [execArgv] The argv to read in addition to the process's own, `[]` by default.
+ * @returns {string[]} The values, without the empty ones a valueless flag contributes.
+ */
+const getFlagValues = (flag, execArgv = []) =>
+  flagValues(flag, flagArgs(execArgv)).filter(Boolean)
 
 /**
  * Splits a version into its numeric parts.
@@ -224,5 +269,6 @@ module.exports = {
   createSharedBufferView,
   extractProperties,
   getFlag,
+  getFlagValues,
   parseVersion,
 }
