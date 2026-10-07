@@ -97,7 +97,7 @@ export interface GlobalShim {
    * `globalThis.fetch` when it's unavailable natively:
    *
    * ```js
-   * import fetch from 'node-fetch'
+   * import { fetch } from 'node-fetch-native'
    *
    * if (!globalThis.fetch) {
    *   globalThis.fetch = fetch

@@ -93,7 +93,7 @@ describe('utils', () => {
     // each specifier is resolved against the worker's URL here, so nothing is left pointing at a
     // generated file under the package's own `node_modules`
     expect(importGlobals).toContain('node:perf_hooks')
-    expect(importGlobals).toMatch(/node_modules[\\/]node-fetch/)
+    expect(importGlobals).toMatch(/node_modules[\\/]node-fetch-native/)
     expect(importGlobals).not.toContain('.synckit')
     expect(generateGlobals('fake.js', DEFAULT_GLOBAL_SHIMS_PRESET)).toBe(
       importGlobals,
