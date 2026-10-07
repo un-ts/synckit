@@ -51,9 +51,31 @@ jobs:
           cd ../bun
           bun i --frozen-lockfile
 
-      - name: Downgrade dependencies for Node.js < 20
-        if: ${{ matrix.node < 20 }}
+      - name: Park the prepare script for the downgrade
+        if: ${{ matrix.node < 22 }}
+        # bash keeps the jq redirect byte-exact; PowerShell would rewrite the line endings
+        shell: bash
+        run: |
+          # `yarn add` below fires the `prepare` lifecycle, and `yarn-berry-deduplicate` then rewrites
+          # `resolutions` in package.json with its own serializer: it cannot spawn `yarn` on Windows
+          # and it loops on CI's immutable installs. Park the script under another name, keeping its
+          # position, so the lifecycle is skipped; the next step restores it after the downgrade.
+          jq -b '.scripts |= with_entries(if .key == "prepare" then .key = "x-synckit-prepare" else . end)' package.json > package.json.next
+          mv package.json.next package.json
+
+      - name: Downgrade dependencies for Node.js < 22
+        if: ${{ matrix.node < 22 }}
         run: yarn add -D concurrently@9 tsdown@0.12.0
+
+      - name: Restore the prepare script
+        if: ${{ matrix.node < 22 }}
+        # bash keeps the jq redirect byte-exact; PowerShell would rewrite the line endings
+        shell: bash
+        run: |
+          # the native `tsc` bin is an extensionless ES module entry that Node.js < 18.19 cannot run,
+          # so build with the 6.x CLI there; the same pass restores `prepare` in place
+          jq -b --argjson older "$(node -p 'const [a,b]=process.versions.node.split(".").map(Number); a<18||(a===18&&b<19)')" 'if $older then .scripts["build:tsc"]="tsc6 -p src" | .scripts["lint:tsc"]="tsc6 --noEmit" else . end | .scripts |= with_entries(if .key == "x-synckit-prepare" then .key = "prepare" else . end)' package.json > package.json.next
+          mv package.json.next package.json
 
       - name: Build and Test
         run: |
