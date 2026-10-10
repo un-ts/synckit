@@ -302,6 +302,26 @@ export const hasImportFlag = (execArgv: string[]) =>
 export const hasLoaderFlag = (execArgv: string[]) =>
   execArgv.some(execArg => LOADER_FLAGS.has(execArg))
 
+/**
+ * The PnP API's own path, or `undefined` when this process does not run under PnP.
+ *
+ * Both ends need it: `setupTsRunner` preloads the API ahead of the load guard, and
+ * `startWorkerThread` recognizes the PnP-plus-guard prefix a nested worker can forward. Resolving it
+ * once per call is cheap — the module cache answers — so it is shared rather than spelled twice.
+ */
+const resolvePnpApiPath = (): string | undefined => {
+  /* istanbul ignore if -- https://github.com/facebook/jest/issues/5274 */
+  if (!process.versions.pnp) {
+    return undefined
+  }
+  try {
+    /** @see https://github.com/facebook/jest/issues/9543 */
+    return cjsRequire.resolve('pnpapi')
+  } catch {
+    return undefined
+  }
+}
+
 export const setupTsRunner = (
   workerPath: string,
   {
@@ -520,30 +540,34 @@ export const setupTsRunner = (
     }
   }
 
+  // resolved even when the project already preloads it: the worker's own `NODE_OPTIONS` puts its
+  // guard behind this require, so `startWorkerThread` needs the path either way
+  const pnpApiPath = resolvePnpApiPath()
   let resolvedPnpLoaderPath: string | undefined
 
-  /* istanbul ignore if -- https://github.com/facebook/jest/issues/5274 */
-  if (process.versions.pnp) {
-    let pnpApiPath: string | undefined
-    try {
-      /** @see https://github.com/facebook/jest/issues/9543 */
-      pnpApiPath = cjsRequire.resolve('pnpapi')
-    } catch {}
-    // a `--require`/`-r` that already loads the pnp API is skipped; only a value equal to it counts
-    if (
-      pnpApiPath &&
-      !getFlag(REQUIRE_FLAGS, pnpApiPath) &&
-      !execArgv.includes(pnpApiPath)
-    ) {
-      execArgv = [REQUIRE_ABBR_FLAG, pnpApiPath, ...execArgv]
-      const pnpLoaderPath = path.resolve(pnpApiPath, '../.pnp.loader.mjs')
-      if (isFile(pnpLoaderPath)) {
-        // Transform path to file URL because nodejs does not accept
-        // absolute Windows paths in the --experimental-loader option.
-        // https://github.com/un-ts/synckit/issues/123
-        resolvedPnpLoaderPath = pathToFileURL(pnpLoaderPath).href
-        execArgv = [LOADER_FLAG, resolvedPnpLoaderPath, ...execArgv]
-      }
+  // a `--require`/`-r` that already loads the pnp API is skipped; only a value equal to it counts.
+  // The require itself is not added here: the worker is given it through its own `NODE_OPTIONS`,
+  // which the runtime applies before `execArgv`, so adding it here as well would only duplicate it
+  if (
+    pnpApiPath !== undefined &&
+    !getFlag(REQUIRE_FLAGS, pnpApiPath) &&
+    !execArgv.includes(pnpApiPath)
+  ) {
+    const pnpLoaderPath = path.resolve(pnpApiPath, '../.pnp.loader.mjs')
+    const pnpLoaderUrl = pathToFileURL(pnpLoaderPath).href
+    // the loader Yarn pairs with the require, or one a nested worker forwarded, must not be added a
+    // second time: every extra pair chains another PnP loader into the worker's ESM resolution. The
+    // generated name identifies it rather than the URL, because the same file can arrive spelled as
+    // a symlinked or portable path, which a string comparison against `pnpLoaderUrl` would miss
+    const inheritedPnpLoader = getFlagValues(LOADER_FLAGS).some(value =>
+      /[/\\]\.pnp\.loader\.mjs$/.test(value),
+    )
+    if (isFile(pnpLoaderPath) && !inheritedPnpLoader) {
+      // Transform path to file URL because nodejs does not accept
+      // absolute Windows paths in the --experimental-loader option.
+      // https://github.com/un-ts/synckit/issues/123
+      resolvedPnpLoaderPath = pnpLoaderUrl
+      execArgv = [LOADER_FLAG, resolvedPnpLoaderPath, ...execArgv]
     }
   }
 
@@ -554,6 +578,7 @@ export const setupTsRunner = (
     tsRunner,
     tsUseEsm,
     workerPath,
+    pnpApiPath,
     pnpLoaderPath: resolvedPnpLoaderPath,
     execArgv,
   }
@@ -752,11 +777,19 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
   const { port1: mainPort, port2: workerPort } = new MessageChannel()
 
   // A nested worker can forward the arguments this code added at the level above, guard pair
-  // included. That pair is not a register the caller asked for, and `setupTsRunner` reads exactly
-  // that to decide whether to add a TypeScript runner, so it goes before the runner is selected. It
-  // only ever leads, because this code is what puts it there — the same positional test the
-  // `inheritsGuard` check makes on `NODE_OPTIONS` — and it is added again after the selection, so it
-  // stays one pair per level instead of one per nesting level
+  // included. That pair — and, under PnP, the PnP API require this code writes in front of it — is
+  // not a register the caller asked for, and `setupTsRunner` reads exactly that to decide whether to
+  // add a TypeScript runner, so it goes before the runner is selected. It only ever leads, because
+  // this code is what puts it there — the same positional tests the `inheritsGuard` check makes on
+  // `NODE_OPTIONS` — and it is added again after the selection, so it stays one pair per level
+  // instead of one per nesting level
+  const forwardedPnpApiPath = resolvePnpApiPath()
+  execArgv =
+    forwardedPnpApiPath !== undefined &&
+    execArgv[0] === REQUIRE_ABBR_FLAG &&
+    execArgv[1] === forwardedPnpApiPath
+      ? execArgv.slice(2)
+      : execArgv
   execArgv =
     execArgv[0] === REQUIRE_ABBR_FLAG && execArgv[1] === workerPreload
       ? execArgv.slice(2)
@@ -769,6 +802,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     tsUseEsm,
     tsRunner: finalTsRunner,
     workerPath: finalWorkerPath,
+    pnpApiPath,
     pnpLoaderPath,
     execArgv: finalExecArgv,
   } = setupTsRunner(workerPath, { execArgv, tsRunner })
@@ -857,25 +891,41 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
     transferList: [workerPort, ...transferList],
   }
 
-  // The guard has to load before any preload inherited through `NODE_OPTIONS` — which run first —
-  // and before the worker module, so it leads the worker's own `NODE_OPTIONS`. A worker that already
-  // inherits it keeps its environment untouched, so a synckit worker inside a worker cannot
-  // accumulate one preload flag per nesting level. The check is the exact shape the prepend writes,
-  // with the same constant, so changing that flag moves the writer and this together: a guard that
-  // merely sits in this process's `execArgv` — the fallback below writes that — or that appears as
-  // another flag's value does not count, and a hand-written `--require <guard>` only costs a
-  // duplicate preload, which the module cache and the per-slice state absorb. It relies on
-  // `NODE_OPTIONS` being fixed when the process starts, which is what makes the array parsed then
-  // the value the environment below follows
-  const inheritsGuard =
-    NODE_OPTIONS[0] === REQUIRE_ABBR_FLAG && NODE_OPTIONS[1] === workerPreload
+  // The guard counts as inherited only where it still leads: at the front, or immediately behind the
+  // PnP API require this code writes in front of it. A guard that merely appears later, after
+  // another preload, is not protective — that preload runs first, and a failure in it is reported by
+  // nothing — so the guard is added ahead of it instead. It relies on `NODE_OPTIONS` being fixed
+  // when the process starts, which is what makes the array parsed then the value the environment
+  // below follows
+  const guardLeads =
+    REQUIRE_FLAGS.has(NODE_OPTIONS[0]) && NODE_OPTIONS[1] === workerPreload
+  const pnpThenGuardLeads =
+    pnpApiPath !== undefined &&
+    REQUIRE_FLAGS.has(NODE_OPTIONS[0]) &&
+    NODE_OPTIONS[1] === pnpApiPath &&
+    REQUIRE_FLAGS.has(NODE_OPTIONS[2]) &&
+    NODE_OPTIONS[3] === workerPreload
+  const inheritsGuard = guardLeads || pnpThenGuardLeads
+
+  // Under PnP the API require opens the worker's `NODE_OPTIONS`, and every other inherited preload
+  // still comes after the guard
+  const pnpPreload = pnpApiPath
+    ? `${REQUIRE_ABBR_FLAG} ${JSON.stringify(pnpApiPath)} `
+    : ''
 
   // On that path the guard is put into `execArgv` as well. `NODE_OPTIONS` is what the check decided
   // to trust, but a caller can clear the variable before creating a nested worker, and then nothing
   // would preload the guard — the load failure it exists to report would go unreported instead. A
   // duplicate preload is the worst case, which the module cache and the per-slice state absorb. The
-  // pair added at the level above was dropped before the runner selection, so this stays one per level
-  const guardExecArgv = [REQUIRE_ABBR_FLAG, workerPreload, ...finalExecArgv]
+  // pair added at the level above was dropped before the runner selection, so this stays one per
+  // level. The PnP API still leads the guard here: on this path the API is not in `NODE_OPTIONS`,
+  // and the guard's own path is inside the project's archive until the API has patched resolution
+  const guardExecArgv = [
+    ...(pnpApiPath ? [REQUIRE_ABBR_FLAG, pnpApiPath] : []),
+    REQUIRE_ABBR_FLAG,
+    workerPreload,
+    ...finalExecArgv,
+  ]
 
   let worker: Worker
   try {
@@ -885,7 +935,7 @@ export function startWorkerThread<T extends AnyFn, R = Awaited<ReturnType<T>>>( 
         ? undefined
         : {
             ...process.env,
-            NODE_OPTIONS: `${REQUIRE_ABBR_FLAG} ${JSON.stringify(workerPreload)}${
+            NODE_OPTIONS: `${pnpPreload}${REQUIRE_ABBR_FLAG} ${JSON.stringify(workerPreload)}${
               process.env.NODE_OPTIONS ? ` ${process.env.NODE_OPTIONS}` : ''
             }`,
           },
