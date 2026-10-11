@@ -24,7 +24,12 @@ const workerPreloadPath = path.resolve(_dirname, '../register.cjs')
 const pnpApiPath = path.join(fixtureDir, 'pnpapi.cjs')
 const pnpLoaderPath = path.join(fixtureDir, '.pnp.loader.mjs')
 const pnpLoaderUrl = pathToFileURL(pnpLoaderPath).href
+const otherLoaderPath = path.join(fixtureDir, 'other', '.pnp.loader.mjs')
+const otherLoaderUrl = pathToFileURL(otherLoaderPath).href
 const inheritedPreload = path.join(fixtureDir, 'inherited-preload.cjs')
+
+/** A second spelling of `pnpLoaderPath`, or `undefined` where symlinks are not permitted. */
+let symlinkedLoaderUrl: string | undefined
 
 interface CapturedOptions {
   env?: { NODE_OPTIONS?: string }
@@ -102,12 +107,22 @@ const importWithRuntime = async (nodeOptions: string, pnp: boolean) => {
 const previousNodeOptions = process.env.NODE_OPTIONS
 const previousPnp = (process.versions as { pnp?: string }).pnp
 
-beforeAll(() => {
-  // requiring them is a no-op; they stand in for the real `.pnp.cjs` and `.pnp.loader.mjs`
-  fs.writeFileSync(pnpApiPath, '')
-  fs.writeFileSync(pnpLoaderPath, '')
-  fs.writeFileSync(inheritedPreload, '')
-})
+// created when the file loads rather than in `beforeAll`, so `testIf` below can see whether this
+// platform lets the suite make a symlink; requiring them is a no-op, they stand in for the real
+// `.pnp.cjs` and `.pnp.loader.mjs`
+fs.writeFileSync(pnpApiPath, '')
+fs.writeFileSync(pnpLoaderPath, '')
+fs.mkdirSync(path.dirname(otherLoaderPath), { recursive: true })
+fs.writeFileSync(otherLoaderPath, '')
+fs.writeFileSync(inheritedPreload, '')
+
+try {
+  const linkPath = path.join(fixtureDir, 'linked-loader.mjs')
+  fs.symlinkSync(pnpLoaderPath, linkPath)
+  symlinkedLoaderUrl = pathToFileURL(linkPath).href
+} catch {
+  // a platform where symlinks need privileges skips the identity case; the exact-URL case runs
+}
 
 afterAll(() => {
   fs.rmSync(fixtureDir, { recursive: true, force: true })
@@ -226,15 +241,16 @@ test('a forwarded PnP prefix does not hide the TypeScript runner', async () => {
   expect(captured.at(-1)!.options.execArgv).toContain('esbuild-register')
 })
 
-test('the PnP ESM loader is added once and not when it is already inherited', async () => {
-  const added = await importWithRuntime(
+test('the PnP ESM loader is added when absent', async () => {
+  const { createSyncFn } = await importWithRuntime(
     `-r ${JSON.stringify(inheritedPreload)}`,
     true,
   )
-  added.createSyncFn(path.join(os.tmpdir(), 'synckit-pnp-loader-added.cjs'))
+  createSyncFn(path.join(os.tmpdir(), 'synckit-pnp-loader-added.cjs'))
   expect(captured.at(-1)!.options.execArgv).toContain(pnpLoaderUrl)
+})
 
-  captured.length = 0
+test('an inherited PnP loader is not added again', async () => {
   const inherited = await importWithRuntime(
     `--experimental-loader ${JSON.stringify(pnpLoaderUrl)}`,
     true,
@@ -244,18 +260,34 @@ test('the PnP ESM loader is added once and not when it is already inherited', as
   )
   // it came in through `NODE_OPTIONS`, so a second pair would chain another loader per level
   expect(captured.at(-1)!.options.execArgv).not.toContain(pnpLoaderUrl)
+})
 
-  captured.length = 0
-  const respelled = await importWithRuntime(
-    `--experimental-loader ${JSON.stringify('file:///symlinked/prefix/.pnp.loader.mjs')}`,
+if (symlinkedLoaderUrl !== undefined) {
+  test('a symlinked spelling of the same PnP loader is not added again', async () => {
+    const linked = await importWithRuntime(
+      `--experimental-loader ${JSON.stringify(symlinkedLoaderUrl)}`,
+      true,
+    )
+    linked.createSyncFn(path.join(os.tmpdir(), 'synckit-pnp-loader-linked.cjs'))
+    // the link and the file are the same loader, which only file identity can tell apart
+    expect(captured.at(-1)!.options.execArgv).not.toContain(pnpLoaderUrl)
+  })
+}
+
+test("another project's PnP loader does not stand in for this one", async () => {
+  const other = await importWithRuntime(
+    `--experimental-loader ${JSON.stringify(otherLoaderUrl)}`,
     true,
   )
-  respelled.createSyncFn(
-    path.join(os.tmpdir(), 'synckit-pnp-loader-respelled.cjs'),
-  )
-  // the same loader reached here under another spelling, so the name identifies it and it is not
-  // chained again
-  expect(captured.at(-1)!.options.execArgv).not.toContain(pnpLoaderUrl)
+  other.createSyncFn(path.join(os.tmpdir(), 'synckit-pnp-loader-other.cjs'))
+  // a different `.pnp.loader.mjs` names a different resolution map, so this project's is added
+  expect(captured.at(-1)!.options.execArgv).toContain(pnpLoaderUrl)
+})
+
+test('a loader that is not a file path does not stand in for this one', async () => {
+  const named = await importWithRuntime('--loader ts-node/esm', true)
+  named.createSyncFn(path.join(os.tmpdir(), 'synckit-pnp-loader-named.cjs'))
+  expect(captured.at(-1)!.options.execArgv).toContain(pnpLoaderUrl)
 })
 
 test('an unresolvable PnP API still preloads the guard', async () => {

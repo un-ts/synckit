@@ -554,20 +554,32 @@ export const setupTsRunner = (
     !execArgv.includes(pnpApiPath)
   ) {
     const pnpLoaderPath = path.resolve(pnpApiPath, '../.pnp.loader.mjs')
-    const pnpLoaderUrl = pathToFileURL(pnpLoaderPath).href
-    // the loader Yarn pairs with the require, or one a nested worker forwarded, must not be added a
-    // second time: every extra pair chains another PnP loader into the worker's ESM resolution. The
-    // generated name identifies it rather than the URL, because the same file can arrive spelled as
-    // a symlinked or portable path, which a string comparison against `pnpLoaderUrl` would miss
-    const inheritedPnpLoader = getFlagValues(LOADER_FLAGS).some(value =>
-      /[/\\]\.pnp\.loader\.mjs$/.test(value),
-    )
-    if (isFile(pnpLoaderPath) && !inheritedPnpLoader) {
-      // Transform path to file URL because nodejs does not accept
-      // absolute Windows paths in the --experimental-loader option.
-      // https://github.com/un-ts/synckit/issues/123
-      resolvedPnpLoaderPath = pnpLoaderUrl
-      execArgv = [LOADER_FLAG, resolvedPnpLoaderPath, ...execArgv]
+    if (isFile(pnpLoaderPath)) {
+      const pnpLoaderUrl = pathToFileURL(pnpLoaderPath).href
+      const pnpLoaderRealPath = fs.realpathSync(pnpLoaderPath)
+      // the loader Yarn pairs with the require, or one a nested worker forwarded, must not be added
+      // a second time: every extra pair chains another PnP loader into the worker's ESM resolution.
+      // File identity decides, so the same loader spelled as a symlink or a portable path matches,
+      // while another project's `.pnp.loader.mjs` — which names a different resolution map — does
+      // not stand in for this one
+      const inheritedPnpLoader = getFlagValues(LOADER_FLAGS).some(value => {
+        if (value === pnpLoaderUrl) {
+          return true
+        }
+        try {
+          return fs.realpathSync(fileURLToPath(value)) === pnpLoaderRealPath
+        } catch {
+          // a loader that is not a file path (`ts-node/esm`, a builtin) is not this one
+          return false
+        }
+      })
+      if (!inheritedPnpLoader) {
+        // Transform path to file URL because nodejs does not accept
+        // absolute Windows paths in the --experimental-loader option.
+        // https://github.com/un-ts/synckit/issues/123
+        resolvedPnpLoaderPath = pnpLoaderUrl
+        execArgv = [LOADER_FLAG, resolvedPnpLoaderPath, ...execArgv]
+      }
     }
   }
 
