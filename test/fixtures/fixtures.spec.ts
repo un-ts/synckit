@@ -114,16 +114,12 @@ test(
       manifest.dependencies.synckit = 'file:../synckit.tgz'
       fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
-      // the fixture gets a cache of its own beside the realpath'd temp directory. The global one can
-      // live behind a symlinked home, where Yarn records its symlinked spelling while Node resolves
-      // the archive it holds to the realpath — and then cannot find a file inside it
+      // keep the install's cache inside the realpath'd temp directory: the global one can live behind
+      // a symlinked home, where Yarn records its symlinked spelling while Node resolves the archive it
+      // holds to the realpath — and then cannot find a file inside it
       fs.appendFileSync(
         path.join(fixture, '.yarnrc.yml'),
-        [
-          'enableGlobalCache: false',
-          `cacheFolder: ${JSON.stringify(path.join(tmp, 'cache'))}`,
-          '',
-        ].join('\n'),
+        'enableGlobalCache: false\n',
       )
 
       // `--no-immutable`: CI makes Yarn treat an install as immutable by default, and the template's
