@@ -13,6 +13,8 @@ const FIXTURE_TIMEOUT = 30_000
 const PACKED_FIXTURE_TIMEOUT = 180_000
 
 const yarnPnpDir = path.resolve('test/fixtures/yarn-pnp')
+// pins synckit's runtime deps for the packed install; see the file's header
+const packedLockfile = path.resolve('test/fixtures/yarn-pnp-packed.lock')
 
 test(
   'yarn-pnp',
@@ -88,15 +90,17 @@ test(
       }
 
       fs.cpSync(yarnPnpDir, fixture, { recursive: true })
-      // the committed map, loader and lockfile describe the `link:` install, not this one
+      // the committed map and loader describe the `link:` install, not this one
       for (const stale of [
         '.pnp.cjs',
         '.pnp.loader.mjs',
-        'yarn.lock',
         '.yarn/install-state.gz',
       ]) {
         fs.rmSync(path.join(fixture, stale), { force: true })
       }
+      // the committed lockfile only pins the `link:` spec and none of synckit's runtime deps, so it
+      // is replaced by one that pins them: the install then needs no registry resolution
+      fs.copyFileSync(packedLockfile, path.join(fixture, 'yarn.lock'))
 
       const manifestPath = path.join(fixture, 'package.json')
       const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as {
