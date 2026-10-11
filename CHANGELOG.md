@@ -1,5 +1,11 @@
 # synckit
 
+## 0.12.2
+
+### Patch Changes
+
+- [#280](https://github.com/un-ts/synckit/pull/280) [`7d87fd3`](https://github.com/un-ts/synckit/commit/7d87fd3fa47c4c70023f17ceaa198941d2b72035) Thanks [@JounQin](https://github.com/JounQin)! - Fix workers never starting under Yarn PnP since v0.12: the failure guard (`register.cjs`) was preloaded ahead of the PnP API require inherited from Yarn, but the guard lives inside the project's package archive and cannot be read until `.pnp.cjs` has patched module resolution. The worker then died at startup with nothing left to report it, so every `createSyncFn` call waited in `Atomics.wait()` until its timeout. Under PnP the worker's `NODE_OPTIONS` now opens with the PnP API require and the guard follows it; every other inherited preload still loads after the guard, and the "already inherited" check scans the whole value so a nested worker does not add a second guard.
+
 ## 0.12.1
 
 ### Patch Changes
