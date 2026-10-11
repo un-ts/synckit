@@ -74,12 +74,7 @@ test(
 test(
   'yarn-pnp from a packed archive, where the guard lives inside a zip',
   async () => {
-    // resolved to its realpath: where the temp or home directory is a symlink (a NAS home behind
-    // `/var/services`), Yarn records the symlinked spelling in the PnP map while Node resolves the
-    // loaded entry to the real one, and a file inside the package archive is then not found
-    const tmp = fs.realpathSync(
-      fs.mkdtempSync(path.join(os.tmpdir(), 'synckit-pnp-packed-')),
-    )
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'synckit-pnp-packed-'))
     try {
       const tarball = path.join(tmp, 'synckit.tgz')
       const fixture = path.join(tmp, 'fixture')
@@ -117,8 +112,8 @@ test(
       // Yarn records the archive's location in the PnP map. Where home is a symlink (a NAS home
       // behind `/var/services`), the default global folder is recorded under the symlinked spelling
       // while Node resolves the archive it holds to the realpath — and then cannot find a file
-      // inside it. Point the fixture at that same folder by its realpath, which keeps the shared
-      // cache warm instead of refilling one beside the fixture
+      // inside it. Only such a spelling needs rewriting: name the same folder by its realpath, which
+      // keeps the shared cache warm instead of refilling one beside the fixture
       const configResult = await exec(
         'yarn',
         ['config', 'get', 'globalFolder'],
@@ -134,10 +129,12 @@ test(
       const defaultGlobalFolder = configResult.stdout.trim()
       fs.mkdirSync(defaultGlobalFolder, { recursive: true })
       const globalFolder = fs.realpathSync(defaultGlobalFolder)
-      fs.appendFileSync(
-        path.join(fixture, '.yarnrc.yml'),
-        `globalFolder: ${JSON.stringify(globalFolder)}\n`,
-      )
+      if (globalFolder !== defaultGlobalFolder) {
+        fs.appendFileSync(
+          path.join(fixture, '.yarnrc.yml'),
+          `globalFolder: ${JSON.stringify(globalFolder)}\n`,
+        )
+      }
 
       // `--no-immutable`: CI makes Yarn treat an install as immutable by default, and the template's
       // `file:` checksum is deliberately stale — Yarn has to refresh it from the tarball just packed
