@@ -74,7 +74,12 @@ test(
 test(
   'yarn-pnp from a packed archive, where the guard lives inside a zip',
   async () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'synckit-pnp-packed-'))
+    // resolved to its realpath: where the temp or home directory is a symlink (a NAS home behind
+    // `/var/services`), Yarn records the symlinked spelling in the PnP map while Node resolves the
+    // loaded entry to the real one, and a file inside the package archive is then not found
+    const tmp = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'synckit-pnp-packed-')),
+    )
     try {
       const tarball = path.join(tmp, 'synckit.tgz')
       const fixture = path.join(tmp, 'fixture')
@@ -108,6 +113,18 @@ test(
       }
       manifest.dependencies.synckit = 'file:../synckit.tgz'
       fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+      // the fixture gets a cache of its own beside the realpath'd temp directory. The global one can
+      // live behind a symlinked home, where Yarn records its symlinked spelling while Node resolves
+      // the archive it holds to the realpath — and then cannot find a file inside it
+      fs.appendFileSync(
+        path.join(fixture, '.yarnrc.yml'),
+        [
+          'enableGlobalCache: false',
+          `cacheFolder: ${JSON.stringify(path.join(tmp, 'cache'))}`,
+          '',
+        ].join('\n'),
+      )
 
       // `--no-immutable`: CI makes Yarn treat an install as immutable by default, and the template's
       // `file:` checksum is deliberately stale — Yarn has to refresh it from the tarball just packed
