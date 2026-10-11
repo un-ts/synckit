@@ -126,6 +126,11 @@ test(
           nodeOptions: { cwd: path.resolve('.'), env: { FORCE_COLOR: '0' } },
         },
       )
+      if (configResult.exitCode !== 0) {
+        throw new Error(
+          `yarn config get globalFolder failed:\n${configResult.stdout}\n${configResult.stderr}`,
+        )
+      }
       const defaultGlobalFolder = configResult.stdout.trim()
       fs.mkdirSync(defaultGlobalFolder, { recursive: true })
       const globalFolder = fs.realpathSync(defaultGlobalFolder)
