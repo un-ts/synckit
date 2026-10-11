@@ -115,13 +115,23 @@ test(
       fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
       // Yarn records the archive's location in the PnP map. Where home is a symlink (a NAS home
-      // behind `/var/services`), the machine's global folder is recorded under the symlinked spelling
-      // while Node resolves the archive it holds to the realpath — and then cannot find a file inside
-      // it. A global folder inside the realpath'd temp directory keeps every recorded path one Node
-      // resolves back, without depending on where the machine's own global folder lives
+      // behind `/var/services`), the default global folder is recorded under the symlinked spelling
+      // while Node resolves the archive it holds to the realpath — and then cannot find a file
+      // inside it. Point the fixture at that same folder by its realpath, which keeps the shared
+      // cache warm instead of refilling one beside the fixture
+      const configResult = await exec(
+        'yarn',
+        ['config', 'get', 'globalFolder'],
+        {
+          nodeOptions: { cwd: path.resolve('.'), env: { FORCE_COLOR: '0' } },
+        },
+      )
+      const defaultGlobalFolder = configResult.stdout.trim()
+      fs.mkdirSync(defaultGlobalFolder, { recursive: true })
+      const globalFolder = fs.realpathSync(defaultGlobalFolder)
       fs.appendFileSync(
         path.join(fixture, '.yarnrc.yml'),
-        `globalFolder: ${JSON.stringify(path.join(tmp, 'global'))}\n`,
+        `globalFolder: ${JSON.stringify(globalFolder)}\n`,
       )
 
       // `--no-immutable`: CI makes Yarn treat an install as immutable by default, and the template's
