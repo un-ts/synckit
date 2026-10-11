@@ -114,12 +114,24 @@ test(
       manifest.dependencies.synckit = 'file:../synckit.tgz'
       fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
-      // keep the install's cache inside the realpath'd temp directory: the global one can live behind
-      // a symlinked home, where Yarn records its symlinked spelling while Node resolves the archive it
-      // holds to the realpath — and then cannot find a file inside it
+      // Yarn records the archive's location in the PnP map. Where home is a symlink (a NAS home
+      // behind `/var/services`), the default global folder is recorded under the symlinked spelling
+      // while Node resolves the archive it holds to the realpath — and then cannot find a file
+      // inside it. Point the fixture at that same folder by its realpath, which keeps the shared
+      // cache warm instead of refilling one beside the fixture
+      const configResult = await exec(
+        'yarn',
+        ['config', 'get', 'globalFolder'],
+        {
+          nodeOptions: { cwd: path.resolve('.'), env: { FORCE_COLOR: '0' } },
+        },
+      )
+      const defaultGlobalFolder = configResult.stdout.trim()
+      fs.mkdirSync(defaultGlobalFolder, { recursive: true })
+      const globalFolder = fs.realpathSync(defaultGlobalFolder)
       fs.appendFileSync(
         path.join(fixture, '.yarnrc.yml'),
-        'enableGlobalCache: false\n',
+        `globalFolder: ${JSON.stringify(globalFolder)}\n`,
       )
 
       // `--no-immutable`: CI makes Yarn treat an install as immutable by default, and the template's
