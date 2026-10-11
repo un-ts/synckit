@@ -1,5 +1,11 @@
 # synckit
 
+## 0.12.3
+
+### Patch Changes
+
+- [#282](https://github.com/un-ts/synckit/pull/282) [`d9febd8`](https://github.com/un-ts/synckit/commit/d9febd889d7ee9b0e668d1c9bd0eab798aa9cf27) Thanks [@JounQin](https://github.com/JounQin)! - Restore the npm provenance attestation on releases. `changesets` 3 publishes Yarn projects with `yarn npm publish`, which only writes a provenance statement when `npmPublishProvenance` (or `publishConfig.provenance`) asks for it, so `0.12.0` onwards shipped without npm's "Built and signed with provenance" badge.
+
 ## 0.12.2
 
 ### Patch Changes
