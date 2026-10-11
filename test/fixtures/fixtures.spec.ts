@@ -83,7 +83,7 @@ test(
       // committed fixture uses `link:`, which leaves synckit on the filesystem and so loads the
       // guard whatever the preload order is — the shape that hid issue #278
       const packed = await exec('yarn', ['pack', '--out', tarball], {
-        nodeOptions: { cwd: path.resolve('.'), env: { FORCE_COLOR: '0' } },
+        nodeOptions: { env: { FORCE_COLOR: '0' } },
       })
       if (packed.exitCode !== 0) {
         throw new Error(`yarn pack failed:\n${packed.stdout}\n${packed.stderr}`)
@@ -108,6 +108,33 @@ test(
       }
       manifest.dependencies.synckit = 'file:../synckit.tgz'
       fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+      // Yarn records the archive's location in the PnP map. Where home is a symlink (a NAS home
+      // behind `/var/services`), the default global folder is recorded under the symlinked spelling
+      // while Node resolves the archive it holds to the realpath — and then cannot find a file
+      // inside it. Only such a spelling needs rewriting: name the same folder by its realpath, which
+      // keeps the shared cache warm instead of refilling one beside the fixture
+      const configResult = await exec(
+        'yarn',
+        ['config', 'get', 'globalFolder'],
+        {
+          nodeOptions: { env: { FORCE_COLOR: '0' } },
+        },
+      )
+      if (configResult.exitCode !== 0) {
+        throw new Error(
+          `yarn config get globalFolder failed:\n${configResult.stdout}\n${configResult.stderr}`,
+        )
+      }
+      const defaultGlobalFolder = configResult.stdout.trim()
+      fs.mkdirSync(defaultGlobalFolder, { recursive: true })
+      const globalFolder = fs.realpathSync(defaultGlobalFolder)
+      if (globalFolder !== defaultGlobalFolder) {
+        fs.appendFileSync(
+          path.join(fixture, '.yarnrc.yml'),
+          `globalFolder: ${JSON.stringify(globalFolder)}\n`,
+        )
+      }
 
       // `--no-immutable`: CI makes Yarn treat an install as immutable by default, and the template's
       // `file:` checksum is deliberately stale — Yarn has to refresh it from the tarball just packed
