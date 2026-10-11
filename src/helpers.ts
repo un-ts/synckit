@@ -567,7 +567,12 @@ export const setupTsRunner = (
           return true
         }
         try {
-          return fs.realpathSync(fileURLToPath(value)) === pnpLoaderRealPath
+          // `--experimental-loader` takes a URL, but Node also accepted a plain path, and a nested
+          // worker can forward one, so both spellings resolve to the file before being compared
+          const loaderPath = value.startsWith('file:')
+            ? fileURLToPath(value)
+            : path.resolve(value)
+          return fs.realpathSync(loaderPath) === pnpLoaderRealPath
         } catch {
           // a loader that is not a file path (`ts-node/esm`, a builtin) is not this one
           return false

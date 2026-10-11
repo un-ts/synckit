@@ -260,6 +260,15 @@ test('an inherited PnP loader is not added again', async () => {
   )
   // it came in through `NODE_OPTIONS`, so a second pair would chain another loader per level
   expect(captured.at(-1)!.options.execArgv).not.toContain(pnpLoaderUrl)
+
+  captured.length = 0
+  const plain = await importWithRuntime(
+    `--loader ${JSON.stringify(pnpLoaderPath)}`,
+    true,
+  )
+  plain.createSyncFn(path.join(os.tmpdir(), 'synckit-pnp-loader-plain.cjs'))
+  // Node also accepted a plain path rather than a file URL, and it is the same file
+  expect(captured.at(-1)!.options.execArgv).not.toContain(pnpLoaderUrl)
 })
 
 if (symlinkedLoaderUrl !== undefined) {
