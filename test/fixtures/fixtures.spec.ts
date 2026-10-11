@@ -86,7 +86,7 @@ test(
         nodeOptions: { cwd: path.resolve('.'), env: { FORCE_COLOR: '0' } },
       })
       if (packed.exitCode !== 0) {
-        throw new Error(`yarn pack failed:\n${packed.stderr}`)
+        throw new Error(`yarn pack failed:\n${packed.stdout}\n${packed.stderr}`)
       }
 
       fs.cpSync(yarnPnpDir, fixture, { recursive: true })
@@ -109,11 +109,15 @@ test(
       manifest.dependencies.synckit = 'file:../synckit.tgz'
       fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
-      const installed = await exec('yarn', ['install'], {
+      // `--no-immutable`: CI makes Yarn treat an install as immutable by default, and the template's
+      // `file:` checksum is deliberately stale — Yarn has to refresh it from the tarball just packed
+      const installed = await exec('yarn', ['install', '--no-immutable'], {
         nodeOptions: { cwd: fixture, env: { FORCE_COLOR: '0' } },
       })
       if (installed.exitCode !== 0) {
-        throw new Error(`yarn install failed:\n${installed.stderr}`)
+        throw new Error(
+          `yarn install failed:\n${installed.stdout}\n${installed.stderr}`,
+        )
       }
 
       // the package is served from an archive, so `register.cjs` cannot be read until `.pnp.cjs`
@@ -129,7 +133,9 @@ test(
         },
       })
       if (run.exitCode !== 0) {
-        throw new Error(`yarn node index.js failed:\n${run.stderr}`)
+        throw new Error(
+          `yarn node index.js failed:\n${run.stdout}\n${run.stderr}`,
+        )
       }
       expect(run.stdout).toContain('1 2 5')
     } finally {
