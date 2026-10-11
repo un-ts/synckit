@@ -83,7 +83,7 @@ test(
       // committed fixture uses `link:`, which leaves synckit on the filesystem and so loads the
       // guard whatever the preload order is — the shape that hid issue #278
       const packed = await exec('yarn', ['pack', '--out', tarball], {
-        nodeOptions: { cwd: path.resolve('.'), env: { FORCE_COLOR: '0' } },
+        nodeOptions: { env: { FORCE_COLOR: '0' } },
       })
       if (packed.exitCode !== 0) {
         throw new Error(`yarn pack failed:\n${packed.stdout}\n${packed.stderr}`)
@@ -118,7 +118,7 @@ test(
         'yarn',
         ['config', 'get', 'globalFolder'],
         {
-          nodeOptions: { cwd: path.resolve('.'), env: { FORCE_COLOR: '0' } },
+          nodeOptions: { env: { FORCE_COLOR: '0' } },
         },
       )
       if (configResult.exitCode !== 0) {
