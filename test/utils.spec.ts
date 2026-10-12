@@ -21,6 +21,9 @@ import {
 const requireModuleOnHost =
   execFileSync(process.execPath, ['-p', 'process.features.require_module'], {
     encoding: 'utf8',
+    // Jest sets FORCE_COLOR in workers; the child inherits it and Node colorizes `-p`
+    // output, so `.trim() === 'true'` would never match under a TTY
+    env: { ...process.env, FORCE_COLOR: '0' },
   }).trim() === 'true'
 
 describe('utils', () => {
