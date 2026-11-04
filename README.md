@@ -140,6 +140,8 @@ On recent `Node` versions, you may select this runner to execute your worker fil
 
 As of `Node` v22.18 and v23.6, this feature is supported out of the box. For `Node` `>=22.6 <22.18` and `>=23 <23.6`, this feature is supported via `--experimental-strip-types` flag. Visit the [documentation](https://nodejs.org/docs/latest/api/typescript.html#type-stripping) to learn more.
 
+Type stripping alone doesn't support [TypeScript features that need code generation](https://nodejs.org/docs/latest/api/typescript.html#typescript-features), like enums or parameter properties. To use them in a worker, add `--experimental-transform-types` to `execArgv`. `synckit` adds this flag by itself only on `Node` `>=22.7 <22.18` and `>=23 <23.6`, and only when `execArgv` has no `--experimental-strip-types`.
+
 When `synckit` detects the process to be running with supported `Node` versions (>=22.6), it will execute the worker file with the `node` runner by default, you can disable this behavior by setting `--no-experimental-strip-types` flag via `NODE_OPTIONS` env or cli arg.
 
 #### `bun` (Default, Bun)

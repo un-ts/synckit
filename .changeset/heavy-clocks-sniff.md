@@ -1,5 +1,7 @@
 ---
-"synckit": patch
+"synckit": minor
 ---
 
-`.ts` workers on Node 22.18+ no longer get `--experimental-transform-types` and its experimental warning, as type stripping is on by default there, like on Node 23.6+. On older Node, the flag is also no longer added when `execArgv` already has `--experimental-strip-types`. A worker that needs the flag can still get it via `execArgv`
+`.ts` workers no longer get `--experimental-transform-types` and its experimental warning on Node `>=22.18 <23`, where type stripping is on by default, or when `execArgv` already has `--experimental-strip-types`
+
+**Breaking:** in these cases, workers that use enums or other TypeScript features that type stripping doesn't support now need `--experimental-transform-types` in `execArgv`
