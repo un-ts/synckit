@@ -28,7 +28,6 @@ import {
   DEFAULT_GLOBAL_SHIMS_PRESET,
   DEFAULT_TIMEOUT,
   DEFAULT_TS_RUNNER,
-  DEFAULT_TYPES_NODE_VERSION,
   IMPORT_FLAG,
   IMPORT_FLAG_SUPPORTED,
   LOADER_FLAG,
@@ -38,6 +37,7 @@ import {
   NO_STRIP_TYPES_FLAG,
   REQUIRE_ABBR_FLAG,
   REQUIRE_FLAGS,
+  STRIP_TYPES_BY_DEFAULT,
   STRIP_TYPES_FLAG,
   STRIP_TYPES_NODE_VERSION,
   TRANSFORM_TYPES_FLAG,
@@ -418,8 +418,7 @@ export const setupTsRunner = (
           throw new Error('type stripping is disabled explicitly')
         }
 
-        // >=
-        if (compareNodeVersion(DEFAULT_TYPES_NODE_VERSION) >= 0) {
+        if (STRIP_TYPES_BY_DEFAULT) {
           break
         }
 

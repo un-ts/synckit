@@ -22,11 +22,12 @@ import {
 } from './helpers.ts'
 
 import {
-  DEFAULT_TYPES_NODE_VERSION,
   IMPORT_FLAG,
   LOADER_FLAG,
+  NODE_VERSION,
   REQUIRE_ABBR_FLAG,
   REQUIRE_FLAG,
+  STRIP_TYPES_BY_DEFAULT,
   TRANSFORM_TYPES_FLAG,
   TRANSFORM_TYPES_NODE_VERSION,
   TsRunner,
@@ -42,6 +43,9 @@ import {
   setupTsRunner,
   type StdioChunk,
 } from 'synckit'
+
+const setNodeVersion = (value: string) =>
+  Object.defineProperty(process.versions, 'node', { value })
 
 /** How the mode probe is started: the process's own flags, and/or the `NODE_OPTIONS` it inherits. */
 interface ProbeFlags {
@@ -440,7 +444,6 @@ describe('helpers', () => {
       expect(result.workerPath).toBe(workerMtsPath)
     })
 
-    // can not be mocked correctly for now
     testIf(compareNodeVersion(TRANSFORM_TYPES_NODE_VERSION) >= 0)(
       'should add `TRANSFORM_TYPES_FLAG` for Node TS runner',
       () => {
@@ -448,13 +451,45 @@ describe('helpers', () => {
           tsRunner: TsRunner.Node,
         })
 
-        if (compareNodeVersion(DEFAULT_TYPES_NODE_VERSION) >= 0) {
+        if (STRIP_TYPES_BY_DEFAULT) {
           expect(execArgv).not.toContain(TRANSFORM_TYPES_FLAG)
         } else {
           expect(execArgv).toContain(TRANSFORM_TYPES_FLAG)
         }
       },
     )
+
+    describe('default type stripping by Node version', () => {
+      afterEach(() => {
+        setNodeVersion(NODE_VERSION)
+        jest.resetModules()
+      })
+
+      // https://github.com/un-ts/synckit/issues/289
+      test.each([
+        ['22.17.1', false],
+        ['22.18.0', true],
+        ['22.23.4', true],
+        ['23.5.0', false],
+        ['23.6.0', true],
+        ['24.0.0', true],
+      ])(
+        'Node %s strips types by default: %s',
+        async (version, stripsByDefault) => {
+          setNodeVersion(version)
+          jest.resetModules()
+          const synckit = await import('synckit')
+
+          expect(synckit.STRIP_TYPES_BY_DEFAULT).toBe(stripsByDefault)
+
+          const { execArgv } = synckit.setupTsRunner(workerTsPath, {
+            tsRunner: TsRunner.Node,
+          })
+
+          expect(execArgv.includes(TRANSFORM_TYPES_FLAG)).toBe(!stripsByDefault)
+        },
+      )
+    })
 
     test('should handle OXC runner', () => {
       const { execArgv } = setupTsRunner(workerTsPath, {

@@ -138,7 +138,7 @@ export interface GlobalShim {
 
 On recent `Node` versions, you may select this runner to execute your worker file (a `.ts` file) in the native runtime.
 
-As of `Node` v23.6, this feature is supported out of the box. For `Node` `>=22.6 <23.6`, this feature is supported via `--experimental-strip-types` flag. Visit the [documentation](https://nodejs.org/docs/latest/api/typescript.html#type-stripping) to learn more.
+As of `Node` v22.18 and v23.6, this feature is supported out of the box. For `Node` `>=22.6 <22.18` and `>=23 <23.6`, this feature is supported via `--experimental-strip-types` flag. Visit the [documentation](https://nodejs.org/docs/latest/api/typescript.html#type-stripping) to learn more.
 
 When `synckit` detects the process to be running with supported `Node` versions (>=22.6), it will execute the worker file with the `node` runner by default, you can disable this behavior by setting `--no-experimental-strip-types` flag via `NODE_OPTIONS` env or cli arg.
 
