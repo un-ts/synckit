@@ -425,6 +425,7 @@ export const setupTsRunner = (
         if (
           // >=
           compareNodeVersion(TRANSFORM_TYPES_NODE_VERSION) >= 0 &&
+          !execArgv.includes(STRIP_TYPES_FLAG) &&
           !execArgv.includes(TRANSFORM_TYPES_FLAG)
         ) {
           execArgv = [TRANSFORM_TYPES_FLAG, ...execArgv]

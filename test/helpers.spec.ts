@@ -28,6 +28,7 @@ import {
   REQUIRE_ABBR_FLAG,
   REQUIRE_FLAG,
   STRIP_TYPES_BY_DEFAULT,
+  STRIP_TYPES_FLAG,
   TRANSFORM_TYPES_FLAG,
   TRANSFORM_TYPES_NODE_VERSION,
   TsRunner,
@@ -459,7 +460,7 @@ describe('helpers', () => {
       },
     )
 
-    describe('default type stripping by Node version', () => {
+    describe('type stripping flags by Node version', () => {
       afterEach(() => {
         setNodeVersion(NODE_VERSION)
         jest.resetModules()
@@ -489,6 +490,19 @@ describe('helpers', () => {
           expect(execArgv.includes(TRANSFORM_TYPES_FLAG)).toBe(!stripsByDefault)
         },
       )
+
+      test('keeps an explicit strip-only flag when Node needs one', async () => {
+        setNodeVersion('22.17.1')
+        jest.resetModules()
+        const synckit = await import('synckit')
+
+        const { execArgv } = synckit.setupTsRunner(workerTsPath, {
+          tsRunner: TsRunner.Node,
+          execArgv: [STRIP_TYPES_FLAG],
+        })
+
+        expect(execArgv).toEqual([STRIP_TYPES_FLAG])
+      })
     })
 
     test('should handle OXC runner', () => {
