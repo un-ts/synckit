@@ -1,9 +1,4 @@
-import {
-  NODE_VERSION,
-  compareNodeVersion,
-  hasFlag,
-  parseVersion,
-} from './common.js'
+import { compareNodeVersion, hasFlag } from './common.js'
 import type { GlobalShim, ValueOf } from './types.js'
 
 export const TsRunner = {
@@ -62,22 +57,19 @@ export const FEATURE_TYPESCRIPT_NODE_VERSION = '22.10'
 // https://nodejs.org/docs/latest-v23.x/api/typescript.html#type-stripping
 export const DEFAULT_TYPES_NODE_VERSION = '23.6'
 
-// https://github.com/nodejs/node/blob/main/doc/changelogs/CHANGELOG_V22.md#22.18.0
-export const DEFAULT_TYPES_BACKPORT_NODE_VERSION = '22.18'
-
 /**
  * Whether this Node strips types by default, so a worker needs no flag to run a `.ts` file.
  *
- * The backport only covers its own release line, so 23.0 to 23.5 don't have it.
+ * The 23.x line started with it in 23.6, and the 22.x line got the backport in 22.18.
  *
  * `process.features.typescript` isn't used, as it also depends on this process's CLI flags.
  * A worker doesn't get them, since it's started with its own `execArgv`.
+ *
+ * @see https://github.com/nodejs/node/blob/main/doc/changelogs/CHANGELOG_V22.md#22.18.0
  */
 export const STRIP_TYPES_BY_DEFAULT =
   compareNodeVersion(DEFAULT_TYPES_NODE_VERSION) >= 0 ||
-  (compareNodeVersion(DEFAULT_TYPES_BACKPORT_NODE_VERSION) >= 0 &&
-    parseVersion(NODE_VERSION)[0] ===
-      parseVersion(DEFAULT_TYPES_BACKPORT_NODE_VERSION)[0])
+  (compareNodeVersion('22.18') >= 0 && compareNodeVersion('23') < 0)
 
 export const STRIP_TYPES_FLAG = '--experimental-strip-types'
 export const TRANSFORM_TYPES_FLAG = '--experimental-transform-types'
